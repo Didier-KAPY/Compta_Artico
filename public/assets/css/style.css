@@ -1,0 +1,134 @@
+body { overflow-x: hidden; }
+
+    /* Desktop sidebar */
+    #sidebar {
+        width: 250px;
+        height: 100vh;
+        position: fixed;
+        top: 0;
+        left: 0;
+        background-color: #fdfcfc;
+        z-index: 1030;
+        transition: transform 0.3s ease;
+    }
+
+    main {
+        margin-left: 250px;
+        margin-top: 56px;
+        padding: 20px;
+        background-color: #f8f9fa;
+        transition: margin-left 0.3s ease;
+    }
+
+    #topbar {
+        height: 56px;
+        position: fixed;
+        top: 0;
+        left: 250px;
+        width: calc(100% - 250px);
+        z-index: 1035;
+        transition: width 0.3s ease, left 0.3s ease;
+    }
+
+    @media (max-width: 991.98px) {
+        #sidebar { transform: translateX(-100%); }
+        #sidebar.show { transform: translateX(0); }
+        #topbar { left:0; width:100%; }
+        main { margin-left:0; }
+    }
+
+    #overlay {
+        position: fixed;
+        top:0; left:0;
+        width:100%; height:100%;
+        background: rgba(0,0,0,0.5);
+        z-index:1025;
+        display:none;
+    }
+
+    .hover-card { transition: transform 0.2s, box-shadow 0.2s; }
+    .hover-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.15); }
+
+   .tableau_formulaire {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+/* Bouton + */
+.add-button {
+    background-color: #0d6efd;
+    color: white;
+    font-weight: bold;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    font-size: 1.5rem;
+    transition: 0.3s ease;
+}
+.add-button:hover {
+    background-color: #084298;
+}
+
+/* Formulaire principal */
+.tableau_formulaire form {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 1rem;
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 12px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+
+/* Champs de saisie */
+.tableau_formulaire .col-8 {
+    flex: 1;
+    min-width: 220px;
+}
+
+.periode {
+    font-weight: 600;
+    margin-right: 8px;
+    color: #333;
+}
+
+.date_rech {
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Bouton filtrer */
+.tableau_formulaire button {
+    white-space: nowrap;
+    padding: 0.6rem 1.5rem;
+    font-weight: bold;
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+}
+
+/* ✅ Responsive : empilement sur petit écran */
+@media (max-width: 768px) {
+    .tableau_formulaire form {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .tableau_formulaire .col-8 {
+        width: 100%;
+    }
+
+    .tableau_formulaire button {
+        width: 100%;
+    }
+
+    .add-button {
+        align-self: flex-end;
+    }
+}
