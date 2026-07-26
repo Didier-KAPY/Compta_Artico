@@ -106,24 +106,14 @@
     <div class="card-body">
 
         <table class="table table-bordered">
-
             <thead>
-
             <tr>
-
                 <th>Désignation</th>
-
                 <th>Quantité</th>
-
                 <th>Prix unitaire</th>
-
                 <th>Montant</th>
-
             </tr>
-
             </thead>
-
-
 
             <tbody>
 
@@ -221,7 +211,21 @@
                 <div class="col-md-3">
                     <div class="p-3 border rounded bg-light h-100">
                         <strong>Pièce justificative</strong>
-                        <div class="mt-2">{{ $journal->piece_justificatif ?? '-' }}</div>
+                        <div class="mt-2">
+                            @if($journal->piece_justificatif)
+                                        <a class="dropdown-item"
+                                        href="{{ asset('storage/'.$journal->piece_justificatif) }}"
+                                        target="_blank">
+                                            <i class="bi bi-paperclip me-2"></i>
+                                            Voir pièce justificative
+                                        </a>
+                                    @else
+                                        <span class="dropdown-item text-muted">
+                                            <i class="bi bi-paperclip me-2"></i>
+                                            Aucune pièce jointe
+                                        </span>
+                                    @endif
+                        </div>
                     </div>
                 </div>
 
@@ -465,25 +469,22 @@
                                 class="form-select"
 
                                 required>
-
-
-
                             <option value="">
                                 -- Choisir le mode --
                             </option>
-                            <option value="Espèces"
+                            <option value="espèce"
 
-                            {{ $journal->mode_paiement == 'Espèces' ? 'selected' : '' }}>
-                                Espèces
+                            {{ $journal->mode_paiement == 'espèce' ? 'selected' : '' }}>
+                                espèce
                             </option>
                             <option value="Banque"
 
-                            {{ $journal->mode_paiement == 'Banque' ? 'selected' : '' }}>
-                                Banque
+                            {{ $journal->mode_paiement == 'banque' ? 'selected' : '' }}>
+                                banque
                             </option>
                             <option value="Mobile Money"
 
-                            {{ $journal->mode_paiement == 'Mobile Money' ? 'selected' : '' }}>
+                            {{ $journal->mode_paiement == 'mobile_money' ? 'selected' : '' }}>
 
                                 Mobile Money
 

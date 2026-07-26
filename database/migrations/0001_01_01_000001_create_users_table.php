@@ -8,13 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Table roles
-        Schema::create('roles', function (Blueprint $table) {
-            $table->id();
-            $table->string('designation');
-            $table->timestamps();
-        });
-
+        
 
         // Table users
         Schema::create('users', function (Blueprint $table) {
@@ -31,11 +25,16 @@ return new class extends Migration
 
             $table->string('telephone')->nullable();
             $table->string('password');
-             $table->string('adresse')->nullable();
+
+            $table->string('adresse')->nullable();
             $table->string('photo')->nullable();
 
             $table->timestamp('email_verified_at')->nullable();
 
+            // Dernière connexion de l'utilisateur
+            $table->timestamp('last_logged_in')->nullable();
+
+            // Indique si le mot de passe est encore celui par défaut
             $table->tinyInteger('password_default')
                   ->default(0);
 

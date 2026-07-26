@@ -10,12 +10,19 @@ return new class extends Migration
     {
         Schema::create('entreprises', function (Blueprint $table) {
             $table->id();
+
+            // Propriétaire de l'entreprise
+            $table->foreignId('user_id')
+                  ->constrained('users')
+                  ->cascadeOnDelete();
+
             $table->string('nom_entreprise');
             $table->string('adresse')->nullable();
             $table->string('telephone')->nullable();
             $table->string('forme_juridique')->nullable();
             $table->string('numero_identification_fiscal')->nullable();
             $table->string('logo')->nullable();
+
             $table->timestamps();
         });
     }

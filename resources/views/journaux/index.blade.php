@@ -25,9 +25,7 @@
 
         <i class="bi bi-funnel"></i>
         Afficher les filtres
-
     </button>
-
 </div>
 
 
@@ -161,48 +159,79 @@
                     <tr>
 
                         <td>
-                            <strong>{{ $journal->reference }}</strong>
+                            <strong>{{ $journal->reference ?? '-' }}</strong>
                         </td>
 
-                        <td>
-                            {{ \Carbon\Carbon::parse($journal->date)->format('d/m/Y') }}
-                        </td>
 
                         <td>
-                            {{ $journal->description }}
+                            {{ $journal->date 
+                                ? \Carbon\Carbon::parse($journal->date)->format('d/m/Y') 
+                                : '-' 
+                            }}
                         </td>
+
+
+                        <td>
+                            {{ $journal->description ?? '-' }}
+                        </td>
+
 
                         <td>
                             <span class="badge bg-secondary">
-                                {{ $journal->monnaie }}
+                                {{ $journal->monnaie ?? 'CDF' }}
                             </span>
                         </td>
 
-                        <td class="text-end fw-bold">
-                            {{ number_format($journal->entrees_cdf, 2) }}
+
+                        <td class="text-end fw-bold text-success">
+                            {{ number_format($journal->entrees_cdf ?? 0, 2, ',', ' ') }}
                         </td>
 
-                        <td class="text-end fw-bold">
-                            {{ number_format($journal->sorties_cdf, 2) }}
+
+                        <td class="text-end fw-bold text-danger">
+                            {{ number_format($journal->sorties_cdf ?? 0, 2, ',', ' ') }}
                         </td>
 
-                        <td class="text-end fw-bold">
-                            {{ number_format($journal->entrees_usd, 2) }}
+
+                        <td class="text-end fw-bold text-success">
+                            {{ number_format($journal->entrees_usd ?? 0, 2, ',', ' ') }}
                         </td>
 
-                        <td class="text-end fw-bold">
-                            {{ number_format($journal->sorties_usd, 2) }}
+
+                        <td class="text-end fw-bold text-danger">
+                            {{ number_format($journal->sorties_usd ?? 0, 2, ',', ' ') }}
                         </td>
 
-                        <td>
-                            @if($journal->statut == 'Validé')
-                                <span class="badge bg-success">Validé</span>
-                            @elseif($journal->statut == 'Rejeté')
-                                <span class="badge bg-danger">Rejeté</span>
+
+                       <td>
+                            @php
+                                $statut = trim(mb_strtolower($journal->statut));
+                            @endphp
+
+
+                            @if($statut == 'validé' || $statut == 'valide')
+
+                                <span class="badge bg-success">
+                                    Validé
+                                </span>
+
+
+                            @elseif($statut == 'rejeté' || $statut == 'rejete')
+
+                                <span class="badge bg-danger">
+                                    Rejeté
+                                </span>
+
+
                             @else
-                                <span class="badge bg-warning text-dark">En attente</span>
+
+                                <span class="badge bg-warning text-dark">
+                                    En attente
+                                </span>
+
                             @endif
-                        </td>
+
+                            </td>
 
                         <td class="text-center">
 
@@ -211,19 +240,66 @@
                                 <button class="btn btn-sm btn-light border dropdown-toggle"
                                         type="button"
                                         data-bs-toggle="dropdown">
+
                                     Actions
+
                                 </button>
+
 
                                 <ul class="dropdown-menu">
 
+
                                     <li>
                                         <a class="dropdown-item"
-                                        href="{{ route('journaux.show', $journal->id) }}">
-                                            👁 Voir
+                                        href="{{ route('journaux.show',$journal->id) }}">
+
+                                            <i class="bi bi-eye me-2"></i>
+                                            Voir
+
                                         </a>
                                     </li>
 
-                                   
+
+                                    <li>
+
+                                        <a class="dropdown-item"
+                                        href="{{ route('journaux.recu',$journal->id) }}"
+                                        target="_blank">
+
+                                            <i class="bi bi-printer me-2"></i>
+                                            Imprimer reçu
+
+                                        </a>
+
+                                    </li>
+
+
+                                    <li>
+
+                                        @if($journal->piece_justificatif)
+
+                                            <a class="dropdown-item"
+                                            href="{{ asset('storage/'.$journal->piece_justificatif) }}"
+                                            target="_blank">
+
+                                                <i class="bi bi-paperclip me-2"></i>
+                                                Voir pièce justificative
+
+                                            </a>
+
+                                        @else
+
+                                            <span class="dropdown-item text-muted">
+
+                                                <i class="bi bi-paperclip me-2"></i>
+                                                Aucune pièce jointe
+
+                                            </span>
+
+                                        @endif
+
+                                    </li>
+
 
                                 </ul>
 
@@ -231,26 +307,29 @@
 
                         </td>
 
+
                     </tr>
+
 
                     @empty
 
                     <tr>
-                        <td colspan="8" class="text-center text-muted py-4">
+
+                        <td colspan="10" class="text-center text-muted py-4">
+
                             Aucun journal trouvé
+
                         </td>
+
                     </tr>
 
                     @endforelse
 
-                </tbody>
 
+                    </tbody>
             </table>
-
         </div>
-
     </div>
-
 </div>
 
 <!-- PAGINATION -->

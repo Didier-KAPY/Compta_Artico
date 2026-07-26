@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\SortieCaisse;
+use App\Models\JournalType;
 use Illuminate\Support\Facades\DB;
 use App\Models\Journaux;
 use Carbon\Carbon;
@@ -93,13 +94,59 @@ class SortieCaisseController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show($id)
-    {
-        $sortie = SortieCaisse::with('user')
-            ->findOrFail($id);
+ public function show($id)
+{
+    $sortie = SortieCaisse::with([
+        'user',
+        'etatBesoin.lignes'
+    ])->findOrFail($id);
 
-        return view('sortie_caisses.show', compact('sortie'));
+
+
+    $roleObservation = strtolower(
+        auth()->user()
+        ->role
+        ?->observation ?? ''
+    );
+
+
+
+    $journalTypes = collect();
+
+
+
+   $journalTypes = collect();
+
+
+    if(
+        str_contains($roleObservation,'caisse') ||
+        str_contains($roleObservation,'banque') ||
+        str_contains($roleObservation,'monnaie electronique') ||
+        str_contains($roleObservation,'mobile money')
+    ) {
+
+
+        $journalTypes = JournalType::where('est_tresorerie', true)
+            ->get();
+
+
+    } else {
+
+
+        $journalTypes = JournalType::where('est_tresorerie', true)
+            ->get();
+
     }
+
+    
+    return view(
+        'sortie_caisses.show',
+        compact(
+            'sortie',
+            'journalTypes'
+        )
+    );
+}
 
     /**
      * Show the form for editing the specified resource.
@@ -176,55 +223,95 @@ class SortieCaisseController extends Controller
 
 public function valider(Request $request, $id)
 {
+    
+
+
     DB::beginTransaction();
+
     try {
+
+
         $sortie = SortieCaisse::findOrFail($id);
+
+
+
         // Générer le numéro si absent
-        if (empty($sortie->numero)) {
+        if(empty($sortie->numero)) {
+
             $sortie->numero = $this->generateNumero();
             $sortie->save();
+
         }
 
-        $montant = $sortie->montant ?? 0;
+
+
         /*
         |--------------------------------------------------------------------------
         | REMETTRE EN ATTENTE
         |--------------------------------------------------------------------------
         */
-        if ($sortie->statut === 'Validé') {
-            $journal = Journaux::where('reference', $sortie->numero)->first();
-            // Impossible si journal déjà validé
-            if ($journal && $journal->statut === 'Validé') {
+
+        if($sortie->statut === 'Validé') {
+
+
+            $journal = Journaux::where(
+                'reference',
+                $sortie->numero
+            )->first();
+
+
+
+            if($journal && $journal->statut === 'Validé') {
+
+
                 DB::rollBack();
+
+
                 return back()->with(
                     'error',
                     'Impossible de remettre ce bon en attente car le journal est déjà validé.'
                 );
+
             }
 
 
-            // Supprimer le journal en attente
-            if ($journal) {
+
+            if($journal){
+
                 $journal->delete();
+
             }
+
 
 
             $sortie->update([
-                'statut' => 'En attente',
-                'date_validation' => null,
-                'valide_par' => null,
+
+                'statut'=>'En attente',
+
+                'date_validation'=>null,
+
+                'valide_par'=>null,
+
             ]);
+
 
 
             DB::commit();
 
+
+
             return redirect()
+
                 ->route('sortie-caisses.index')
+
                 ->with(
                     'success',
                     'Le bon a été remis en attente.'
                 );
+
         }
+
+
 
 
 
@@ -234,61 +321,113 @@ public function valider(Request $request, $id)
         |--------------------------------------------------------------------------
         */
 
+
         $sortie->update([
-            'statut' => 'Validé',
-            'date_validation' => now(),
-            'valide_par' => auth()->id(),
+
+            'statut'=>'Validé',
+
+            'date_validation'=>now(),
+
+            'valide_par'=>auth()->id(),
+
         ]);
 
+
+
+
+
         Journaux::updateOrCreate(
+
             [
-                'reference' => $sortie->numero
+
+                'reference'=>$sortie->numero
+
             ],
+
+
             [
-                'user_id' => auth()->id(),
-                'sortie_caisse_id' => $sortie->id,
-                'date' => $sortie->date,
-                'reference' => $sortie->numero,
-                'description' => $sortie->motif,
-                'piece_justificatif' => $sortie->numero,
-                'mode_paiement' => 'Espèces',
-                'monnaie' => $sortie->monnaie,
-                'entrees_cdf' => 0,
-                'entrees_usd' => 0,
-                'sorties_cdf' => $sortie->monnaie == 'CDF'
+
+                'user_id'=>auth()->id(),
+
+
+                // AJOUT IMPORTANT
+                'journal_type_id'=>$request->journal_type_id,
+
+
+                'sortie_caisse_id'=>$sortie->id,
+
+
+                'date'=>$sortie->date,
+
+
+                'description'=>$sortie->motif,
+
+
+                'piece_justificatif'=>$sortie->numero,
+
+
+                'mode_paiement'=>'espèce',
+
+
+                'monnaie'=>$sortie->monnaie,
+
+
+                'entrees_cdf'=>0,
+
+                'entrees_usd'=>0,
+
+
+                'sorties_cdf'=>$sortie->monnaie == 'CDF'
                     ? $sortie->montant
                     : 0,
-                'sorties_usd' => $sortie->monnaie == 'USD'
+
+
+                'sorties_usd'=>$sortie->monnaie == 'USD'
                     ? $sortie->montant
                     : 0,
-                'statut' => 'En attente',
+
+
+                'statut'=>'En attente',
+
             ]
-    );
+
+        );
+
 
 
         DB::commit();
 
 
+
         return redirect()
+
             ->route('sortie-caisses.index')
+
             ->with(
                 'success',
                 'Bon de sortie validé avec succès.'
             );
 
 
-    } catch (\Exception $e) {
+
+    } catch(\Exception $e) {
+
 
         DB::rollBack();
 
-         dd([
-        'message' => $e->getMessage(),
-        'line' => $e->getLine(),
-        'file' => $e->getFile()
-    ]);
+
+        dd([
+
+            'message'=>$e->getMessage(),
+
+            'line'=>$e->getLine(),
+
+            'file'=>$e->getFile()
+
+        ]);
+
     }
 }
-
 public function rejeter($id)
 {
     $sortie = SortieCaisse::findOrFail($id);
@@ -300,6 +439,87 @@ public function rejeter($id)
     return redirect()
         ->route('sortie-caisses.show', $id)
         ->with('success', 'Bon de sortie rejeté.');
+}
+public function attente($id)
+{
+
+    DB::beginTransaction();
+
+    try {
+
+        $sortie = SortieCaisse::findOrFail($id);
+
+
+        // Vérifier si le journal existe
+        $journal = Journaux::where(
+            'reference',
+            $sortie->numero
+        )->first();
+
+
+
+        // Si le journal est déjà validé, blocage
+        if($journal && $journal->statut === 'Validé'){
+
+
+            DB::rollBack();
+
+
+            return back()->with(
+                'error',
+                'Vous ne pouvez pas remettre ce bon en attente car le journal comptable est déjà validé.'
+            );
+
+        }
+
+
+
+        // Supprimer le journal provisoire
+        if($journal){
+
+            $journal->delete();
+
+        }
+
+
+
+        // Remettre le bon en attente
+
+        $sortie->update([
+
+            'statut'=>'En attente',
+
+            'date_validation'=>null,
+
+            'valide_par'=>null,
+
+        ]);
+
+
+
+        DB::commit();
+
+
+        return back()->with(
+            'success',
+            'Le bon de sortie a été remis en attente.'
+        );
+
+
+
+    } catch(\Exception $e){
+
+
+        DB::rollBack();
+
+
+        return back()->with(
+            'error',
+            $e->getMessage()
+        );
+
+    }
+
 }
     
 }

@@ -112,24 +112,68 @@
                                        required>
                             </div>
                             {{-- ROLE --}}
+                            {{-- ROLE --}}
                             <div class="col-md-6 mb-3">
+
                                 <label class="form-label fw-bold">
                                     Rôle
                                 </label>
-                                <select name="role_id"
-                                        class="form-select"
-                                        required>
-                                    <option value="">
-                                        -- Choisir un rôle --
-                                    </option>
 
-                                    @foreach($roles as $role)
-                                        <option value="{{ $role->id }}"
-                                        {{ $user->role_id == $role->id ? 'selected':'' }}>
-                                            {{ $role->designation }} - {{ $role->type }}
+
+                                @if(in_array(strtolower(auth()->user()->role?->designation ?? ''), [
+
+                                    'super admin',
+                                    'admin'
+
+                                ]))
+
+
+                                    {{-- Super Admin et Admin peuvent modifier le rôle --}}
+
+                                    <select name="role_id"
+                                            class="form-select"
+                                            required>
+
+
+                                        <option value="">
+                                            -- Choisir un rôle --
                                         </option>
-                                    @endforeach
-                                </select>
+
+
+                                        @foreach($roles as $role)
+
+                                            <option value="{{ $role->id }}"
+                                            {{ $user->role_id == $role->id ? 'selected':'' }}>
+
+                                                {{ $role->designation }} - {{ $role->type }}
+
+                                            </option>
+
+                                        @endforeach
+
+
+                                    </select>
+
+
+                                @else
+
+
+                                    {{-- Les autres utilisateurs ne peuvent pas modifier --}}
+
+                                    <input type="text"
+                                        class="form-control"
+                                        value="{{ $user->role?->designation ?? 'Aucun rôle' }}"
+                                        readonly>
+
+
+                                    <input type="hidden"
+                                        name="role_id"
+                                        value="{{ $user->role_id }}">
+
+
+                                @endif
+
+
                             </div>
                         </div>
                         <hr>

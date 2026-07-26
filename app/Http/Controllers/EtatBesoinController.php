@@ -14,40 +14,75 @@ class EtatBesoinController extends Controller
     /**
      * LISTE
      */
-    public function index(Request $request)
+   public function index(Request $request)
 {
-    $query = EtatBesoin::with('lignes');
+    $query = EtatBesoin::with([
+        'lignes',
+        'user'
+    ]);
+
 
     // Recherche par numéro
     if ($request->filled('numero')) {
-        $query->where('numero', 'like', '%' . $request->numero . '%');
+
+        $query->where(
+            'numero',
+            'like',
+            '%' . $request->numero . '%'
+        );
+
     }
+
 
     // Date début
     if ($request->filled('date_debut')) {
-        $query->whereDate('date', '>=', $request->date_debut);
+
+        $query->whereDate(
+            'date',
+            '>=',
+            $request->date_debut
+        );
+
     }
+
 
     // Date fin
     if ($request->filled('date_fin')) {
-        $query->whereDate('date', '<=', $request->date_fin);
+
+        $query->whereDate(
+            'date',
+            '<=',
+            $request->date_fin
+        );
+
     }
 
-    // Si aucun filtre n'est renseigné
+
+    // Aucun filtre → aujourd'hui
     if (
         !$request->filled('numero') &&
         !$request->filled('date_debut') &&
         !$request->filled('date_fin')
     ) {
-        $query->whereDate('date', Carbon::today());
+
+        $query->whereDate(
+            'date',
+            Carbon::today()
+        );
+
     }
+
 
     $etatBesoins = $query
         ->latest()
         ->paginate(10)
         ->withQueryString();
 
-    return view('etat_besoins.index', compact('etatBesoins'));
+
+    return view(
+        'etat_besoins.index',
+        compact('etatBesoins')
+    );
 }
     /**
      * FORM CREATE
@@ -204,50 +239,122 @@ public function valider(Request $request, $id)
 {
     $request->validate([
         'observation' => 'required|string',
-        'action' => 'required|in:valider,rejetter',
-        'monnaie' => 'nullable|string',
+        'action'      => 'required|in:valider,rejeter,attente',
+        'monnaie'     => 'required|in:CDF,USD',
     ]);
 
     DB::beginTransaction();
 
     try {
 
-        $etat = EtatBesoin::with('lignes')->findOrFail($id);
+        $etat = EtatBesoin::findOrFail($id);
 
-        // 🔵 VALIDATION
-        if ($request->action === 'valider') {
+        /*
+        |--------------------------------------------------------------------------
+        | REMETTRE EN ATTENTE
+        |--------------------------------------------------------------------------
+        */
+        if ($request->action == 'attente') {
+
+            $sortieValidee = SortieCaisse::where('etat_besoin_id', $etat->id)
+                ->where('statut', 'Validé')
+                ->exists();
+
+            if ($sortieValidee) {
+
+                DB::rollBack();
+
+                return back()->with(
+                    'error',
+                    'Vous ne pouvez pas remettre cet état de besoin en attente, car le bon de sortie caisse a déjà été validé. Veuillez d\'abord remettre le bon de sortie en attente.'
+                );
+            }
 
             $etat->update([
                 'observation' => $request->observation,
-                'statut' => 'Validé',
+                'statut'      => 'En attente',
             ]);
 
-            // 🔥 Création automatique sortie caisse
-            SortieCaisse::create([
-                'user_id' => auth()->id(),
-                'numero' =>null,
-                 //$this->generateNumeroSortie(),
-                'date' => now(),
-                'etat_besoin_id' => $etat->id,
-                'beneficiaire' => $etat->demandeur,
-                'motif' => $etat->motif,
-                'montant' => $etat->montant_estime,
-                'monnaie' => $request->monnaie,
-                'observation' => $request->observation,
-            ]);
+            $sortie = SortieCaisse::where('etat_besoin_id', $etat->id)->first();
 
-            $message = "État validé et sortie de caisse créée.";
+            if ($sortie) {
+                $sortie->delete();
+            }
+
+            $message = "État de besoin remis en attente avec succès.";
         }
 
-        // 🔴 REJET
-        if ($request->action === 'rejetter') {
+        /*
+        |--------------------------------------------------------------------------
+        | VALIDATION
+        |--------------------------------------------------------------------------
+        */
+        elseif ($request->action == 'valider') {
 
             $etat->update([
                 'observation' => $request->observation,
-                'statut' => 'Rejeté',
+                'statut'      => 'Validé',
             ]);
 
-            $message = "État rejeté avec succès.";
+            $sortieExiste = SortieCaisse::where(
+                'etat_besoin_id',
+                $etat->id
+            )->exists();
+
+            if (!$sortieExiste) {
+
+                SortieCaisse::create([
+
+                    'user_id'          => auth()->id(),
+                    'numero'           => $this->generateNumeroSortie(),
+                    'date'             => now(),
+                    'etat_besoin_id'   => $etat->id,
+                    'beneficiaire'     => $etat->demandeur,
+                    'motif'            => $etat->motif,
+                    'montant'          => $etat->montant_estime,
+                    'monnaie'          => $etat->monnaie,
+                    'observation'      => $request->observation,
+                    'statut'           => 'En attente',
+
+                ]);
+            }
+
+            $message = "État de besoin validé avec succès. Le bon de sortie caisse a été créé.";
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | REJET
+        |--------------------------------------------------------------------------
+        */
+        else {
+
+            $sortieValidee = SortieCaisse::where('etat_besoin_id', $etat->id)
+                ->where('statut', 'Validé')
+                ->exists();
+
+            if ($sortieValidee) {
+
+                DB::rollBack();
+
+                return back()->with(
+                    'error',
+                    'Vous ne pouvez pas rejeter cet état de besoin, car le bon de sortie caisse a déjà été validé. Veuillez d\'abord remettre le bon de sortie en attente.'
+                );
+            }
+
+            $etat->update([
+                'observation' => $request->observation,
+                'statut'      => 'Rejeté',
+            ]);
+
+            $sortie = SortieCaisse::where('etat_besoin_id', $etat->id)->first();
+
+            if ($sortie) {
+                $sortie->delete();
+            }
+
+            $message = "État de besoin rejeté avec succès.";
         }
 
         DB::commit();

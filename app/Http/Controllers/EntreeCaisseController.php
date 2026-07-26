@@ -101,135 +101,112 @@ class EntreeCaisseController extends Controller
     // =========================
     // VALIDATION TOGGLE
     // =========================
-    public function valider($id, $type = 'entree')
+   public function valider(Request $request, $id)
 {
     DB::beginTransaction();
 
     try {
 
-        // =========================
-        // ENTREE CAISSE
-        // =========================
-        if($type == 'entree') {
-            $caisse = EntreeCaisse::with('lignes')
-                ->findOrFail($id);
-            $montant = $caisse->lignes->sum(function($ligne){
-                return ($ligne->quantite ?? 0) *
-                       ($ligne->prix_unitaire ?? 0);
-            });
-            if($montant <= 0){
-                $montant = $caisse->montant ?? 0;
-            }
-            // RETOUR EN ATTENTE
-            if($caisse->statut == 'Validé'){
-                $caisse->update([
-                    'statut'=>'En attente',
-                    'date_validation'=>null,
-                    'valide_par'=>null
-                ]);
-                Journaux::where(
-                    'entree_caisse_id',
-                    $caisse->id
-                )->delete();
-            }else{
-                // VALIDATION
-                $caisse->update([
-                    'statut'=>'Validé',
-                    'montant'=>$montant,
-                    'date_validation'=>now(),
-                    'valide_par'=>auth()->id()
-                ]);
-                Journaux::updateOrCreate(
-                    [
-                        'entree_caisse_id'=>$caisse->id
-                    ],
-                    [
-                        'user_id'=>auth()->id(),
-                        // LIAISON
-                        'entree_caisse_id'=>$caisse->id,
-                        'sortie_caisse_id'=>null,
-                        'reference'=>$caisse->numero,
-                        'date'=>$caisse->date,
-                        'description'=>$caisse->motif,
-                        'piece_justificatif'=>$caisse->numero,
-                        'mode_paiement'=>'Espèces',
-                        'monnaie'=>$caisse->monnaie,
-                        'entrees_cdf'=>
-                        $caisse->monnaie=='CDF'
-                        ? $montant : 0,
-                        'entrees_usd'=>
-                        $caisse->monnaie=='USD'
-                        ? $montant : 0,
-                        'sorties_cdf'=>0,
-                        'sorties_usd'=>0,
-                        'statut'=>'En attente'
-                    ]
-                );
-            }
+        // Récupération de l'entrée de caisse
+        $caisse = EntreeCaisse::with('lignes')
+            ->findOrFail($id);
+
+
+        // Calcul du montant
+        $montant = $caisse->lignes->sum(function($ligne){
+
+            return ($ligne->quantite ?? 0) *
+                   ($ligne->prix_unitaire ?? 0);
+
+        });
+
+
+        if($montant <= 0){
+            $montant = $caisse->montant ?? 0;
         }
-        // =========================
-        // SORTIE CAISSE
-        // =========================
-        else {
-            $sortie = SortieCaisse::findOrFail($id);
-            if($sortie->statut == 'Validé'){
-                $sortie->update([
-                    'statut'=>'En attente',
-                    'date_validation'=>null,
-                    'valide_par'=>null
 
-                ]);
-                Journaux::where(
-                    'sortie_caisse_id',
-                    $sortie->id
-                )->delete();
-            }else{
-                $sortie->update([
-                    'statut'=>'Validé',
-                    'date_validation'=>now(),
-                    'valide_par'=>auth()->id()
 
-                ]);
+        // Validation entrée caisse
+        $caisse->update([
 
-                Journaux::updateOrCreate(
-                    [
-                        'sortie_caisse_id'=>$sortie->id
-                    ],
-                    [
-                        'user_id'=>auth()->id(),
-                        // LIAISON
-                        'entree_caisse_id'=>null,
-                        'sortie_caisse_id'=>$sortie->id,
-                        'reference'=>$sortie->numero,
-                        'date'=>$sortie->date,
-                        'description'=>$sortie->motif,
-                        'piece_justificatif'=>$sortie->numero,
-                        'mode_paiement'=>'Espèces',
-                        'monnaie'=>$sortie->monnaie,
-                        'entrees_cdf'=>0,
-                        'entrees_usd'=>0,
-                        'sorties_cdf'=>
-                        $sortie->monnaie=='CDF'
-                        ? $sortie->montant : 0,
-                        'sorties_usd'=>
-                        $sortie->monnaie=='USD'
-                        ? $sortie->montant : 0,
-                        'statut'=>'En attente'
-                    ]
-                );
-            }
-        }
+            'statut' => 'Validé',
+
+            'montant' => $montant,
+
+            'observation' => $request->observation,
+
+            'date_validation' => now(),
+
+            'valide_par' => auth()->id()
+
+        ]);
+
+
+        // Création du journal
+        Journaux::updateOrCreate(
+
+            [
+                'entree_caisse_id' => $caisse->id
+            ],
+
+            [
+
+                'user_id' => auth()->id(),
+
+                'entree_caisse_id' => $caisse->id,
+
+                'reference' => $caisse->numero,
+
+                'date' => $caisse->date,
+
+                'description' => $caisse->motif,
+
+                'monnaie' => $caisse->monnaie,
+
+
+                'entrees_cdf' => $caisse->monnaie == 'CDF'
+                    ? $montant : 0,
+
+
+                'entrees_usd' => $caisse->monnaie == 'USD'
+                    ? $montant : 0,
+
+
+                'sorties_cdf' => 0,
+
+                'sorties_usd' => 0,
+
+
+                'statut' => 'Validé',
+
+                'date_validation' => now(),
+
+                'valide_par' => auth()->id()
+
+            ]
+        );
+
+
         DB::commit();
+
+
         return back()->with(
             'success',
-            'Validation effectuée avec succès.'
+            'Entrée de caisse validée avec succès.'
         );
-    } catch(\Exception $e){
+
+
+    } catch(\Exception $e) {
+
+
         DB::rollBack();
+
+
         return back()->with(
             'error',
             $e->getMessage()
         );
+
     }
 }
 
@@ -278,74 +255,7 @@ class EntreeCaisseController extends Controller
     return $prefix . str_pad($next, 4, '0', STR_PAD_LEFT);
 }
 
-public function statistiques(Request $request)
-{
-    $currentYear = date('Y');
-    $years = range($currentYear - 5, $currentYear + 2);
 
-    // 🔥 récupération propre
-    $year = $request->input('year', $currentYear);
-    $month = $request->input('month');
-
-    // 🔥 NORMALISATION (IMPORTANT)
-    $month = ($month === "" || $month === null) ? null : (int)$month;
-
-    // 📌 QUERY UNIQUE
-    $query = EntreeCaisse::whereYear('created_at', $year);
-
-    if ($month) {
-        $query->whereMonth('created_at', $month);
-    }
-
-    // 📊 KPI (TOUJOURS FILTRÉS)
-    $totalEntrees = (clone $query)->count();
-    $totalValidees = (clone $query)->where('statut', 'valide')->count();
-    $totalRejetees = (clone $query)->where('statut', 'rejete')->count();
-    $enAttente = $totalEntrees - ($totalValidees + $totalRejetees);
-
-    // 📊 GRAPH
-    $labels = [];
-    $values = [];
-
-    if ($month) {
-
-        // 📅 PAR JOUR (MOIS ACTIF)
-        $days = cal_days_in_month(CAL_GREGORIAN, $month, $year);
-
-        for ($d = 1; $d <= $days; $d++) {
-
-            $labels[] = $d;
-
-            $values[] = (clone $query)
-                ->whereDay('created_at', $d)
-                ->count();
-        }
-
-    } else {
-
-        // 📅 PAR MOIS (ANNÉE COMPLETE)
-        for ($m = 1; $m <= 12; $m++) {
-
-            $labels[] = "M" . $m;
-
-            $values[] = EntreeCaisse::whereYear('created_at', $year)
-                ->whereMonth('created_at', $m)
-                ->count();
-        }
-    }
-
-    return view('entree_caisses.statistiques', compact(
-        'years',
-        'year',
-        'month',
-        'totalEntrees',
-        'totalValidees',
-        'totalRejetees',
-        'enAttente',
-        'labels',
-        'values'
-    ));
-}
 public function edit($id)
 {
     $entree = EntreeCaisse::with('lignes')->findOrFail($id);

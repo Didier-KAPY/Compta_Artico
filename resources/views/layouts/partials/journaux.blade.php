@@ -37,29 +37,15 @@
                 Nouveau journal
             </a>
         </li>
-        <!-- Caisse -->
-        <li>
-            <a href="{{ route('journaux.caisse') }}"
-               class="nav-link {{ request()->routeIs('journaux.caisse') ? 'active-menu' : '' }}">
-                <i class="bi bi-cash-stack me-2"></i>
-                Journal Caisse
+        <!-- Relevé -->
+        <li class="nav-item">
+            <a class="nav-link"
+            href="{{ route('journaux.releve') }}"
+            class="nav-link {{ request()->routeIs('journaux.releve') ? 'active-menu' : '' }}">
+                <i class="bi bi-journal-text me-2"></i>
+                    Relevé Journal
             </a>
-        </li>
-        <!-- Banque -->
-        <li>
-            <a href="{{ route('journaux.banque') }}"
-               class="nav-link {{ request()->routeIs('journaux.banque') ? 'active-menu' : '' }}">
-                <i class="bi bi-bank me-2"></i>
-                Journal Banque
-            </a>
-        </li>
-        <!-- Mobile Money -->
-        <li>
-            <a href="{{ route('journaux.mobile') }}"
-               class="nav-link {{ request()->routeIs('journaux.mobile') ? 'active-menu' : '' }}">
-                <i class="bi bi-phone me-2"></i>
-                Journal Mobile Money
-            </a>
+
         </li>
         <!-- Situation trésorerie -->
         <li>

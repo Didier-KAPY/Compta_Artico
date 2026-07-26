@@ -2,13 +2,31 @@
 
 @section('content')
 
-<div class="container py-4">
+@php
+    $role = strtolower(auth()->user()->role?->designation ?? '');
+@endphp
 
+
+<div class="container py-4">
+    @if(session('success'))
+    <div class="alert alert-success alert-dismissible fade show">
+        {{ session('success') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    @endif
+
+    @if(session('error'))
+    <div class="alert alert-danger alert-dismissible fade show">
+        {{ session('error') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    @endif
 
     <!-- HEADER -->
     <div class="d-flex justify-content-between align-items-center mb-3">
 
         <div>
+
             <h4 class="mb-0">
                 <i class="bi bi-file-earmark-text me-2"></i>
                 Détails État de Besoin
@@ -17,6 +35,7 @@
             <small class="text-muted">
                 Consultation et validation financière
             </small>
+
         </div>
 
 
@@ -64,6 +83,7 @@
 
 
 
+
                 <div class="col-md-3">
 
                     <strong>Service</strong><br>
@@ -74,6 +94,7 @@
 
 
 
+
                 <div class="col-md-3">
 
                     <strong>Demandeur</strong><br>
@@ -81,6 +102,7 @@
                     {{ $etat->demandeur }}
 
                 </div>
+
 
 
 
@@ -95,22 +117,29 @@
                             Validé
                         </span>
 
+
                     @elseif($etat->statut == 'Rejeté')
+
 
                         <span class="badge bg-danger">
                             Rejeté
                         </span>
 
+
                     @else
+
 
                         <span class="badge bg-warning text-dark">
                             En attente
                         </span>
 
+
                     @endif
 
 
                 </div>
+
+
 
 
 
@@ -128,6 +157,8 @@
 
 
 
+
+
                 <div class="col-md-6">
 
                     <strong>Motif</strong><br>
@@ -137,21 +168,30 @@
                 </div>
 
 
+
             </div>
+
 
 
 
             <hr>
 
 
+
+
             <div class="text-end">
+
 
                 <h5 class="text-primary">
 
+
                     Total :
+
                     {{ number_format($etat->montant_estime,2) }}
 
+
                 </h5>
+
 
             </div>
 
@@ -165,18 +205,24 @@
 
 
 
+
+
     <!-- LIGNES -->
+
 
     <div class="card shadow-sm border-0">
 
 
         <div class="card-header bg-dark text-white">
 
+
             <i class="bi bi-list-check me-2"></i>
 
             Lignes du besoin
 
+
         </div>
+
 
 
 
@@ -188,6 +234,7 @@
 
                 <thead class="table-light">
 
+
                     <tr>
 
                         <th>Désignation</th>
@@ -197,7 +244,9 @@
 
                     </tr>
 
+
                 </thead>
+
 
 
 
@@ -208,6 +257,7 @@
 
 
                     <tr>
+
 
                         <td>
                             {{ $ligne->designation }}
@@ -225,9 +275,7 @@
 
 
                         <td>
-
                             {{ number_format($ligne->montant,2) }}
-
                         </td>
 
 
@@ -246,6 +294,7 @@
 
                         </td>
 
+
                     </tr>
 
 
@@ -260,6 +309,7 @@
 
         </div>
 
+
     </div>
 
 
@@ -267,94 +317,211 @@
 
 
 
-<!-- VALIDATION -->
-@if($etat->statut == 'En attente')
+    <!-- TRAITEMENT -->
+
+<!-- TRAITEMENT -->
+
+@if(
+    $etat->statut == 'En attente'
+    ||
+    (
+        $etat->statut == 'Validé'
+        &&
+        in_array($role,[
+            'super admin',
+            'admin',
+            'directeur général',
+            'gérant'
+        ])
+    )
+)
+
+
 <div class="card shadow-lg border-0 mt-4">
-    <div class="card-header bg-dark text-white d-flex align-items-center">
-        <i class="bi bi-shield-check fs-4 me-2"></i>
-        <h5 class="mb-0">Traitement de l'état de besoin</h5>
+
+
+    <div class="card-header bg-dark text-white">
+
+        <i class="bi bi-shield-check me-2"></i>
+
+        Traitement de l'état de besoin
+
     </div>
+
+
 
     <div class="card-body">
 
-        <div class="alert alert-warning">
-            <i class="bi bi-exclamation-triangle-fill me-2"></i>
-            Une observation est obligatoire avant validation ou rejet.
-        </div>
 
-        <div class="d-flex justify-content-end gap-2">
+        @if($etat->statut == 'Validé')
 
-            <a href="{{ route('etat-besoins.edit',$etat->id) }}"
-               class="btn btn-warning">
-                <i class="bi bi-pencil-square me-1"></i>
-                Modifier
-            </a>
+            <div class="alert alert-success">
 
-            <button type="button"
-                    class="btn btn-primary"
+                <i class="bi bi-check-circle-fill me-2"></i>
+
+                Cet état de besoin est déjà validé.
+                Vous pouvez le remettre en attente.
+
+            </div>
+
+
+        @else
+
+            <div class="alert alert-warning">
+
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+
+                Une observation est obligatoire avant validation ou rejet.
+
+            </div>
+
+
+        @endif
+
+
+
+
+        <div class="text-end">
+
+
+            @if($etat->statut == 'En attente')
+
+                <a href="{{ route('etat-besoins.edit',$etat->id) }}"
+                   class="btn btn-warning">
+
+                    <i class="bi bi-pencil-square me-1"></i>
+
+                    Modifier
+
+                </a>
+
+            @endif
+
+
+
+            <button class="btn btn-primary"
                     data-bs-toggle="modal"
                     data-bs-target="#modalTraitement">
+
+
                 <i class="bi bi-check-circle me-1"></i>
-                Traiter l'état de besoin
+
+                Traiter
+
+
             </button>
+
 
         </div>
 
+
     </div>
+
+
 </div>
 
 
-<div class="modal fade" id="modalTraitement" tabindex="-1">
+
+
+
+<!-- MODAL TRAITEMENT -->
+
+<div class="modal fade"
+     id="modalTraitement"
+     tabindex="-1">
+
+
     <div class="modal-dialog modal-dialog-centered">
+
+
         <div class="modal-content">
 
-            <form action="{{ route('etat-besoins.valider',$etat->id) }}" method="POST">
+
+
+            <form action="{{ route('etat-besoins.valider',$etat->id) }}"
+                  method="POST">
+
                 @csrf
 
+
+
                 <div class="modal-header bg-dark text-white">
+
+
                     <h5 class="modal-title">
+
                         <i class="bi bi-file-earmark-check me-2"></i>
+
                         Traitement état de besoin
+
                     </h5>
+
+
 
                     <button type="button"
                             class="btn-close btn-close-white"
                             data-bs-dismiss="modal">
+
                     </button>
+
+
                 </div>
+
+
+
 
 
                 <div class="modal-body">
 
+
                     <div class="alert alert-info">
-                        <strong>Numéro :</strong> {{ $etat->numero }}
+
+
+                        <strong>Numéro :</strong>
+
+                        {{ $etat->numero }}
+
                         <br>
+
+
                         <strong>Montant :</strong>
+
                         {{ number_format($etat->montant_estime,2) }}
+
                         {{ $etat->monnaie }}
+
+
                     </div>
+
+                        
+
+
+                    <label class="form-label fw-bold">
+
+                        Observation
+
+                        <span class="text-danger">*</span>
+
+                    </label>
+
+
+
+                    <textarea name="observation"
+                              class="form-control"
+                              rows="4"
+                              required>{{ old('observation',$etat->observation) }}</textarea>
+
 
                     <input type="hidden"
                            name="monnaie"
                            value="{{ $etat->monnaie }}">
 
 
-                    <div class="mb-3">
-
-                        <label class="form-label fw-bold">
-                            Observation
-                            <span class="text-danger">*</span>
-                        </label>
-
-                        <textarea name="observation"
-                                  class="form-control"
-                                  rows="4"
-                                  placeholder="Saisir votre observation..."
-                                  required>{{ old('observation',$etat->observation) }}</textarea>
-
-                    </div>
 
                 </div>
+
+
+
 
 
                 <div class="modal-footer">
@@ -365,73 +532,130 @@
                         Annuler
                     </button>
 
+                    {{-- Bouton Rejeter toujours visible --}}
                     <button type="submit"
                             name="action"
-                            value="rejetter"
+                            value="rejeter"
                             class="btn btn-danger">
-                        <i class="bi bi-x-circle"></i>
+
+                        <i class="bi bi-x-circle me-1"></i>
                         Rejeter
+
                     </button>
 
-                    <button type="submit"
-                            name="action"
-                            value="valider"
-                            class="btn btn-success">
-                        <i class="bi bi-check-circle"></i>
-                        Valider
-                    </button>
+                    @if($etat->statut == 'Validé')
+
+                        <button type="submit"
+                                name="action"
+                                value="attente"
+                                class="btn btn-warning">
+
+                            <i class="bi bi-arrow-counterclockwise me-1"></i>
+                            Remettre en attente
+
+                        </button>
+
+                    @else
+
+                        <button type="submit"
+                                name="action"
+                                value="valider"
+                                class="btn btn-success">
+
+                            <i class="bi bi-check-circle me-1"></i>
+                            Valider
+
+                        </button>
+
+                    @endif
 
                 </div>
 
+
+
             </form>
 
+
         </div>
+
+
     </div>
+
+
 </div>
+
+
 
 
 @else
 
+
+
 <div class="card shadow-sm border-0 mt-4">
 
+
     <div class="card-body text-center">
+
 
         @if($etat->statut == 'Validé')
 
             <i class="bi bi-check-circle-fill text-success"
                style="font-size:70px;"></i>
 
-        @else
+
+        @elseif($etat->statut == 'Rejeté')
+
 
             <i class="bi bi-x-circle-fill text-danger"
                style="font-size:70px;"></i>
 
+
         @endif
 
 
+
+
         <h5 class="mt-3">
+
             Cet état de besoin a déjà été traité
+
         </h5>
 
 
+
+
         <p class="text-muted">
+
             Statut actuel :
-            <strong>{{ $etat->statut }}</strong>
+
+            <strong>
+                {{ $etat->statut }}
+            </strong>
+
+
         </p>
+
+
 
 
         <a href="{{ route('etat-besoins.index') }}"
            class="btn btn-secondary">
 
-            <i class="bi bi-arrow-left"></i>
+            <i class="bi bi-arrow-left me-1"></i>
+
             Retour
 
         </a>
 
+
+
     </div>
 
+
 </div>
 
+
+
 @endif
-</div>
+
 @endsection

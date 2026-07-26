@@ -99,16 +99,21 @@
 
                     <thead class="table-dark">
                         <tr>
-                            <th>N°</th>
-                            <th>Date</th>
-                            <th>Service</th>
-                            <th>Demandeur</th>
-                            <th>Désignation</th>
-                            <th>Monnaie</th>
-                            <th class="text-end">Montant</th>
-                            <th>Statut</th>
-                            <th class="text-center">Actions</th>
-                        </tr>
+                        <th>N°</th>
+
+                        @if(strtolower(auth()->user()->role?->designation ?? '') == 'super admin')
+                            <th>Utilisateur</th>
+                        @endif
+                        <th>Date</th>
+                        <th>Service</th>
+                        <th>Demandeur</th>
+                        <th>Désignation</th>
+                        <th>Monnaie</th>
+                        <th class="text-end">Montant</th>
+                        <th>Statut</th>
+                        <th class="text-center">Actions</th>
+
+                    </tr>
                     </thead>
 
                     <tbody>
@@ -118,7 +123,14 @@
                         <tr>
 
                             <td><strong>{{ $etat->numero }}</strong></td>
+                                @if(strtolower(auth()->user()->role?->designation ?? '') == 'super admin')
 
+                            <td>
+                                {{ $etat->user?->prenom ?? '' }}
+                                {{ $etat->user?->nom ?? '' }}
+                            </td>
+
+                            @endif
                             <td>
                                 {{ \Carbon\Carbon::parse($etat->date)->format('d/m/Y') }}
                             </td>
@@ -188,7 +200,8 @@
                         @empty
 
                         <tr>
-                            <td colspan="9" class="text-center text-muted py-4">
+                            <td colspan="{{ strtolower(auth()->user()->role?->designation ?? '') == 'super admin' ? 10 : 9 }}"
+                            class="text-center text-muted py-4">
                                 Aucun état de besoin trouvé
                             </td>
                         </tr>

@@ -83,44 +83,58 @@ class AuthController extends Controller
                 'Email ou mot de passe incorrect.'
             );
     }
+    
     /**
-     * Redirection selon rôle
-     */
-    protected function authenticated($user)
-    {
-        $role = strtolower(
-            $user->role?->designation ?? ''
-        );
-        switch($role)
-        {
-            case 'super admin':
-                return redirect()
-                    ->route('dashboard');
-            case 'caissier':
-                return redirect()
-                    ->route(
-                        'dashboard'
-                    );
+ * Redirection après connexion
+ */
+protected function authenticated($user)
+{
+    $role = strtolower(
+        $user->role?->designation ?? ''
+    );
 
-            case 'comptable':
 
-                return redirect()
-                    ->route(
-                        'layouts.partials.etat-besoins',
-                        'layouts.partials.journaux'
-                    );
+    // Comptable et DAF → Caisses par défaut
+    if(in_array($role, [
+        'comptable',
+        'daf'
+    ])) {
 
-            default:
-                return redirect()
-                    ->route('login')
-                    ->with(
-                        'error_msg',
-                        'Aucun rôle attribué.'
-                    );
-
-        }
-
+        return redirect()
+            ->route('journaux.index');
     }
+
+
+    // Caissier et Trésorier → Caisses par défaut
+    if(in_array($role, [
+        'caissier',
+        'caissière',
+        'trésorier',
+        'trésorière'
+    ])) {
+
+        return redirect()
+            ->route('journaux.index');
+    }
+
+
+    // Directeur Général, Chef de Service, Chef de département
+    // → Etat de besoin par défaut
+    if(in_array($role, [
+        'chef de service',
+        'chef de département',
+        'directeur technique'
+    ])) {
+
+        return redirect()
+            ->route('etat-besoins.index');
+    }
+
+
+    // Administration → Dashboard
+    return redirect()
+        ->route('dashboard');
+}
     /**
      * Page succès
      */

@@ -6,32 +6,49 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
-    public function up(): void
-    {
-        Schema::create('liste_des_comptes', function (Blueprint $table) {
-            $table->id();
 
-            $table->foreignId('user_id')
-                  ->constrained()
-                  ->cascadeOnDelete();
+public function up(): void
+{
 
-            $table->string('compte')->nullable();
-            $table->string('designation')->nullable();
-            $table->string('nature')->nullable();
-            $table->string('observation')->nullable();
+Schema::create('liste_des_comptes', function (Blueprint $table) {
 
-            $table->timestamps();
-        });
-    }
+    $table->id();
 
-    /**
-     * Reverse the migrations.
-     */
-    public function down(): void
-    {
-        Schema::dropIfExists('liste_des_comptes');
-    }
+
+    $table->foreignId('user_id')
+          ->constrained()
+          ->cascadeOnDelete();
+
+
+    // Exemple : 571100
+    $table->string('compte',20)
+          ->index();
+
+
+    // Exemple : Caisse CDF
+    $table->string('designation');
+
+
+    // Actif, Passif, Charge...
+    $table->string('nature')
+          ->nullable();
+
+
+    $table->text('observation')
+          ->nullable();
+
+
+    $table->timestamps();
+
+});
+
+}
+
+
+
+public function down(): void
+{
+Schema::dropIfExists('liste_des_comptes');
+}
+
 };

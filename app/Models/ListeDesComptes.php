@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\EcritureComptable;
 
 class ListeDesComptes extends Model
 {
@@ -19,11 +20,22 @@ class ListeDesComptes extends Model
         'observation',
     ];
 
-    /**
-     * Relation : un compte appartient à un utilisateur
-     */
-    public function user()
-    {
-        return $this->belongsTo(User::class);
-    }
+    public function journaux()
+{
+return $this->hasMany(
+Journaux::class,
+'liste_des_comptes_id'
+);
+}
+public function getClasseAttribute()
+{
+return substr($this->compte,0,1);
+}
+public function user()
+{
+    return $this->belongsTo(
+        User::class,
+        'user_id'
+    );
+}
 }
