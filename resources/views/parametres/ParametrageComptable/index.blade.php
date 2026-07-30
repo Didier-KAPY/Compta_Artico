@@ -2,6 +2,7 @@
 
 
 @section('content')
+@php $isSuperAdmin = auth()->user()?->hasRole('Super Admin') ?? false; @endphp
 
 
 <div class="container-fluid py-4">
@@ -230,6 +231,10 @@ Liste des paramètres
 
 <th>Compte</th>
 
+@if($isSuperAdmin)
+<th>Utilisateur</th>
+@endif
+
 <th width="120">
 Action
 </th>
@@ -255,7 +260,6 @@ Action
 
 </td>
 
-
 <td>
 
 {{$param->designation}}
@@ -275,6 +279,10 @@ Action
 
 
 </td>
+
+@if($isSuperAdmin)
+<td>{{ trim(($param->user?->prenom ?? '').' '.($param->user?->nom ?? '')) ?: 'Système' }}</td>
+@endif
 
 
 
@@ -314,7 +322,7 @@ onclick="return confirm('Supprimer ce paramètre ?')">
 
 <tr>
 
-<td colspan="4"
+<td colspan="{{ $isSuperAdmin ? 5 : 4 }}"
 class="text-center text-muted">
 
 Aucun paramètre configuré

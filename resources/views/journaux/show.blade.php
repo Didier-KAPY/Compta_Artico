@@ -235,7 +235,7 @@
     </div>
 
     <!-- ACTIONS MODAL -->
-@if($journal->statut !== 'Validé')
+@if($journal->statut === 'En attente' && auth()->user()->can('valider', $journal))
 
 <div class="card shadow-lg border-0 mt-4">
 
@@ -264,20 +264,6 @@
 
 
         <div class="d-flex justify-content-end gap-2">
-
-
-            <!-- MODIFIER -->
-
-            <a href="{{ route('journaux.edit',$journal->id) }}"
-               class="btn btn-warning">
-
-                <i class="bi bi-pencil-square me-1"></i>
-
-                Modifier
-
-            </a>
-
-
 
 
             <!-- MODAL -->
@@ -416,15 +402,15 @@
 
 
 
-                            @foreach($journalTypes as $type)
+                            @foreach($journalTypes as $journalType)
 
 
-                                <option value="{{ $type->id }}"
+                                <option value="{{ $journalType->id }}"
 
-                                {{ $journal->journal_type_id == $type->id ? 'selected' : '' }}>
-
-
-                                    {{ $type->compte->designation ?? 'Non défini' }}
+                                {{ old('journal_type_id', $journal->journal_type_id) == $journalType->id ? 'selected' : '' }}>
+                                {{ $journalType->libelle }}
+                                @if($journalType->compte)
+                                @endif
 
 
                                 </option>
@@ -440,61 +426,6 @@
 
                     </div>
 
-
-
-
-
-
-
-
-
-                    <!-- MODE PAIEMENT -->
-
-                    <div class="mb-3">
-
-
-                        <label class="form-label fw-bold">
-
-                            Mode de paiement
-
-                            <span class="text-danger">*</span>
-
-                        </label>
-
-
-
-
-                        <select name="mode_paiement"
-
-                                class="form-select"
-
-                                required>
-                            <option value="">
-                                -- Choisir le mode --
-                            </option>
-                            <option value="espèce"
-
-                            {{ $journal->mode_paiement == 'espèce' ? 'selected' : '' }}>
-                                espèce
-                            </option>
-                            <option value="Banque"
-
-                            {{ $journal->mode_paiement == 'banque' ? 'selected' : '' }}>
-                                banque
-                            </option>
-                            <option value="Mobile Money"
-
-                            {{ $journal->mode_paiement == 'mobile_money' ? 'selected' : '' }}>
-
-                                Mobile Money
-
-                            </option>
-                            <option value="Chèque"
-                            {{ $journal->mode_paiement == 'Chèque' ? 'selected' : '' }}>
-                                Chèque
-                            </option>
-                        </select>
-                    </div>
                 </div>
                 <!-- FOOTER -->
                 <div class="modal-footer">
@@ -554,6 +485,17 @@
             <i class="bi bi-arrow-left"></i>
             Retour
         </a>
+        @can('reouvrir', $journal)
+            @if($journal->statut === 'Validé')
+                <form method='POST' action='{{ route('journaux.reouvrir', $journal->id) }}' class='d-inline'>
+                    @csrf
+                    @method('PATCH')
+                    <button class='btn btn-warning'>
+                        <i class='bi bi-arrow-counterclockwise'></i> Réouvrir
+                    </button>
+                </form>
+            @endif
+        @endcan
     </div>
 </div>
 @endif

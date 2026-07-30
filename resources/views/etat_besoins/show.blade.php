@@ -86,9 +86,9 @@
 
                 <div class="col-md-3">
 
-                    <strong>Service</strong><br>
+                    <strong>Département</strong><br>
 
-                    {{ $etat->service }}
+                    {{ $etat->departement?->designation ?? $etat->service }}
 
                 </div>
 

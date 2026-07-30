@@ -9,6 +9,8 @@ use App\Models\JournalType;
 use App\Models\Journaux;
 use App\Models\ListeDesComptes;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
+use App\Services\WorkflowComptableService;
 use Barryvdh\DomPDF\Facade\Pdf;
 
 class EcritureComptableController extends Controller
@@ -48,6 +50,7 @@ public function liste(Request $request)
     // Totaux CDF
     $totalDebitCDF = (clone $query)->sum('debit_cdf');
     $totalCreditCDF = (clone $query)->sum('credit_cdf');
+    $equilibreCDF = abs($totalDebitCDF - $totalCreditCDF);
 
     return view(
         'comptabilite.ecritures.liste',
@@ -55,6 +58,7 @@ public function liste(Request $request)
             'ecritures',
             'totalDebitCDF',
             'totalCreditCDF',
+            'equilibreCDF',
         )
     );
 }
@@ -64,38 +68,54 @@ public function liste(Request $request)
      */
     public function valider($id)
 {
-    $ecriture = EcritureComptable::findOrFail($id);
+    abort_unless(Auth::user()?->hasRole(['Super Admin', 'Comptable']), 403);
 
+    $alreadyValidated = DB::transaction(function () use ($id): bool {
+        $ecriture = EcritureComptable::query()
+            ->lockForUpdate()
+            ->findOrFail($id);
 
-    // Vérifier si déjà validée
-    if (trim($ecriture->statut) === 'Validé') {
+        if (trim($ecriture->statut) === 'Validé') {
+            return true;
+        }
 
-        return back()->with(
-            'warning',
-            'Cette écriture est déjà validée.'
-        );
+        $ecriture->update([
+            'statut' => 'Validé',
+            'date_validation' => now(),
+            'valide_par' => Auth::id(),
+        ]);
 
+        return false;
+    });
+
+    if ($alreadyValidated) {
+        return back()->with('warning', 'Cette écriture est déjà validée.');
     }
-
-
-    $ecriture->statut = 'Validé';
-    $ecriture->date_validation = now();
-    $ecriture->valide_par = Auth::id();
-
-    $ecriture->save();
-
 
     return back()->with(
         'success',
         'Écriture validée avec succès.'
     );
 }
+    public function reouvrir($id, WorkflowComptableService $workflow)
+    {
+        $ecriture = EcritureComptable::findOrFail($id);
+        Gate::authorize('reouvrir', $ecriture);
+        $workflow->reouvrirEcriture($ecriture);
+
+        return back()->with('success', 'Écriture réouverte avec succès.');
+    }
+
     /**
      * Formulaire de modification
      */
     public function edit($id)
     {
         $ecriture = EcritureComptable::findOrFail($id);
+
+        if ($ecriture->statut === 'Validé') {
+            return back()->with('error', 'Une écriture comptable validée ne peut plus être modifiée.');
+        }
 
         return view(
             'comptabilite.ecritures.modifier',
@@ -113,13 +133,15 @@ public function liste(Request $request)
             'libelle' => 'required|string|max:255',
             'debit_cdf' => 'nullable|numeric',
             'credit_cdf' => 'nullable|numeric',
-            'debit_usd' => 'nullable|numeric',
-            'credit_usd' => 'nullable|numeric',
         ]);
 
         $ecriture = EcritureComptable::findOrFail($id);
 
-        $ecriture->update($request->all());
+        if ($ecriture->statut === 'Validé') {
+            return back()->with('error', 'Une écriture comptable validée ne peut plus être modifiée.');
+        }
+
+        $ecriture->update($request->only(['date', 'libelle', 'debit_cdf', 'credit_cdf']));
 
         return redirect()
             ->route('ecritures.liste')
@@ -136,6 +158,10 @@ public function liste(Request $request)
     {
         $ecriture = EcritureComptable::findOrFail($id);
 
+        if ($ecriture->statut === 'Validé') {
+            return back()->with('error', 'Une écriture comptable validée ne peut plus être supprimée.');
+        }
+
         $ecriture->delete();
 
         return back()->with(
@@ -145,6 +171,7 @@ public function liste(Request $request)
     }
    public function brc(Request $request)
 {
+    return $this->genererBrc($request);
 
     $dateDebut = $request->input(
         'date_debut',
@@ -278,199 +305,74 @@ public function liste(Request $request)
 }
 public function formBrc()
 {
+    $journalTypes = JournalType::orderBy('code')->get();
 
-    return view(
-        'comptabilite.ecritures.form_brc'
-    );
+    return view('comptabilite.ecritures.form_brc', compact('journalTypes'));
 
 }
 public function genererBrc(Request $request)
 {
+    $donnees = $this->construireBrc($request);
 
-
-    $request->validate([
-
-        'date_debut'=>'required|date',
-
-        'date_fin'=>'required|date',
-
-    ]);
-
-
-
-    $dateDebut = $request->date_debut;
-
-
-    $dateFin = $request->date_fin;
-
-
-
-
-    $ecritures = EcritureComptable::with([
-        'compte',
-        'journal'
-    ])
-    ->where('statut','Validé')
-    ->whereBetween(
-        'date',
-        [
-            $dateDebut,
-            $dateFin
-        ]
-    )
-    ->get();
-
-
-
-    $brc = $ecritures
-        ->groupBy('liste_des_comptes_id')
-        ->map(function($ligne){
-
-
-            return [
-
-                'date'=>$ligne->first()->date,
-
-                'reference'=>$ligne->first()->journal->reference ?? '-',
-
-                'compte'=>$ligne->first()->compte->compte ?? '-',
-
-                'designation'=>$ligne->first()->compte->designation ?? '-',
-
-                'debit'=>$ligne->sum('debit_cdf'),
-
-                'credit'=>$ligne->sum('credit_cdf'),
-
-            ];
-
-
-        });
-
-
-
-    $totalDebit = $brc->sum('debit');
-
-
-    $totalCredit = $brc->sum('credit');
-
-
-
-    $numeroBrc =
-        'BRC-'.
-        now()->format('Ymd').
-        '-0001';
-
-
-
-    $entreprise = \App\Models\Entreprise::first();
-
-
-
-    return view(
-        'comptabilite.ecritures.brc',
-        compact(
-            'brc',
-            'totalDebit',
-            'totalCredit',
-            'dateDebut',
-            'dateFin',
-            'numeroBrc',
-            'entreprise'
-        )
-    );
+    return view('comptabilite.ecritures.brc', $donnees);
 
 }
 public function brcPdf(Request $request)
 {
+    $donnees = $this->construireBrc($request);
+    $pdf = Pdf::loadView('comptabilite.ecritures.brc_pdf', $donnees)
+        ->setPaper('a4', 'landscape');
 
-    $dateDebut = $request->date_debut;
+    return $pdf->download($donnees['numeroBrc'].'.pdf');
 
-    $dateFin = $request->date_fin;
+}
 
+private function construireBrc(Request $request): array
+{
+    $filtres = $request->validate([
+        'date_debut' => ['required', 'date'],
+        'date_fin' => ['required', 'date', 'after_or_equal:date_debut'],
+        'journal_type_id' => ['nullable', 'integer', 'exists:journal_types,id'],
+    ]);
 
+    $dateDebut = $filtres['date_debut'];
+    $dateFin = $filtres['date_fin'];
+    $journalTypeId = $filtres['journal_type_id'] ?? null;
 
-    $ecritures = EcritureComptable::with([
-        'compte',
-        'journal'
-    ])
-    ->where('statut','Validé')
-    ->whereBetween(
-        'date',
-        [
-            $dateDebut,
-            $dateFin
-        ]
-    )
-    ->get();
-
-
-
-
-    $brc = $ecritures
-        ->groupBy('liste_des_comptes_id')
-        ->map(function($lignes){
-
-
-            return [
-
-                'date'=>$lignes->first()->date,
-
-                'reference'=>$lignes->first()->journal->reference ?? '-',
-
-                'compte'=>$lignes->first()->compte->compte ?? '-',
-
-                'designation'=>$lignes->first()->compte->designation ?? '-',
-
-
-                'debit'=>$lignes->sum('debit_cdf'),
-
-                'credit'=>$lignes->sum('credit_cdf'),
-
-            ];
-
-
+    $ecritures = EcritureComptable::with(['compte', 'journal.journalType'])
+        ->where('statut', 'Validé')
+        ->whereBetween('date', [$dateDebut, $dateFin])
+        ->when($journalTypeId, function ($query, $id) {
+            $query->whereHas('journal', fn ($journal) => $journal->where('journal_type_id', $id));
         })
-        ->values();
+        ->orderBy('date')
+        ->orderBy('journal_id')
+        ->orderBy('id')
+        ->get();
 
+    $brc = $ecritures->map(fn ($ecriture) => [
+        'date' => $ecriture->date,
+        'reference' => $ecriture->journal?->reference ?? '-',
+        'journal' => $ecriture->journal?->journalType?->code ?? '-',
+        'piece' => $ecriture->piece ?: ($ecriture->journal?->reference ?? '-'),
+        'compte' => $ecriture->compte?->compte ?? '-',
+        'designation' => $ecriture->compte?->designation ?? '-',
+        'libelle' => $ecriture->libelle,
+        'debit' => (float) $ecriture->debit_cdf,
+        'credit' => (float) $ecriture->credit_cdf,
+    ]);
 
+    $totalDebit = round((float) $brc->sum('debit'), 2);
+    $totalCredit = round((float) $brc->sum('credit'), 2);
+    $ecart = round($totalDebit - $totalCredit, 2);
+    $journalSelectionne = $journalTypeId ? JournalType::find($journalTypeId) : null;
+    $numeroBrc = 'BRC-'.str_replace('-', '', $dateDebut).'-'.str_replace('-', '', $dateFin)
+        .($journalSelectionne ? '-'.$journalSelectionne->code : '');
 
-    $totalDebit = $brc->sum('debit');
-
-    $totalCredit = $brc->sum('credit');
-
-
-
-    $numeroBrc =
-        'BRC-'
-        .now()->format('Ymd')
-        .'-0001';
-
-
-
-    $entreprise = \App\Models\Entreprise::first();
-
-
-
-    $pdf = Pdf::loadView(
-        'comptabilite.ecritures.brc_pdf',
-        compact(
-            'brc',
-            'totalDebit',
-            'totalCredit',
-            'dateDebut',
-            'dateFin',
-            'numeroBrc',
-            'entreprise'
-        )
-    )
-    ->setPaper('a4','portrait');
-
-
-
-    return $pdf->download(
-        $numeroBrc.'.pdf'
-    );
-
+    return compact(
+        'brc', 'totalDebit', 'totalCredit', 'ecart', 'dateDebut', 'dateFin',
+        'numeroBrc', 'journalSelectionne'
+    ) + ['entreprise' => \App\Models\Entreprise::first()];
 }
  /**
      * Formulaire nouvelle écriture/imputation
@@ -543,44 +445,17 @@ public function brcPdf(Request $request)
         $journalType = JournalType::with('compte')
             ->findOrFail($request->journal_type_id);
 
-
-
         if(!$journalType->compte){
-
-            throw new \Exception(
-                "Ce journal n'a pas de compte associé."
-            );
-
+            throw new \Exception("Ce journal n'a pas de compte associé.");
         }
-
-
-
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | Calcul du montant total
-        |--------------------------------------------------------------------------
-        */
-
 
         $total = 0;
-
-
         foreach($request->lignes as $ligne){
-
             $total += floatval($ligne['montant']);
-
         }
 
-
-
         if($total <= 0){
-
-            throw new \Exception(
-                "Le montant doit être supérieur à zéro."
-            );
-
+            throw new \Exception("Le montant doit être supérieur à zéro.");
         }
 
 
@@ -626,8 +501,7 @@ public function brcPdf(Request $request)
             'date'=>$request->date,
 
 
-            'description'=>$request->description 
-                ?? 'Opération diverse',
+            'description'=>$request->description ?? 'Opération diverse',
 
 
 
@@ -661,11 +535,7 @@ public function brcPdf(Request $request)
 
 
             'statut'=>'Validé',
-
-
             'date_validation'=>now(),
-
-
             'valide_par'=>auth()->id(),
 
 
@@ -684,7 +554,6 @@ public function brcPdf(Request $request)
         |--------------------------------------------------------------------------
         */
 
-
         EcritureComptable::create([
 
 
@@ -700,31 +569,26 @@ public function brcPdf(Request $request)
             'date'=>$request->date,
 
 
-            'libelle'=>$request->description 
-                ?? 'Contrepartie',
+            'libelle'=>$request->description ?? 'Contrepartie',
 
 
 
 
-            'debit_cdf'=> $request->sens == 'credit'
+            'debit_cdf'=> $request->sens == 'debit'
                 ? $total
                 : 0,
 
 
 
-            'credit_cdf'=> $request->sens == 'debit'
+            'credit_cdf'=> $request->sens == 'credit'
                 ? $total
                 : 0,
 
 
 
             'statut'=>'Validé',
-
-
-            'date_validation'=>now(),
-
-
-            'valide_par'=>auth()->id(),
+            'date_validation'=>null,
+            'valide_par'=>null,
 
 
         ]);
@@ -747,20 +611,9 @@ public function brcPdf(Request $request)
 
         foreach($request->lignes as $ligne){
 
-
-
             if($ligne['compte_id'] == $journalType->compte->id){
-
-
-                throw new \Exception(
-
-                    "Le compte du journal ne peut pas être utilisé comme imputation."
-
-                );
-
+                throw new \Exception("Le compte du journal ne peut pas être utilisé comme imputation.");
             }
-
-
 
 
 
@@ -784,33 +637,22 @@ public function brcPdf(Request $request)
 
 
 
-                'libelle'=>$ligne['libelle']
-                    ?? 'Imputation comptable',
+                'libelle'=>$ligne['libelle'] ?? 'Imputation comptable',
 
 
 
 
-                'debit_cdf'=> $request->sens == 'debit'
-                    ? $ligne['montant']
-                    : 0,
+                'debit_cdf'=> $request->sens == 'credit' ? $ligne['montant'] : 0,
 
 
 
-                'credit_cdf'=> $request->sens == 'credit'
-                    ? $ligne['montant']
-                    : 0,
+                'credit_cdf'=> $request->sens == 'debit' ? $ligne['montant'] : 0,
 
 
 
                 'statut'=>'Validé',
-
-
-
-                'date_validation'=>now(),
-
-
-
-                'valide_par'=>auth()->id(),
+                'date_validation'=>null,
+                'valide_par'=>null,
 
 
             ]);

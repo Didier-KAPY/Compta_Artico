@@ -6,6 +6,9 @@ use Illuminate\Http\Request;
 use App\Models\SortieCaisse;
 use App\Models\JournalType;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
+use App\Services\WorkflowComptableService;
 use App\Models\Journaux;
 use Carbon\Carbon;
 
@@ -16,31 +19,7 @@ class SortieCaisseController extends Controller
      */
  public function index(Request $request)
 {
-    $query = SortieCaisse::with('etatBesoin');
-
-    // Recherche par numéro
-    if ($request->filled('numero')) {
-        $query->where('numero', 'like', '%' . $request->numero . '%');
-    }
-
-    // Date début
-    if ($request->filled('date_debut')) {
-        $query->whereDate('date', '>=', $request->date_debut);
-    }
-
-    // Date fin
-    if ($request->filled('date_fin')) {
-        $query->whereDate('date', '<=', $request->date_fin);
-    }
-
-    // Afficher uniquement les sorties du jour si aucun filtre
-    if (
-        !$request->filled('numero') &&
-        !$request->filled('date_debut') &&
-        !$request->filled('date_fin')
-    ) {
-        $query->whereDate('date', Carbon::today());
-    }
+    $query = $this->sortiesFiltrees($request);
 
     $sorties = $query
         ->latest()
@@ -50,12 +29,22 @@ class SortieCaisseController extends Controller
     return view('sortie_caisses.index', compact('sorties'));
 }
 
+    private function sortiesFiltrees(Request $request)
+    {
+        return SortieCaisse::with(['etatBesoin', 'user'])
+            ->when($request->filled('numero'), fn ($query) => $query->where('numero', 'like', '%'.$request->numero.'%'))
+            ->when($request->filled('date_debut'), fn ($query) => $query->whereDate('date', '>=', $request->date_debut))
+            ->when($request->filled('date_fin'), fn ($query) => $query->whereDate('date', '<=', $request->date_fin))
+            ->when(!$request->filled('numero') && !$request->filled('date_debut') && !$request->filled('date_fin'),
+                fn ($query) => $query->whereDate('date', Carbon::today()));
+    }
+
     /**
      * Show the form for creating a new resource.
      */
     public function create()
     {
-        //
+        return view('sortie_caisses.create');
     }
 
     /**
@@ -69,7 +58,7 @@ class SortieCaisseController extends Controller
             'motif' => 'required|string',
             'montant' => 'required|numeric|min:0',
             'monnaie' => 'required|in:CDF,USD',
-            'type' => 'required|in:Caisse,Banque,Monnaie électronique',
+            'type' => 'required|in:Caisse,Banque,Mobile Money',
             'observation' => 'required|string',
         ]);
 
@@ -153,7 +142,13 @@ class SortieCaisseController extends Controller
      */
     public function edit(string $id)
     {
-        //
+        $sortie = SortieCaisse::findOrFail($id);
+
+        if ($sortie->statut === 'Validé') {
+            return back()->with('error', 'Ce Bon validé doit d’abord être réouvert.');
+        }
+
+        return view('sortie_caisses.edit', compact('sortie'));
     }
 
     private function generateNumero()
@@ -189,10 +184,15 @@ class SortieCaisseController extends Controller
         'motif' => 'required|string',
         'montant' => 'required|numeric|min:0',
         'monnaie' => 'required|in:CDF,USD',
+        'type' => 'required|in:Caisse,Banque,Mobile Money',
         'observation' => 'required|string',
     ]);
 
     $sortie = SortieCaisse::findOrFail($id);
+
+    if ($sortie->statut === 'Validé') {
+        return back()->with('error', 'Ce Bon validé doit d’abord être réouvert.');
+    }
 
     // Générer un numéro seulement si absent
     if (empty($sortie->numero)) {
@@ -204,6 +204,7 @@ class SortieCaisseController extends Controller
     $sortie->motif = $request->motif;
     $sortie->montant = $request->montant;
     $sortie->monnaie = $request->monnaie;
+    $sortie->type = $request->type;
     $sortie->observation = $request->observation;
 
     $sortie->save();
@@ -218,7 +219,19 @@ class SortieCaisseController extends Controller
      */
     public function destroy(string $id)
     {
-        //
+        DB::transaction(function () use ($id) {
+            $sortie = SortieCaisse::lockForUpdate()->findOrFail($id);
+            if ($sortie->statut === 'Validé') {
+                throw ValidationException::withMessages(['statut' => 'Un Bon validé doit d’abord être réouvert.']);
+            }
+            if ($sortie->journaux()->exists()) {
+                throw ValidationException::withMessages(['dependance' => 'Suppression impossible : un Journal est lié.']);
+            }
+            $sortie->delete();
+        });
+
+        return redirect()->route('sortie-caisses.index')
+            ->with('success', 'Bon de sortie supprimé avec succès.');
     }
 
 public function valider(Request $request, $id)
@@ -365,7 +378,7 @@ public function valider(Request $request, $id)
 
                 'piece_justificatif'=>$sortie->numero,
 
-
+                'type'=>'depense',
                 'mode_paiement'=>'espèce',
 
 
@@ -521,5 +534,13 @@ public function attente($id)
     }
 
 }
-    
+
+public function reouvrir($id, WorkflowComptableService $workflow)
+{
+    $sortie = SortieCaisse::findOrFail($id);
+    Gate::authorize('reouvrir', $sortie);
+    $workflow->reouvrirSortieCaisse($sortie);
+
+    return back()->with('success', 'Bon de sortie réouvert avec succès.');
+}
 }

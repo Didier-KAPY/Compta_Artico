@@ -10,6 +10,8 @@
 $role = strtolower(auth()->user()->role?->designation ?? '');
 
 $isSuperAdmin = $role == 'super admin';
+$canCreateSortie = in_array($role, ['super admin', 'admin', 'directeur général', 'caissier', 'caissière', 'trésorier', 'trésorière'], true);
+$canManageSortie = in_array($role, ['super admin', 'admin', 'directeur général'], true);
 
 
 @endphp
@@ -25,6 +27,9 @@ $isSuperAdmin = $role == 'super admin';
     </h4>
 
 
+    <div class="d-flex gap-2 flex-wrap">
+    @include('partials.period-export-buttons', ['rapport' => 'sorties'])
+    @if($canCreateSortie)
     <a href="{{ route('sortie-caisses.create') }}"
        class="btn btn-primary">
 
@@ -33,6 +38,8 @@ $isSuperAdmin = $role == 'super admin';
         Nouvelle sortie
 
     </a>
+    @endif
+    </div>
 
 </div>
 
@@ -41,6 +48,10 @@ $isSuperAdmin = $role == 'super admin';
 
 
 <!-- FILTRES -->
+
+@if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
+@if(session('error'))<div class="alert alert-danger">{{ session('error') }}</div>@endif
+@if($errors->any())<div class="alert alert-danger"><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 
 <div class="card shadow-sm border-0 mb-3">
 
@@ -200,11 +211,7 @@ Réinitialiser
 
 
 @if($isSuperAdmin)
-
-<th>
-Utilisateur
-</th>
-
+<th>Utilisateur</th>
 @endif
 
 
@@ -269,19 +276,7 @@ Actions
 
 
 @if($isSuperAdmin)
-
-
-<td>
-
-
-{{ $sortie->user?->prenom ?? '' }}
-
-{{ $sortie->user?->nom ?? '' }}
-
-
-</td>
-
-
+<td>{{ trim(($sortie->user?->prenom ?? '').' '.($sortie->user?->nom ?? '')) ?: 'Système' }}</td>
 @endif
 
 
@@ -428,6 +423,17 @@ href="{{ route('sortie-caisses.show',$sortie->id) }}">
 
 
 </li>
+
+@if($canManageSortie && $sortie->statut !== 'Validé')
+<li><a class="dropdown-item" href="{{ route('sortie-caisses.edit', $sortie->id) }}"><i class="bi bi-pencil-square me-2"></i>Modifier</a></li>
+<li><hr class="dropdown-divider"></li>
+<li>
+    <form action="{{ route('sortie-caisses.destroy', $sortie->id) }}" method="POST" onsubmit="return confirm('Supprimer définitivement ce bon de sortie ?')">
+        @csrf @method('DELETE')
+        <button type="submit" class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Supprimer</button>
+    </form>
+</li>
+@endif
 
 
 

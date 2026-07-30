@@ -1,222 +1,89 @@
-<nav class="navbar navbar-light bg-white shadow-sm fixed-top px-3" style="z-index:1200;">
+<nav class="navbar app-topbar fixed-top" aria-label="Navigation principale">
+    <div class="container-fluid app-topbar-inner">
+        <div class="d-flex align-items-center app-topbar-left">
+            <button type="button" class="topbar-icon-btn d-lg-none" id="toggleSidebar" aria-label="Ouvrir le menu" aria-controls="sidebar" aria-expanded="false">
+                <i class="bi bi-list"></i>
+            </button>
 
-    <!-- Hamburger -->
-    <button class="btn btn-light d-lg-none" id="toggleSidebar">
-        <i class="bi bi-list fs-3"></i>
-    </button>
-
-
-    <!-- Logo Entreprise -->
-    <div class="d-flex align-items-center ms-2">
-
-        @if(!empty($entreprise?->logo))
-
-            <img src="{{ asset('storage/'.$entreprise->logo) }}"
-                 alt="Logo entreprise"
-                 style="width:40px;height:40px;object-fit:cover;border-radius:50%;">
-
-        @else
-
-            <i class="bi bi-building fs-4"></i>
-
-        @endif
-
-
-        <span class="fw-bold">
-            {{ $entreprise->nom_entreprise ?? 'COMPTA ARTICO' }}
-        </span>
-
-    </div>
-
-
-
-    <!-- Partie droite -->
-    <div class="ms-auto d-flex align-items-center">
-
-
-        @if($user)
-
-            <small class="d-none d-md-block me-3">
-
-                {{ $user->prenom }} {{ $user->nom }}
-
-                -
-
-                {{ $user->role?->designation ?? 'Sans rôle' }}
-
-                @if($user->role?->type)
-
-                    ({{ $user->role->type }})
-
-                @endif
-
-            </small>
-
-        @endif
-
-
-
-        <!-- Profil -->
-        <div class="dropdown">
-
-
-            <a href="#"
-               class="d-flex align-items-center text-decoration-none dropdown-toggle text-dark"
-               data-bs-toggle="dropdown">
-
-
-                @if(!empty($user?->photo))
-
-                    <img src="{{ asset('storage/'.$user->photo) }}"
-                         alt="Photo Profil"
-                         class="rounded-circle me-2"
-                         style="width:35px;height:35px;object-fit:cover;">
-
-                @else
-
-                    <i class="bi bi-person-circle fs-3 me-2"></i>
-
-                @endif
-
-
-                <span class="d-none d-md-inline">
-                    Profil
+            <a href="{{ route('dashboard') }}" class="topbar-brand text-decoration-none">
+                <span class="topbar-logo">
+                    @if(!empty($entreprise?->logo))
+                        <img src="{{ asset('storage/'.$entreprise->logo) }}" alt="Logo {{ $entreprise->nom_entreprise ?? 'entreprise' }}">
+                    @else
+                        <i class="bi bi-building"></i>
+                    @endif
                 </span>
-
-
+                <span class="topbar-brand-copy">
+                    <strong>{{ $entreprise->nom_entreprise ?? 'COMPTA ARTICO' }}</strong>
+                    <small>Gestion comptable</small>
+                </span>
             </a>
-
-
-
-
-            <ul class="dropdown-menu dropdown-menu-end shadow">
-
-
-                <li class="dropdown-header">
-
-                    <strong>
-                        {{ $user->prenom ?? '' }}
-                        {{ $user->nom ?? '' }}
-                    </strong>
-
-                    <br>
-
-                    <small class="text-muted">
-                        {{ $user->email ?? '' }}
-                    </small>
-
-                </li>
-
-
-
-                <li>
-                    <hr class="dropdown-divider">
-                </li>
-
-
-
-
-                <!-- Profil accessible à tous -->
-
-                <li>
-
-                    <a class="dropdown-item"
-                       href="{{ route('profil.index') }}">
-
-                        <i class="bi bi-person me-2"></i>
-
-                        Mon profil
-
-                    </a>
-
-                </li>
-
-
-
-
-
-                <!-- Paramètres uniquement pour certains rôles -->
-
-                @if(in_array(strtolower($user->role?->designation ?? ''), [
-
-                    'super admin',
-                    'admin',
-                    'directeur général',
-                    'gérant',
-                    'comptable',
-                    'daf',
-                    'chef de service',
-                    'directeur technique',
-                    'chef de département'
-
-                ]))
-
-
-                    <li>
-
-                        <a class="dropdown-item"
-                           href="{{ route('parametres.parametre') }}">
-
-                            <i class="bi bi-gear me-2"></i>
-
-                            Paramètres
-
-                        </a>
-
-                    </li>
-
-
-                @endif
-
-
-
-
-
-                <li>
-
-                    <hr class="dropdown-divider">
-
-                </li>
-
-
-
-
-                <!-- Déconnexion accessible à tous -->
-
-                <li>
-
-                    <form method="POST"
-                          action="{{ route('logout') }}">
-
-                        @csrf
-
-
-                        <button type="submit"
-                                class="dropdown-item text-danger">
-
-
-                            <i class="bi bi-box-arrow-right me-2"></i>
-
-                            Déconnexion
-
-
-                        </button>
-
-
-                    </form>
-
-
-                </li>
-
-
-
-            </ul>
-
-
         </div>
 
+        <div class="topbar-context d-none d-xl-flex">
+            <span class="topbar-context-icon"><i class="bi bi-grid-1x2"></i></span>
+            <div>
+                <small>Espace de travail</small>
+                <strong>@yield('title', 'Tableau de bord')</strong>
+            </div>
+        </div>
 
+        <div class="ms-auto d-flex align-items-center gap-2">
+            <div class="topbar-date d-none d-md-flex">
+                <i class="bi bi-calendar3"></i>
+                <span>{{ now()->translatedFormat('d M Y') }}</span>
+            </div>
+
+            @if($user)
+                @php
+                    $nomComplet = trim(($user->prenom ?? '').' '.($user->nom ?? ''));
+                    $initiales = mb_strtoupper(mb_substr($user->prenom ?? '', 0, 1).mb_substr($user->nom ?? '', 0, 1));
+                    $peutConfigurer = in_array(mb_strtolower($user->role?->designation ?? ''), [
+                        'super admin', 'admin', 'directeur général', 'gérant', 'comptable', 'daf',
+                        'chef de service', 'directeur technique', 'chef de département'
+                    ], true);
+                @endphp
+                <div class="dropdown">
+                    <button class="topbar-user" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <span class="topbar-avatar">
+                            @if(!empty($user->photo))
+                                <img src="{{ asset('storage/'.$user->photo) }}" alt="Photo de {{ $nomComplet }}">
+                            @else
+                                <span>{{ $initiales ?: 'U' }}</span>
+                            @endif
+                            <i class="topbar-status" title="Compte actif"></i>
+                        </span>
+                        <span class="topbar-user-copy d-none d-md-block">
+                            <strong>{{ $nomComplet ?: 'Utilisateur' }}</strong>
+                            <small>{{ $user->role?->designation ?? 'Sans rôle' }}</small>
+                        </span>
+                        <i class="bi bi-chevron-down topbar-chevron"></i>
+                    </button>
+
+                    <div class="dropdown-menu dropdown-menu-end topbar-user-menu">
+                        <div class="topbar-menu-head">
+                            <span class="topbar-avatar topbar-avatar-lg">
+                                @if(!empty($user->photo))
+                                    <img src="{{ asset('storage/'.$user->photo) }}" alt="Photo de {{ $nomComplet }}">
+                                @else
+                                    <span>{{ $initiales ?: 'U' }}</span>
+                                @endif
+                            </span>
+                            <div><strong>{{ $nomComplet ?: 'Utilisateur' }}</strong><small>{{ $user->email }}</small></div>
+                        </div>
+                        <div class="dropdown-divider"></div>
+                        <a class="dropdown-item" href="{{ route('profil.index') }}"><i class="bi bi-person"></i><span>Mon profil<small>Informations personnelles</small></span></a>
+                        @if($peutConfigurer)
+                            <a class="dropdown-item" href="{{ route('parametres.parametre') }}"><i class="bi bi-gear"></i><span>Paramètres<small>Configuration de l’application</small></span></a>
+                        @endif
+                        <div class="dropdown-divider"></div>
+                        <form method="POST" action="{{ route('logout') }}">
+                            @csrf
+                            <button type="submit" class="dropdown-item topbar-logout"><i class="bi bi-box-arrow-right"></i><span>Déconnexion<small>Fermer la session</small></span></button>
+                        </form>
+                    </div>
+                </div>
+            @endif
+        </div>
     </div>
-
-
 </nav>

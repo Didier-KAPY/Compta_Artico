@@ -35,4 +35,9 @@ class EntreeCaisse extends Model
     {
         return $this->hasMany(EntreeCaisseLigne::class, 'entree_caisse_id');
     }
+
+    public function journaux()
+    {
+        return $this->hasMany(Journaux::class, 'entree_caisse_id');
+    }
 }

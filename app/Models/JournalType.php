@@ -18,6 +18,7 @@ protected $fillable=[
 'libelle',
 'liste_des_comptes_id',
 'nature',
+'monnaie',
 'est_tresorerie'
 ];
 

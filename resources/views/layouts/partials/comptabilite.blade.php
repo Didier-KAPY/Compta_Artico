@@ -4,7 +4,8 @@
         $isActive = request()->routeIs([
             'ecritures.*',
             'grandlivre.*',
-            'balance.*'
+            'balance.*',
+            'comptabilite.etats-financiers.*'
         ]);
     @endphp
 
@@ -86,6 +87,24 @@
             </a>
 
         </li>
+
+        @can('viewAccountingReports')
+            <li class="mt-2 px-3 text-uppercase small text-secondary">États financiers</li>
+            <li>
+                <a href="{{ route('comptabilite.etats-financiers.bilan') }}"
+                   class="nav-link {{ request()->routeIs('comptabilite.etats-financiers.bilan*') ? 'active-menu' : '' }}">
+                    <i class="bi bi-file-earmark-spreadsheet me-2"></i>
+                    Bilan final
+                </a>
+            </li>
+            <li>
+                <a href="{{ route('comptabilite.etats-financiers.compte-resultat') }}"
+                   class="nav-link {{ request()->routeIs('comptabilite.etats-financiers.compte-resultat*') ? 'active-menu' : '' }}">
+                    <i class="bi bi-graph-up-arrow me-2"></i>
+                    Compte de résultat
+                </a>
+            </li>
+        @endcan
 
 
     </ul>

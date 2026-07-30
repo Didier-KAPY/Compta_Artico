@@ -11,8 +11,12 @@
         @method('PUT')
 
         <div class="mb-3">
-            <label>Service</label>
-            <input type="text" name="service" class="form-control" value="{{ $etat->service }}">
+            <label>Département</label>
+            <select name="departement_id" class="form-select" required>
+                @foreach($departements as $departement)
+                    <option value="{{ $departement->id }}" {{ $etat->departement_id === $departement->id ? 'selected' : '' }}>{{ $departement->designation }}</option>
+                @endforeach
+            </select>
         </div>
 
         <div class="mb-3">

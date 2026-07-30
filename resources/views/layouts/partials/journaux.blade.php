@@ -29,12 +29,20 @@
                 Caisses
             </a>
         </li>
-        <!-- Nouveau journal -->
+        <!-- Nouveaux journaux de trésorerie -->
         <li>
-            <a href="{{ route('journaux.create') }}"
-               class="nav-link {{ request()->routeIs('journaux.create') ? 'active-menu' : '' }}">
-                <i class="bi bi-plus-circle me-2"></i>
-                Nouveau journal
+            <a href="{{ route('journaux.create.caisse') }}" class="nav-link {{ request()->routeIs('journaux.create.caisse') ? 'active-menu' : '' }}">
+                <i class="bi bi-cash-stack me-2"></i>Journal Caisse
+            </a>
+        </li>
+        <li>
+            <a href="{{ route('journaux.create.banque') }}" class="nav-link {{ request()->routeIs('journaux.create.banque') ? 'active-menu' : '' }}">
+                <i class="bi bi-bank me-2"></i>Journal Banque
+            </a>
+        </li>
+        <li>
+            <a href="{{ route('journaux.create.mobile') }}" class="nav-link {{ request()->routeIs('journaux.create.mobile') ? 'active-menu' : '' }}">
+                <i class="bi bi-phone me-2"></i>Journal Mobile Money
             </a>
         </li>
         <!-- Relevé -->

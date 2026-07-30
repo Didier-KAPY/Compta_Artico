@@ -36,8 +36,15 @@
                     </div>
 
                     <div class="col-md-4 mb-3">
-                        <label class="form-label">Service</label>
-                        <input type="text" name="service" class="form-control" required>
+                        <label class="form-label">Département</label>
+                        <select name="departement_id" class="form-select" required>
+                            <option value="">-- Sélectionner un département --</option>
+                            @foreach($departements as $departement)
+                                <option value="{{ $departement->id }}" {{ (string) old('departement_id', auth()->user()->departement_id) === (string) $departement->id ? 'selected' : '' }}>
+                                    {{ $departement->designation }}
+                                </option>
+                            @endforeach
+                        </select>
                     </div>
 
                     <div class="col-md-4 mb-3">
@@ -53,7 +60,7 @@
 
                 <div class="mb-3">
                     <label class="form-label">Demandeur</label>
-                    <input type="text" name="demandeur" class="form-control" required>
+                    <input type="text" name="demandeur" class="form-control" value="{{ old('demandeur', trim(auth()->user()->prenom.' '.auth()->user()->nom)) }}" required>
                 </div>
 
                 <div class="mb-3">

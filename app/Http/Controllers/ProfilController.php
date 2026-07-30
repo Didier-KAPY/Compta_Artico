@@ -5,10 +5,13 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 use App\Models\User;
 use App\Models\Role;
+use App\Models\Departement;
+use App\Models\Fonction;
 
 
 class ProfilController extends Controller
@@ -18,25 +21,9 @@ class ProfilController extends Controller
     public function index()
     {
 
-        $user = Auth::user()
-            ->load('role');
+        $user = Auth::user()->load(['role', 'departement', 'fonction']);
 
-
-        $roles = Role::orderBy('designation')
-            ->get();
-
-
-        $users = User::with('role')
-            ->orderBy('nom')
-            ->get();
-
-
-
-        return view('profil.index', compact(
-            'user',
-            'roles',
-            'users'
-        ));
+        return view('profil.index', compact('user'));
 
     }
 
@@ -50,10 +37,13 @@ class ProfilController extends Controller
         $roles = Role::orderBy('designation')
             ->get();
 
+        $departements = Departement::orderBy('designation')->get();
+        $fonctions = Fonction::orderBy('designation')->get();
+
 
         return view(
             'profil.create-user',
-            compact('roles')
+            compact('roles', 'departements', 'fonctions')
         );
 
     }
@@ -73,17 +63,19 @@ class ProfilController extends Controller
 
         $request->validate([
 
-            'nom'=>'required',
+            'nom'=>'required|string|max:100',
 
-            'prenom'=>'required',
+            'prenom'=>'required|string|max:100',
 
             'email'=>'required|email|unique:users,email,'.$user->id,
 
-            'role_id'=>'required|exists:roles,id',
-
             'photo'=>'nullable|image|max:2048',
 
-            'password'=>'nullable|min:6',
+            'telephone'=>'nullable|string|max:30',
+
+            'adresse'=>'nullable|string|max:255',
+
+            'password'=>'nullable|string|min:8|confirmed',
 
         ]);
 
@@ -95,25 +87,16 @@ class ProfilController extends Controller
 
         $user->email = $request->email;
 
-        $user->role_id = $request->role_id;
-
-
-
-        if($request->filled('telephone'))
-        {
-            $user->telephone = $request->telephone;
-        }
-
-
-        if($request->filled('adresse'))
-        {
-            $user->adresse = $request->adresse;
-        }
+        $user->telephone = $request->telephone;
+        $user->adresse = $request->adresse;
 
 
 
         if($request->hasFile('photo'))
         {
+            if ($user->photo) {
+                Storage::disk('public')->delete($user->photo);
+            }
 
             $user->photo =
                 $request
@@ -170,15 +153,24 @@ class ProfilController extends Controller
 
             'email'=>'required|email|unique:users,email',
 
-            'telephone'=>'required',
+            'telephone'=>'required|string|max:30',
 
-            'adresse'=>'nullable',
+            'adresse'=>'nullable|string|max:255',
+
+            'statut'=>'nullable|in:Actif,Inactif',
 
             'role_id'=>'required|exists:roles,id',
+
+            'departement_id'=>'nullable|exists:departements,id',
+            'fonction_id'=>'nullable|exists:fonctions,id',
 
             'photo'=>'nullable|image|max:2048',
 
         ]);
+
+        $roleChoisi = Role::findOrFail($request->role_id);
+        abort_if($roleChoisi->designation === 'Super Admin' && !Auth::user()->isSuperAdmin(), 403,
+            'Seul le Super Admin peut créer un autre Super Admin.');
 
 
 
@@ -214,6 +206,9 @@ class ProfilController extends Controller
 
 
         $user->role_id = $request->role_id;
+
+        $user->departement_id = $request->departement_id;
+        $user->fonction_id = $request->fonction_id;
 
 
 
@@ -266,7 +261,7 @@ class ProfilController extends Controller
 
 
         return redirect()
-            ->route('profil.create')
+            ->route($request->input('source') === 'parametres' ? 'parametres.utilisateurs' : 'profil.create')
             ->with([
 
                 'success'=>'Agent créé avec succès',

@@ -1,433 +1,51 @@
 @extends('layouts.app')
+
 @section('content')
-<div class="container-fluid py-4">
-    {{-- TITRE --}}
-    <div class="mb-4">
-        <h3 class="fw-bold">
-            📊 Situation de la trésorerie
-        </h3>
-        <small class="text-muted">
-            Suivi des mouvements Caisse - Banque - Mobile Money
-        </small>
-    </div>
-    {{-- FILTRE --}}
-    <div class="card shadow-sm mb-4">
-        <div class="card-header bg-primary text-white">
-            🔎 Filtre période
-        </div>
-        <div class="card-body">
-            <form method="GET" class="row g-3">
-                <div class="col-md-4">
-                    <label class="form-label">
-                        Date début
-                    </label>
-                    <input
-                    type="date"
-                    name="date_debut"
-                    value="{{ $dateDebut }}"
-                    class="form-control">
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">
-                        Date fin
-                    </label>
-                    <input
-                    type="date"
-                    name="date_fin"
-                    value="{{ $dateFin }}"
-                    class="form-control">
-                </div>
-
-                <div class="col-md-4 d-flex align-items-end">
-                    <button class="btn btn-primary w-100">
-                        <i class="bi bi-search"></i>
-                        Afficher
-                    </button>
-                </div>
-            </form>
-        </div>
+<div class="container-fluid py-3 sage-screen">
+    <div class="sage-titlebar d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+        <div><span class="sage-module">Trésorerie</span><h3><i class="bi bi-bank2 me-2"></i>Situation de trésorerie</h3><p>Soldes des comptes de caisse, banque et Mobile Money</p></div>
+        <div class="d-flex gap-2 no-print"><a href="{{ route('journaux.releve', request()->only('date_debut','date_fin')) }}" class="btn btn-outline-primary"><i class="bi bi-list-columns-reverse me-1"></i> Relevé détaillé</a><button class="btn btn-light border" onclick="window.print()"><i class="bi bi-printer me-1"></i> Imprimer</button></div>
     </div>
 
-    {{-- TABLEAU --}}
-    <div class="card shadow-sm mb-4">
-        <div class="card-header bg-dark text-white">
-            📋 Détail trésorerie par compte
+    <div class="d-flex justify-content-end mb-2 no-print">@include('partials.period-export-buttons', ['rapport'=>'tresorerie','exportParams'=>['date_debut'=>$dateDebut,'date_fin'=>$dateFin]])</div>
+    <form method="GET" action="{{ route('journaux.tresorerie') }}" class="sage-filter no-print">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-4 col-lg-3"><label class="form-label">Du</label><input type="date" name="date_debut" value="{{ $dateDebut }}" class="form-control"></div>
+            <div class="col-md-4 col-lg-3"><label class="form-label">Au</label><input type="date" name="date_fin" value="{{ $dateFin }}" class="form-control"></div>
+            <div class="col-md-4 col-lg-3 d-flex gap-2"><button class="btn btn-primary flex-grow-1"><i class="bi bi-arrow-repeat me-1"></i> Actualiser</button><a href="{{ route('journaux.tresorerie') }}" class="btn btn-light border" title="Réinitialiser"><i class="bi bi-x-lg"></i></a></div>
+            <div class="col-lg-3 text-lg-end"><span class="period-label">Période : {{ \Carbon\Carbon::parse($dateDebut)->format('d/m/Y') }} – {{ \Carbon\Carbon::parse($dateFin)->format('d/m/Y') }}</span></div>
         </div>
-        <div class="table-responsive">
-            <table class="table table-bordered table-hover mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>Compte</th>
-                        <th>Désignation</th>
-                        <th class="text-end">Entrée CDF</th>
-                        <th class="text-end">Sortie CDF</th>
-                        <th class="text-end">Solde CDF</th>
-                        <th class="text-end">Entrée USD</th>
-                        <th class="text-end">Sortie USD</th>
-                        <th class="text-end">Solde USD</th>
-                    </tr>
-                </thead>
+    </form>
 
-                <tbody>
-                @forelse($tresorerie as $ligne)
-                    <tr>
-                        {{-- COMPTE --}}
-                        <td>
-                            <strong>
-                                {{ $ligne->journalType->compte->compte ?? '' }}
-                            </strong>
-                        </td>
-                        {{-- DESIGNATION --}}
-                        <td>
-                            {{ $ligne->journalType->compte->designation 
-                            ?? $ligne->journalType->compte->libelle 
-                            ?? '' }}
-                        </td>
-
-                        {{-- CDF --}}
-                        <td class="text-end text-success">
-                            {{ number_format($ligne->entree_cdf ?? 0,2,',',' ') }}
-                        </td>
-                        <td class="text-end text-danger">
-                            {{ number_format($ligne->sortie_cdf ?? 0,2,',',' ') }}
-                        </td>
-                        <td class="text-end fw-bold">
-                            {{ number_format(
-                            ($ligne->entree_cdf ?? 0)
-                            -
-                            ($ligne->sortie_cdf ?? 0),
-                            2,
-                            ',',
-                            ' '
-                            ) }}
-                        </td>
-                        {{-- USD --}}
-                        <td class="text-end text-success">
-                            {{ number_format($ligne->entree_usd ?? 0,2,',',' ') }}
-                        </td>
-                        <td class="text-end text-danger">
-                            {{ number_format($ligne->sortie_usd ?? 0,2,',',' ') }}
-                        </td>
-
-                        <td class="text-end fw-bold">
-                            {{ number_format(
-                            ($ligne->entree_usd ?? 0)
-                            -
-                            ($ligne->sortie_usd ?? 0),
-                            2,
-                            ',',
-                            ' '
-                            ) }}
-                        </td>
-                    </tr>
-
-                @empty
-                    <tr>
-                        <td colspan="8" class="text-center">
-                            Aucun mouvement trouvé
-                        </td>
-                    </tr>
-                @endforelse
-
-                </tbody>
-            </table>
-        </div>
-    </div>
-{{-- ================================
-        ETAT DE CAISSE
-================================ --}}
-
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card shadow-sm mb-4">
-            {{-- HEADER --}}
-            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                    <i class="bi bi-wallet2 me-2"></i>
-                    État de caisse par compte
-                </h5>
-                <span class="badge bg-light text-dark">
-                    Validé uniquement
-                </span>
-            </div>
-            {{-- BODY --}}
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-bordered table-hover align-middle mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>
-                                    Compte
-                                </th>
-                                <th>
-                                    Désignation
-                                </th>
-                                <th class="text-center">
-                                    Solde CDF
-                                </th>
-                                <th class="text-center">
-                                    Solde USD
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        @forelse($totaux['etat_caisse'] as $etat)
-                            <tr>
-                                {{-- COMPTE --}}
-                                <td class="fw-bold">
-                                    <i class="bi bi-bank me-2"></i>
-                                    {{ $etat['compte'] }}
-                                </td>
-
-                                {{-- DESIGNATION --}}
-                                <td>
-                                    {{ $etat['designation'] }}
-                                </td>
-
-                                {{-- SOLDE CDF --}}
-                                <td class="text-right fw-bold text-success">
-                                    {{ number_format(
-                                        $etat['solde_cdf'],
-                                        2,
-                                        ',',
-                                        ' '
-                                    ) }}
-                                    <span class="badge bg-success">
-                                        CDF
-                                    </span>
-                                </td>
-
-                                {{-- SOLDE USD --}}
-                                <td class="text-right fw-bold text-primary">
-                                    {{ number_format(
-                                        $etat['solde_usd'],
-                                        2,
-                                        ',',
-                                        ' '
-                                    ) }}
-                                    <span class="badge bg-primary">
-                                        USD
-                                    </span>
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="4"
-                                    class="text-center text-muted">
-                                    Aucun mouvement de trésorerie validé
-                                </td>
-                            </tr>
-                        @endforelse
-                        </tbody>
-                    </table>
-                </div>
+    <div class="row g-3 my-1">
+        @foreach([
+            ['Solde en caisse CDF', 'cash-stack', 'caisse_cdf', 'CDF'],
+            ['Solde en caisse USD', 'cash-stack', 'caisse_usd', 'USD'],
+            ['Solde en banque CDF', 'bank', 'banque_cdf', 'CDF'],
+            ['Solde en banque USD', 'bank', 'banque_usd', 'USD'],
+            ['Solde Mobile Money CDF', 'phone', 'mobile_cdf', 'CDF'],
+            ['Solde Mobile Money USD', 'phone', 'mobile_usd', 'USD'],
+        ] as [$label, $icon, $key, $currency])
+        @php $balance = (float) ($totaux[$key] ?? 0); @endphp
+        <div class="col-md-6 col-xl-4">
+            <div class="sage-balance-card">
+                <div class="balance-head"><span>{{ $label }}</span><i class="bi bi-{{ $icon }}"></i></div>
+                <div class="balance-value {{ $balance < 0 ? 'text-danger' : '' }}">{{ number_format($balance, 2, ',', ' ') }} <small>{{ $currency }}</small></div>
+                <small class="text-muted">Disponible au {{ \Carbon\Carbon::parse($dateFin)->format('d/m/Y') }}</small>
             </div>
         </div>
+        @endforeach
     </div>
 
-</div>
-    {{-- RESUME --}}
-<div class="row g-4">
-
-    {{-- SITUATION CDF --}}
-
-    <div class="col-md-6">
-
-        <div class="card shadow border-primary">
-
-
-            <div class="card-header bg-primary text-white">
-
-                🇨🇩 Situation CDF
-
-            </div>
-
-
-            <div class="card-body">
-
-
-                <p>
-                    Entrées :
-                    <b class="text-success">
-
-                        {{ number_format($totaux['cdf_entree'],2,',',' ') }}
-
-                    </b>
-                </p>
-
-
-
-                <p>
-                    Sorties :
-                    <b class="text-danger">
-
-                        {{ number_format($totaux['cdf_sortie'],2,',',' ') }}
-
-                    </b>
-                </p>
-
-
-
-                <hr>
-
-
-                <h4>
-
-                    Solde :
-
-                    {{ number_format($totaux['cdf_solde'],2,',',' ') }}
-
-                    CDF
-
-                </h4>
-
-
-            </div>
-
-
-        </div>
-
-
-    </div>
-
-
-
-
-
-    {{-- SITUATION USD --}}
-
-
-    <div class="col-md-6">
-
-
-        <div class="card shadow border-success">
-
-
-            <div class="card-header bg-success text-white">
-
-                🇺🇸 Situation USD
-
-            </div>
-
-
-
-            <div class="card-body">
-
-
-                <p>
-                    Entrées :
-
-                    <b class="text-success">
-
-                        {{ number_format($totaux['usd_entree'],2,',',' ') }}
-
-                    </b>
-
-                </p>
-
-
-
-
-                <p>
-
-                    Sorties :
-
-                    <b class="text-danger">
-
-                        {{ number_format($totaux['usd_sortie'],2,',',' ') }}
-
-                    </b>
-
-                </p>
-
-
-
-                <hr>
-
-
-
-                <h4>
-
-                    Solde :
-
-                    {{ number_format($totaux['usd_solde'],2,',',' ') }}
-
-                    USD
-
-                </h4>
-
-
-
-            </div>
-
-
-        </div>
-
-
-    </div>
-
-
-
-</div>
-
-{{-- MOYENS DE TRESORERIE EN BAS --}}
-<div class="row mt-4">
-    <div class="col-md-12">
-        <div class="card shadow border-warning">
-            <div class="card-header bg-warning">
-
-                💰 Moyens de trésorerie
-
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    {{-- CAISSE --}}
-                    <div class="col-md-4 text-center">
-                        <span class="badge bg-primary">
-                            Caisse
-                        </span>
-                        <h5 class="mt-3">
-                            {{ number_format($totaux['caisse_cdf'] ?? 0,2,',',' ') }}
-                            CDF
-                            <br>
-                            {{ number_format($totaux['caisse_usd'] ?? 0,2,',',' ') }}
-                            USD
-                        </h5>
-                    </div>
-
-                   {{-- BANQUE --}}
-                    <div class="col-md-4 text-center">
-                        <span class="badge bg-success">
-                            Banque
-                        </span>
-                        <h5 class="mt-3">
-                            {{ number_format($totaux['banque_cdf'] ?? 0,2,',',' ') }}
-                            CDF
-                            <br>
-                            {{ number_format($totaux['banque_usd'] ?? 0,2,',',' ') }}
-                            USD
-                        </h5>
-                    </div>
-                    {{-- MOBILE MONEY --}}
-                    <div class="col-md-4 text-center">
-                        <span class="badge bg-warning text-dark">
-                            Mobile Money
-                        </span>
-                        <h5 class="mt-3">
-                            {{ number_format($totaux['mobile_cdf'] ?? 0,2,',',' ') }}
-                            CDF
-                            <br>
-                            {{ number_format($totaux['mobile_usd'] ?? 0,2,',' ,' ') }}
-                            USD
-                        </h5>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <div class="sage-panel mt-3">
+        <div class="sage-panel-head"><div><strong>Position par compte de trésorerie</strong><small>Mouvements validés uniquement</small></div><span>{{ $tresorerie->count() }} compte(s)</span></div>
+        <div class="table-responsive"><table class="table sage-grid mb-0"><thead><tr><th>Code journal</th><th>Compte</th><th>Désignation</th><th>Nature</th><th class="text-end">Entrées CDF</th><th class="text-end">Sorties CDF</th><th class="text-end">Solde CDF</th><th class="text-end">Entrées USD</th><th class="text-end">Sorties USD</th><th class="text-end">Solde USD</th></tr></thead><tbody>
+            @forelse($tresorerie as $ligne)
+                @php $cdf = (float)$ligne->entree_cdf - (float)$ligne->sortie_cdf; $usd = (float)$ligne->entree_usd - (float)$ligne->sortie_usd; @endphp
+                <tr><td><span class="journal-code">{{ $ligne->journalType?->code ?? '—' }}</span></td><td class="fw-semibold">{{ $ligne->journalType?->compte?->compte ?? '—' }}</td><td>{{ $ligne->journalType?->compte?->designation ?? '—' }}</td><td><span class="nature-badge">{{ ucfirst(str_replace('_',' ', $ligne->journalType?->nature ?? '')) }}</span></td><td class="text-end amount-in">{{ number_format($ligne->entree_cdf,2,',',' ') }}</td><td class="text-end amount-out">{{ number_format($ligne->sortie_cdf,2,',',' ') }}</td><td class="text-end fw-bold {{ $cdf < 0 ? 'text-danger' : '' }}">{{ number_format($cdf,2,',',' ') }}</td><td class="text-end amount-in">{{ number_format($ligne->entree_usd,2,',',' ') }}</td><td class="text-end amount-out">{{ number_format($ligne->sortie_usd,2,',',' ') }}</td><td class="text-end fw-bold {{ $usd < 0 ? 'text-danger' : '' }}">{{ number_format($usd,2,',',' ') }}</td></tr>
+            @empty<tr><td colspan="10" class="empty-state"><i class="bi bi-inbox"></i>Aucun mouvement validé sur cette période.</td></tr>@endforelse
+        </tbody><tfoot><tr><td colspan="4">TOTAL GÉNÉRAL</td><td class="text-end">{{ number_format($totaux['cdf_entree'],2,',',' ') }}</td><td class="text-end">{{ number_format($totaux['cdf_sortie'],2,',',' ') }}</td><td class="text-end">{{ number_format($totaux['cdf_solde'],2,',',' ') }}</td><td class="text-end">{{ number_format($totaux['usd_entree'],2,',',' ') }}</td><td class="text-end">{{ number_format($totaux['usd_sortie'],2,',',' ') }}</td><td class="text-end">{{ number_format($totaux['usd_solde'],2,',',' ') }}</td></tr></tfoot></table></div>
     </div>
 </div>
-
-</div>
-    </div>
-</div>
+@include('journaux._sage_styles')
 @endsection

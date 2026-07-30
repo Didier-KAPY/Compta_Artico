@@ -73,9 +73,7 @@ Choisir
 
 <option value="{{ $journal->id }}">
 
-{{ $journal->compte->compte ?? '' }}
--
-{{ $journal->compte->designation ?? '' }}
+{{ $journal->compte->compte }} - {{ $journal->compte->designation }}
 
 @if($journal->est_tresorerie)
 (TRESORERIE)
@@ -91,48 +89,18 @@ Choisir
 
 </div>
 
-
-
-
 <div class="col-md-2">
-
-<label class="small fw-bold">
-Sens *
-</label>
-
-
-<select name="sens"
-class="form-select form-select-sm"
-required>
-
-<option value="debit">
-Débit
-</option>
-
-<option value="credit">
-Crédit
-</option>
-
+<label class="small fw-bold">Sens du compte lié au journal *</label>
+<select name="sens" class="form-select form-select-sm" required>
+<option value="debit">Débit</option>
+<option value="credit">Crédit</option>
 </select>
-
-
+<small class="text-muted">Les comptes d’imputation prendront automatiquement le sens opposé.</small>
 </div>
 
 
 
 
-<div class="col-md-4">
-
-<label class="small fw-bold">
-Description
-</label>
-
-
-<input type="text"
-name="description"
-class="form-control form-control-sm">
-
-</div>
 
 
 </div>
@@ -512,9 +480,7 @@ total += Number(m.value) || 0;
 
 });
 
-
-document.getElementById('totalMontant')
-.innerHTML = total.toFixed(2);
+document.getElementById('totalMontant').innerHTML = total.toFixed(2);
 
 
 }

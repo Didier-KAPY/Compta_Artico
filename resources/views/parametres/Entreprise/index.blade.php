@@ -54,7 +54,7 @@
 
 
 
-            <form action="{{ route('parametres.update') }}"
+            <form action="{{ route('parametres.entreprise.update') }}"
                   method="POST"
                   enctype="multipart/form-data">
 

@@ -2,6 +2,7 @@
 
 
 @section('content')
+@php $isSuperAdmin = auth()->user()?->hasRole('Super Admin') ?? false; @endphp
 
 
 <div class="container-fluid py-4">
@@ -106,10 +107,16 @@
                                 Nature
                             </th>
 
+                            <th>Monnaie</th>
+
 
                             <th class="text-center">
                                 Trésorerie
                             </th>
+
+                            @if($isSuperAdmin)
+                                <th>Utilisateur</th>
+                            @endif
 
 
                             <th width="15%"
@@ -286,6 +293,8 @@
 
 
 
+                            <td><span class="badge bg-info text-dark">{{ $journal->monnaie ?? 'CDF' }}</span></td>
+
                             <td class="text-center">
 
 
@@ -314,6 +323,10 @@
 
 
                             </td>
+
+                            @if($isSuperAdmin)
+                                <td>{{ trim(($journal->user?->prenom ?? '').' '.($journal->user?->nom ?? '')) ?: 'Système' }}</td>
+                            @endif
 
 
 
@@ -380,7 +393,7 @@
                         <tr>
 
 
-                            <td colspan="6"
+                            <td colspan="{{ $isSuperAdmin ? 8 : 7 }}"
                                 class="text-center text-muted py-4">
 
 

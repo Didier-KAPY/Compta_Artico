@@ -90,6 +90,7 @@
             text-decoration: underline;
         }
     </style>
+    <link href="{{ asset('assets/css/app-theme.css') }}" rel="stylesheet">
 </head>
 <body>
     <div class="card">

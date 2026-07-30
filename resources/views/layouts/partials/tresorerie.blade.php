@@ -24,24 +24,6 @@
         id="subTresorerie"
         style="{{ request()->routeIs('tresorerie.*') ? 'display:block;' : 'display:none;' }}">
 
-        <!-- FACTURES -->
-        <li class="mb-1">
-            <a href="{{ route('factures.index') }}"
-               class="nav-link text-white d-flex align-items-center {{ request()->routeIs('factures.*') ? 'active' : '' }}">
-                <i class="bi bi-receipt me-2"></i>
-                Factures
-            </a>
-        </li>
-
-        <!-- PAIEMENTS -->
-        <li class="mb-1">
-            <a href="{{ route('paiements.index') }}"
-               class="nav-link text-white d-flex align-items-center {{ request()->routeIs('paiements.*') ? 'active' : '' }}">
-                <i class="bi bi-credit-card me-2"></i>
-                Paiements
-            </a>
-        </li>
-
         <!-- JOURNAL CAISSE -->
         <li class="mb-1">
             <a href="{{ route('tresorerie.journal-caisse') }}"

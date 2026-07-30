@@ -1,11 +1,14 @@
 @extends('layouts.app')
 @section('content')
 <div class="card shadow-sm border-0 mt-4">
-    <div class="card-header bg-dark text-white d-flex align-items-center">
+    <div class="card-header bg-dark text-white d-flex align-items-center justify-content-between">
+        <div>
         <i class="bi bi-book me-2"></i>
         <strong>
             Grand Livre
         </strong>
+        </div>
+        @include('partials.period-export-buttons', ['rapport' => 'grand-livre'])
     </div>
     <div class="card-body">
         {{-- FILTRE --}}

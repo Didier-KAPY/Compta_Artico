@@ -345,10 +345,20 @@
 
 
 
+                    {{-- MONNAIE --}}
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Monnaie du journal</label>
+                        <select name="monnaie" class="form-select @error('monnaie') is-invalid @enderror" required>
+                            <option value="CDF" {{ old('monnaie', 'CDF') === 'CDF' ? 'selected' : '' }}>CDF</option>
+                            <option value="USD" {{ old('monnaie') === 'USD' ? 'selected' : '' }}>USD</option>
+                        </select>
+                        @error('monnaie')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+
                     {{-- TRESORERIE --}}
 
 
-                    <div class="col-md-12">
+                    <div class="col-md-6">
 
 
                         <div class="card bg-light border-0 mt-2">

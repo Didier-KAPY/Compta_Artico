@@ -37,12 +37,9 @@ class EcritureComptable extends Model
         'debit_cdf',
 
         'credit_cdf',
-
-        'debit_usd',
-
-        'credit_usd',
-
         'statut',
+        'valide_par',
+        'date_validation',
 
     ];
 
@@ -57,11 +54,7 @@ class EcritureComptable extends Model
         'debit_cdf' => 'decimal:2',
 
         'credit_cdf' => 'decimal:2',
-
-        'debit_usd' => 'decimal:2',
-
-        'credit_usd' => 'decimal:2',
-
+        'date_validation' => 'datetime',
     ];
 
 

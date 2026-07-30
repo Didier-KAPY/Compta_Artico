@@ -12,9 +12,10 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
-        'force.password.change' => \App\Http\Middleware\ForcePasswordChange::class,
-        'check.entreprise.active' => \App\Http\Middleware\CheckEntrepriseActive::class,
-    ]);
+            'force.password.change' => \App\Http\Middleware\ForcePasswordChange::class,
+            'check.entreprise.active' => \App\Http\Middleware\CheckEntrepriseActive::class,
+            'role' => \App\Http\Middleware\RoleMiddleware::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

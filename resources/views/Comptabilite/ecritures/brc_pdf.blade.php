@@ -208,7 +208,7 @@ class="logo">
 
 <div>
 
-L'excellence au service
+Découvre ton habilité
 
 </div>
 
@@ -334,7 +334,7 @@ Préparé par :
 </strong>
 
 
-{{ auth()->user()->name ?? 'Utilisateur' }}
+{{ trim((auth()->user()->prenom ?? '').' '.(auth()->user()->nom ?? '')) ?: 'Utilisateur' }}
 
 
 
@@ -374,6 +374,10 @@ DETAIL BRC
 
 <th>Date</th>
 
+<th>Journal</th>
+
+<th>Pièce</th>
+
 
 <th>Référence</th>
 
@@ -381,7 +385,7 @@ DETAIL BRC
 <th>Compte</th>
 
 
-<th>Désignation</th>
+<th>Libellé</th>
 
 
 <th>Débit CDF</th>
@@ -403,7 +407,7 @@ DETAIL BRC
 
 
 
-@foreach($brc as $ligne)
+@forelse($brc as $ligne)
 
 
 
@@ -411,12 +415,22 @@ DETAIL BRC
 
 
 <td>
-
-
 {{ \Carbon\Carbon::parse(
 $ligne['date']
 )->format('d/m/Y') }}
 
+
+</td>
+
+<td>
+
+{{ $ligne['journal'] }}
+
+</td>
+
+<td>
+
+{{ $ligne['piece'] }}
 
 </td>
 
@@ -447,7 +461,7 @@ $ligne['date']
 <td>
 
 
-{{ $ligne['designation'] }}
+{{ $ligne['libelle'] }}
 
 
 </td>
@@ -492,7 +506,9 @@ $ligne['credit'],
 
 
 
-@endforeach
+@empty
+<tr><td colspan="8" class="text-center">Aucune écriture validée pour ces critères.</td></tr>
+@endforelse
 
 
 
@@ -508,7 +524,7 @@ $ligne['credit'],
 <tr class="total">
 
 
-<td colspan="4"
+<td colspan="6"
 class="text-right">
 
 
@@ -560,7 +576,7 @@ $totalCredit,
 <tr>
 
 
-<td colspan="4"
+<td colspan="6"
 class="text-right bold">
 
 
@@ -576,7 +592,7 @@ Contrôle équilibre
 class="text-center">
 
 
-@if($totalDebit == $totalCredit)
+@if(abs($ecart) < 0.01)
 
 
 <span class="badge-success">
@@ -599,7 +615,7 @@ ECRITURE EQUILIBREE
 ECART :
 
 {{ number_format(
-abs($totalDebit-$totalCredit),
+abs($ecart),
 2,
 ',',
 ' '
@@ -669,7 +685,7 @@ _________________________
 
 
 
-{{ auth()->user()->name ?? 'Utilisateur' }}
+{{ trim((auth()->user()->prenom ?? '').' '.(auth()->user()->nom ?? '')) ?: 'Utilisateur' }}
 
 
 

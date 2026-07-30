@@ -2,6 +2,8 @@
 
 @section('content')
 
+@php $isSuperAdmin = auth()->user()?->hasRole('Super Admin') ?? false; @endphp
+
 <div class="container py-4">
 
     <!-- HEADER -->
@@ -12,10 +14,12 @@
             Entrées de Caisse
         </h4>
 
+        <div class="d-flex gap-2 flex-wrap">
+        @include('partials.period-export-buttons', ['rapport' => 'entrees'])
         <a href="{{ route('entree-caisses.create') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i>
             Nouveau
-        </a>
+        </a></div>
 
     </div>
 
@@ -86,6 +90,9 @@
                     <thead class="table-dark">
                         <tr>
                             <th>N°</th>
+                            @if($isSuperAdmin)
+                                <th>Utilisateur</th>
+                            @endif
                             <th>Date</th>
                             <th>Motif</th>
                             <th class="text-end">Montant</th>
@@ -102,6 +109,9 @@
                         <tr>
 
                             <td><strong>{{ $entree->numero }}</strong></td>
+                            @if($isSuperAdmin)
+                                <td>{{ trim(($entree->user?->prenom ?? '').' '.($entree->user?->nom ?? '')) ?: 'Système' }}</td>
+                            @endif
 
                             <td>
                                 {{ \Carbon\Carbon::parse($entree->date)->format('d/m/Y') }}
@@ -184,7 +194,7 @@
                         @empty
 
                         <tr>
-                            <td colspan="7" class="text-center text-muted py-4">
+                            <td colspan="{{ $isSuperAdmin ? 8 : 7 }}" class="text-center text-muted py-4">
                                 Aucune entrée de caisse trouvée
                             </td>
                         </tr>

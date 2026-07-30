@@ -3,17 +3,102 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\TauxMc;
 use App\Models\TauxDeChange;
 use App\Models\ParametrageComptable;
 use App\Models\Entreprise;
 use App\Models\ListeDesComptes;
 use Illuminate\Support\Facades\Auth;
 use App\Models\JournalType;
+use App\Models\Departement;
+use App\Models\Fonction;
+use App\Models\User;
+use App\Models\Role;
 use Illuminate\Support\Facades\Storage;
 
 class ParametreController extends Controller
 {
+    public function utilisateurs()
+    {
+        $roles = Role::orderBy('designation')->get();
+        $departements = Departement::orderBy('designation')->get();
+        $fonctions = Fonction::orderBy('designation')->get();
+        $users = User::with(['role', 'departement', 'fonction'])
+            ->orderByDesc('last_logged_in')->orderBy('nom')->paginate(15);
+
+        return view('parametres.utilisateurs.index', compact('roles', 'departements', 'fonctions', 'users'));
+    }
+
+    public function departements()
+    {
+        $departements = Departement::withCount(['users', 'etatBesoins'])->orderBy('designation')->get();
+        $fonctions = Fonction::withCount('users')->orderBy('designation')->get();
+        $users = User::with(['role', 'departement', 'fonction'])->orderBy('nom')->orderBy('prenom')->get();
+        return view('parametres.departements.index', compact('departements', 'fonctions', 'users'));
+    }
+
+    public function storeDepartement(Request $request)
+    {
+        $data = $request->validate([
+            'designation' => 'required|string|max:150|unique:departements,designation',
+        ]);
+        Departement::create($data);
+        return back()->with('success', 'Département ajouté avec succès.');
+    }
+
+    public function updateDepartement(Request $request, Departement $departement)
+    {
+        $data = $request->validate([
+            'designation' => 'required|string|max:150|unique:departements,designation,'.$departement->id,
+        ]);
+        $departement->update($data);
+        return back()->with('success', 'Département mis à jour.');
+    }
+
+    public function storeFonction(Request $request)
+    {
+        $data = $request->validate([
+            'designation' => 'required|string|max:150|unique:fonctions,designation',
+        ]);
+        Fonction::create($data);
+        return back()->with('success', 'Fonction ajoutée avec succès.');
+    }
+
+    public function updateFonction(Request $request, Fonction $fonction)
+    {
+        $data = $request->validate([
+            'designation' => 'required|string|max:150|unique:fonctions,designation,'.$fonction->id,
+        ]);
+        $fonction->update($data);
+        return back()->with('success', 'Fonction mise à jour.');
+    }
+
+    public function destroyFonction(Fonction $fonction)
+    {
+        if ($fonction->users()->exists()) {
+            return back()->with('error', 'Cette fonction est affectée à un utilisateur et ne peut pas être supprimée.');
+        }
+        $fonction->delete();
+        return back()->with('success', 'Fonction supprimée.');
+    }
+
+    public function destroyDepartement(Departement $departement)
+    {
+        if ($departement->users()->exists() || $departement->etatBesoins()->exists()) {
+            return back()->with('error', 'Ce département est utilisé et ne peut pas être supprimé.');
+        }
+        $departement->delete();
+        return back()->with('success', 'Département supprimé.');
+    }
+
+    public function affecterDepartement(Request $request, User $user)
+    {
+        $data = $request->validate([
+            'departement_id' => 'nullable|exists:departements,id',
+            'fonction_id' => 'nullable|exists:fonctions,id',
+        ]);
+        $user->update($data);
+        return back()->with('success', 'Affectation de l’utilisateur mise à jour.');
+    }
 
     public function parametre()
     {
@@ -31,7 +116,7 @@ class ParametreController extends Controller
             compact('entreprise')
         );
     }
-    public function update(Request $request)
+    public function updateEntreprise(Request $request)
     {
         $request->validate([
             'nom_entreprise' => 'required',
@@ -169,38 +254,38 @@ public function storeCompte(Request $request)
         );
 }
 
-//taux de change
-public function createTauxMc()
+public function createTauxChange()
 {
-    $taux = TauxMc::where('user_id', Auth::id())->first();
+    $taux = TauxDeChange::latest()
+        ->first();
 
     return view(
-        'parametres.taux_mc.create',
+        'parametres.taux_change.create',
         compact('taux')
     );
 }
 
-public function storeTauxMc(Request $request)
+public function storeTauxChange(Request $request)
 {
     $request->validate([
-        'taux_mc' => 'required|numeric|min:0',
+        'taux_de_change' => 'required|numeric|min:0',
     ]);
 
-    TauxMc::updateOrCreate(
-        [
-            'user_id' => Auth::id(),
-        ],
-        [
-            'taux_mc' => $request->taux_mc,
-        ]
-    );
+    $taux = TauxDeChange::latest()->first();
 
-    return redirect()
-        ->route('parametres.taux-mc.create')
-        ->with(
-            'success',
-            'Taux MC enregistré avec succès.'
-        );
+    if ($taux) {
+        $taux->update(['taux_de_change' => $request->taux_de_change]);
+    } else {
+        TauxDeChange::create([
+            'user_id' => Auth::id(),
+            'taux_de_change' => $request->taux_de_change,
+        ]);
+    }
+
+    return back()->with(
+        'success',
+        'Taux de change enregistré avec succès.'
+    );
 }
 
     /*
@@ -212,7 +297,7 @@ public function storeTauxMc(Request $request)
     public function journalTypes()
     {
 
-        $journalTypes = JournalType::with('compte')
+        $journalTypes = JournalType::with(['compte', 'user'])
             ->orderBy('code')
             ->get();
 
@@ -273,6 +358,8 @@ public function storeTauxMc(Request $request)
 
         'nature'=>'required|in:caisse,banque,mobile_money,achat,vente,od',
 
+        'monnaie'=>'required|in:CDF,USD',
+
     ]);
 
 
@@ -288,6 +375,8 @@ public function storeTauxMc(Request $request)
         'liste_des_comptes_id'=>$request->liste_des_comptes_id,
 
         'nature'=>$request->nature,
+
+        'monnaie'=>$request->monnaie,
 
         'est_tresorerie'=>$request->boolean('est_tresorerie'),
 
@@ -373,6 +462,8 @@ public function storeTauxMc(Request $request)
 
             'nature'=>'required',
 
+            'monnaie'=>'required|in:CDF,USD',
+
 
         ]);
 
@@ -393,6 +484,8 @@ public function storeTauxMc(Request $request)
 
 
             'nature'=>$request->nature,
+
+            'monnaie'=>$request->monnaie,
 
 
             'est_tresorerie'=>$request->has('est_tresorerie'),
@@ -447,18 +540,17 @@ public function index()
 {
     $comptes = ListeDesComptes::orderBy('compte')->get();
 
-    $parametrages = ParametrageComptable::with('compte')
+    $parametrages = ParametrageComptable::with(['compte', 'user'])
         ->get();
 
 
     $journaux = JournalType::with('compte')
-        ->where('user_id', auth()->id())
         ->orderBy('id')
         ->get();
 
 
     return view(
-        'parametres.comptables',
+        'parametres.ParametrageComptable.index',
         compact(
             'comptes',
             'parametrages',
@@ -471,7 +563,7 @@ public function index()
 
 
 public function store(Request $request)
-{  
+{
     $request->validate([
     'code'=>'required',
     'designation'=>'required',
@@ -491,6 +583,29 @@ public function store(Request $request)
 );
 
 }
+
+public function updateParametrageComptable(Request $request, $id)
+{
+    $request->validate([
+        'code' => 'required',
+        'designation' => 'required',
+        'liste_des_comptes_id' => 'required|exists:liste_des_comptes,id',
+    ]);
+
+    $parametrage = ParametrageComptable::findOrFail($id);
+
+    $parametrage->update([
+        'code' => $request->code,
+        'designation' => $request->designation,
+        'liste_des_comptes_id' => $request->liste_des_comptes_id,
+    ]);
+
+    return back()->with(
+        'success',
+        'Paramètre comptable modifié avec succès'
+    );
+}
+
 public function destroy($id)
 {
 

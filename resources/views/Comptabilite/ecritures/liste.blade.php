@@ -1,6 +1,7 @@
 @extends('layouts.app')
 @section('title', 'Liste des écritures comptables')
 @section('content')
+@php $isSuperAdmin = auth()->user()?->hasRole('Super Admin') ?? false; @endphp
 <div class="container-fluid">
     {{-- Messages --}}
     @if(session('success'))
@@ -21,6 +22,7 @@
                 <i class="bi bi-journal-check me-2"></i>
                 Liste des écritures comptables
             </h5>
+            @include('partials.period-export-buttons', ['rapport' => 'ecritures'])
         </div>
         <div class="card-body">
             {{-- ========================= --}}
@@ -75,6 +77,9 @@
                     <thead class="table-dark">
                     <tr>
                         <th>Date</th>
+                        @if($isSuperAdmin)
+                            <th>Utilisateur</th>
+                        @endif
                         <th>Compte</th>
                         <th>Désignation</th>
                         <th class="text-end">
@@ -98,6 +103,9 @@
                             <td>
                                 {{ $ecriture->date->format('d/m/Y') }}
                             </td>
+                            @if($isSuperAdmin)
+                                <td>{{ trim(($ecriture->user?->prenom ?? '').' '.($ecriture->user?->nom ?? '')) ?: 'Système' }}</td>
+                            @endif
                             <td>
                                 {{ $ecriture->compte->compte ?? '-' }}
                             </td>
@@ -139,6 +147,8 @@
 
                             <td class="text-center">
 
+                                @can('valider', $ecriture)
+                                @if($ecriture->statut === 'En attente')
                                 {{-- Valider --}}
                                 <form
                                     action="{{ route('ecritures.valider', $ecriture->id) }}"
@@ -156,8 +166,10 @@
                                     </button>
 
                                 </form>
+                                @endif
+                                @endcan
 
-
+                                @can('update', $ecriture)
                                 {{-- Modifier --}}
                                 <a
                                     href="{{ route('ecritures.edit', $ecriture->id) }}"
@@ -167,8 +179,9 @@
                                     <i class="bi bi-pencil-square"></i>
 
                                 </a>
+                                @endcan
 
-
+                                @can('delete', $ecriture)
                                 {{-- Supprimer --}}
                                 <form
                                     action="{{ route('ecritures.destroy', $ecriture->id) }}"
@@ -189,13 +202,28 @@
                                     </button>
 
                                 </form>
+                                @endcan
+
+                                @can('reouvrir', $ecriture)
+                                @if($ecriture->statut === 'Validé')
+                                <form action='{{ route('ecritures.reouvrir', $ecriture->id) }}'
+                                      method='POST' class='d-inline'>
+                                    @csrf
+                                    @method('PATCH')
+                                    <button type='submit' class='btn btn-sm btn-warning'
+                                            title='Réouvrir'>
+                                        <i class='bi bi-arrow-counterclockwise'></i>
+                                    </button>
+                                </form>
+                                @endif
+                                @endcan
 
                             </td>
                         </tr>
                     @empty
                         <tr>
                             <td
-                                colspan="11"
+                                colspan="{{ $isSuperAdmin ? 8 : 7 }}"
                                 class="text-center text-muted">
                                 Aucune écriture comptable trouvée.
                             </td>
@@ -204,7 +232,7 @@
                     </tbody>
                     <tfoot class="table-light">
                         <tr>
-                            <th colspan="3" class="text-end">
+                            <th colspan="{{ $isSuperAdmin ? 4 : 3 }}" class="text-end">
                                 Totaux CDF
                             </th>
                             <th class="text-end">
@@ -225,9 +253,6 @@
                     Vérification de l'équilibre comptable
                 </div>
                 <div class="card-body">
-                    @php
-                        $equilibreCDF = abs($totalDebitCDF - $totalCreditCDF);
-                    @endphp
                     <div class="row">
                         <div class="col-md-12">
                             @if($equilibreCDF == 0)

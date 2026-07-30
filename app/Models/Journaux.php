@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use App\Models\User;
 use App\Models\JournalType;
 use App\Models\EntreeCaisse;
+use App\Models\SortieCaisse;
 use App\Models\EcritureComptable;
 use App\Models\ListeDesComptes;
 
@@ -30,6 +31,7 @@ class Journaux extends Model
 
         'liste_des_comptes_id',
         'entree_caisse_id',
+        'sortie_caisse_id',
 
         'reference',
 
@@ -169,6 +171,11 @@ class Journaux extends Model
         'entree_caisse_id'
     );
 }
+
+    public function sortieCaisse()
+    {
+        return $this->belongsTo(SortieCaisse::class, 'sortie_caisse_id');
+    }
 
 
 

@@ -8,6 +8,7 @@ class EtatBesoin extends Model
 {
     protected $fillable = [
         'user_id',
+        'departement_id',
         'numero',
         'date',
         'service',
@@ -17,6 +18,8 @@ class EtatBesoin extends Model
         'monnaie',
         'statut',
         'observation',
+        'valide_par',
+        'date_validation',
     ];
 
     /**
@@ -25,6 +28,11 @@ class EtatBesoin extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function departement()
+    {
+        return $this->belongsTo(Departement::class);
     }
 
     /**
@@ -36,5 +44,10 @@ class EtatBesoin extends Model
             EtatBesoinLigne::class,
             'etat_besoin_id'
         );
+    }
+
+    public function sortieCaisses()
+    {
+        return $this->hasMany(SortieCaisse::class, 'etat_besoin_id');
     }
 }

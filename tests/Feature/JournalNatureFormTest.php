@@ -1,0 +1,81 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\JournalType;
+use App\Models\Journaux;
+use App\Models\ListeDesComptes;
+use App\Models\Role;
+use App\Models\TauxDeChange;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class JournalNatureFormTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_chaque_formulaire_affiche_uniquement_les_comptes_de_sa_nature(): void
+    {
+        [$user, $types] = $this->contexte();
+
+        foreach (['caisse' => 'caisse', 'banque' => 'banque', 'mobile' => 'mobile_money'] as $route => $nature) {
+            $response = $this->actingAs($user)->get(route('journaux.create.'.$route));
+            $response->assertOk()->assertDontSee('Journal *')
+                ->assertSee('type="hidden" name="journal_type_id"', false)
+                ->assertViewHas('journalTypes', fn ($journaux) => $journaux->isNotEmpty() && $journaux->every(fn ($journal) => $journal->nature === $nature));
+        }
+    }
+
+    public function test_index_filtre_par_journal_de_tresorerie(): void
+    {
+        [$user, $types] = $this->contexte();
+
+        Journaux::create(['user_id' => $user->id, 'journal_type_id' => $types['caisse']->id, 'liste_des_comptes_id' => $types['caisse']->liste_des_comptes_id, 'reference' => 'REF-CAISSE', 'date' => '2026-07-29', 'statut' => 'Validé']);
+        Journaux::create(['user_id' => $user->id, 'journal_type_id' => $types['banque']->id, 'liste_des_comptes_id' => $types['banque']->liste_des_comptes_id, 'reference' => 'REF-BANQUE', 'date' => '2026-07-29', 'statut' => 'Validé']);
+
+        $response = $this->actingAs($user)->get(route('journaux.index', ['journal_type_id' => $types['banque']->id]));
+        $response->assertOk()->assertSee('Journal / compte de trésorerie')->assertSee('521100')
+            ->assertSee('REF-BANQUE')->assertDontSee('REF-CAISSE');
+    }
+
+    public function test_monnaie_selectionne_automatiquement_le_compte_du_journal(): void
+    {
+        [$user, $types] = $this->contexte();
+        TauxDeChange::create(['user_id' => $user->id, 'taux_de_change' => 2800]);
+        $operation = ListeDesComptes::create(['user_id' => $user->id, 'compte' => '701100', 'designation' => 'Produit', 'nature' => 'Produit']);
+
+        $this->actingAs($user)->post(route('journaux.store'), [
+            'journal_nature' => 'banque',
+            'journal_type_id' => $types['banque']->id,
+            'liste_des_comptes_id' => $operation->id,
+            'date' => '2026-07-29', 'type' => 'recette', 'monnaie' => 'USD',
+            'montant_ttc' => 100, 'appliquer_tva' => 0, 'mode_paiement' => 'banque',
+            'description' => 'Recette USD',
+        ])->assertRedirect(route('journaux.index'));
+
+        $this->assertDatabaseHas('journaux', [
+            'journal_type_id' => $types['banque_usd']->id,
+            'monnaie' => 'USD',
+        ]);
+    }
+
+    private function contexte(): array
+    {
+        $role = Role::create(['designation' => 'Admin']);
+        $user = User::create(['nom' => 'Test', 'prenom' => 'Journaux', 'email' => 'journaux@test.local', 'password' => bcrypt('password'), 'role_id' => $role->id, 'password_default' => 0, 'statut' => 'Actif']);
+        $definitions = [
+            'caisse' => ['CAI', '571100', 'Caisse'],
+            'banque' => ['BQ', '521100', 'Banque'],
+            'mobile_money' => ['MOB', '532100', 'Mobile Money'],
+        ];
+        $types = [];
+        foreach ($definitions as $nature => [$code, $numero, $designation]) {
+            $compte = ListeDesComptes::create(['user_id' => $user->id, 'compte' => $numero, 'designation' => $designation, 'nature' => 'Actif']);
+            $types[$nature === 'mobile_money' ? 'mobile' : $nature] = JournalType::create(['user_id' => $user->id, 'code' => $code, 'libelle' => $designation, 'liste_des_comptes_id' => $compte->id, 'nature' => $nature, 'est_tresorerie' => true]);
+        }
+        $compteUsd = ListeDesComptes::create(['user_id' => $user->id, 'compte' => '521200', 'designation' => 'Banque USD', 'nature' => 'Actif']);
+        $types['banque_usd'] = JournalType::create(['user_id' => $user->id, 'code' => 'BQUSD', 'libelle' => 'Banque USD', 'liste_des_comptes_id' => $compteUsd->id, 'nature' => 'banque', 'monnaie' => 'USD', 'est_tresorerie' => true]);
+        return [$user, $types];
+    }
+}

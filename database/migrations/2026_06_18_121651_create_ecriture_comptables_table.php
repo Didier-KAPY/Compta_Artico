@@ -81,24 +81,10 @@ return new class extends Migration
             |--------------------------------------------------------------------------
             */
 
-            $table->decimal('debit_cdf', 15, 2)
+            $table->decimal('debit_cdf', 18, 2)
                 ->default(0);
 
-            $table->decimal('credit_cdf', 15, 2)
-                ->default(0);
-
-
-
-            /*
-            |--------------------------------------------------------------------------
-            | Montants USD
-            |--------------------------------------------------------------------------
-            */
-
-            $table->decimal('debit_usd', 15, 2)
-                ->default(0);
-
-            $table->decimal('credit_usd', 15, 2)
+            $table->decimal('credit_cdf', 18, 2)
                 ->default(0);
 
 

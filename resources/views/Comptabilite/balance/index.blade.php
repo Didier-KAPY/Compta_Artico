@@ -13,6 +13,7 @@
         <strong>
             Balance générale
         </strong>
+        <div class="ms-auto">@include('partials.period-export-buttons', ['rapport'=>'balance','exportParams'=>['date_debut'=>$dateDebut,'date_fin'=>$dateFin,'classe'=>$classeRecherche]])</div>
 
     </div>
 

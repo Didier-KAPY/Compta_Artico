@@ -37,4 +37,9 @@ class SortieCaisse extends Model
             ? $this->etatBesoin->lignes()
             : collect();
     }
+
+    public function journaux()
+    {
+        return $this->hasMany(Journaux::class, 'sortie_caisse_id');
+    }
 }

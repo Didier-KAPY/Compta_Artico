@@ -2,15 +2,28 @@
 
 @section('content')
 
+@php $isSuperAdmin = auth()->user()?->hasRole('Super Admin') ?? false; @endphp
+
 <div class="container py-4">
+
+@if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
+@if(session('error'))<div class="alert alert-danger">{{ session('error') }}</div>@endif
+@if($errors->any())<div class="alert alert-danger"><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 
 <!-- HEADER -->
 <div class="d-flex justify-content-between align-items-center mb-3">
 
     <h4 class="mb-0">
         <i class="bi bi-journal-bookmark me-2"></i>
-        Caisse
+        Journaux de trésorerie
     </h4>
+
+    <div class="d-flex gap-2 flex-wrap">
+        @include('partials.period-export-buttons', ['rapport' => 'journaux'])
+        <a href="{{ route('journaux.create.caisse') }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-cash-stack me-1"></i>Journal Caisse</a>
+        <a href="{{ route('journaux.create.banque') }}" class="btn btn-outline-success btn-sm"><i class="bi bi-bank me-1"></i>Journal Banque</a>
+        <a href="{{ route('journaux.create.mobile') }}" class="btn btn-outline-warning btn-sm"><i class="bi bi-phone me-1"></i>Journal Mobile Money</a>
+    </div>
 
 </div>
 
@@ -89,6 +102,18 @@
 
 
 
+                    <div class="col-md-4">
+                        <label class="form-label">Journal / compte de trésorerie</label>
+                        <select name="journal_type_id" class="form-select">
+                            <option value="">Tous les journaux de trésorerie</option>
+                            @foreach($journalTypesTresorerie as $typeJournal)
+                                <option value="{{ $typeJournal->id }}" {{ (string) request('journal_type_id') === (string) $typeJournal->id ? 'selected' : '' }}>
+                                    {{ $typeJournal->code }} — {{ $typeJournal->monnaie ?? 'CDF' }} — {{ $typeJournal->compte?->compte }} {{ $typeJournal->compte?->designation }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
                     <div class="col-md-2 d-flex align-items-end">
 
                         <button type="submit"
@@ -140,6 +165,9 @@
                 <thead class="table-dark">
                     <tr>
                         <th>Référence</th>
+                        @if($isSuperAdmin)
+                            <th>Utilisateur</th>
+                        @endif
                         <th>Date</th>
                         <th>Description</th>
                         <th>Monnaie</th>
@@ -162,6 +190,9 @@
                             <strong>{{ $journal->reference ?? '-' }}</strong>
                         </td>
 
+                        @if($isSuperAdmin)
+                            <td>{{ trim(($journal->user?->prenom ?? '').' '.($journal->user?->nom ?? '')) ?: 'Système' }}</td>
+                        @endif
 
                         <td>
                             {{ $journal->date 
@@ -259,6 +290,26 @@
                                         </a>
                                     </li>
 
+                                    <li>
+                                        <a class="dropdown-item" href="{{ route('journaux.recu.pdf', $journal->id) }}">
+                                            <i class="bi bi-file-earmark-arrow-down me-2"></i>Télécharger le reçu
+                                        </a>
+                                    </li>
+
+                                    @can('update', $journal)
+                                    <li><a class="dropdown-item" href="{{ route('journaux.edit', $journal->id) }}"><i class="bi bi-pencil-square me-2"></i>Modifier</a></li>
+                                    @endcan
+
+                                    @can('delete', $journal)
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <form action="{{ route('journaux.destroy', $journal->id) }}" method="POST" onsubmit="return confirm('Supprimer définitivement ce journal ?')">
+                                            @csrf @method('DELETE')
+                                            <button type="submit" class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Supprimer</button>
+                                        </form>
+                                    </li>
+                                    @endcan
+
 
                                     <li>
 
@@ -315,7 +366,7 @@
 
                     <tr>
 
-                        <td colspan="10" class="text-center text-muted py-4">
+                        <td colspan="{{ $isSuperAdmin ? 11 : 10 }}" class="text-center text-muted py-4">
 
                             Aucun journal trouvé
 

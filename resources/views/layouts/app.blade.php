@@ -234,8 +234,171 @@
         }
 
 
+        /* ==================================================
+           SIDEBAR — DESIGN MODERNE (présentation uniquement)
+           ================================================== */
+        .sidebar {
+            width: 272px;
+            padding: 82px 12px 24px;
+            background:
+                radial-gradient(circle at 15% 8%, rgba(59, 130, 246, .22), transparent 28%),
+                linear-gradient(180deg, #101c35 0%, #15243f 52%, #0d172b 100%);
+            border-right: 1px solid rgba(255, 255, 255, .08);
+            box-shadow: 10px 0 35px rgba(15, 23, 42, .13);
+            scrollbar-width: thin;
+            scrollbar-color: rgba(148, 163, 184, .35) transparent;
+        }
+
+        .sidebar::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, .35);
+            border-radius: 20px;
+        }
+
+        .sidebar > .nav {
+            gap: 5px;
+        }
+
+        .sidebar .nav-item,
+        .sidebar > .nav > li {
+            width: 100%;
+        }
+
+        .sidebar .nav-link,
+        .sidebar .menu-parent {
+            min-height: 46px;
+            margin: 0;
+            padding: 11px 13px;
+            color: #c8d4e5;
+            border: 1px solid transparent;
+            border-radius: 12px;
+            font-size: .9rem;
+            font-weight: 500;
+            letter-spacing: .01em;
+            transition: background-color .2s ease, color .2s ease,
+                        border-color .2s ease, transform .2s ease,
+                        box-shadow .2s ease;
+        }
+
+        .sidebar .nav-link > i:first-child,
+        .sidebar .menu-parent > div > i:first-child {
+            width: 30px;
+            height: 30px;
+            margin-right: 10px !important;
+            display: inline-grid;
+            place-items: center;
+            flex: 0 0 30px;
+            color: #8fb8f5;
+            background: rgba(96, 165, 250, .1);
+            border-radius: 9px;
+            font-size: 1rem !important;
+            transition: .2s ease;
+        }
+
+        .sidebar .nav-link:hover,
+        .sidebar .menu-parent:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, .075);
+            border-color: rgba(255, 255, 255, .07);
+            transform: translateX(2px);
+        }
+
+        .sidebar .nav-link:hover > i:first-child,
+        .sidebar .menu-parent:hover > div > i:first-child {
+            color: #fff;
+            background: rgba(59, 130, 246, .28);
+        }
+
+        .sidebar .nav-link.active-menu,
+        .sidebar .submenu a.active {
+            color: #fff !important;
+            background: linear-gradient(135deg, #2563eb, #3b82f6) !important;
+            border: 1px solid rgba(147, 197, 253, .25);
+            border-left: 1px solid rgba(147, 197, 253, .25);
+            box-shadow: 0 8px 20px rgba(37, 99, 235, .28);
+            font-weight: 600;
+        }
+
+        .sidebar .nav-link.active-menu > i:first-child,
+        .sidebar .submenu a.active > i:first-child {
+            color: #fff;
+            background: rgba(255, 255, 255, .17);
+        }
+
+        .sidebar .submenu {
+            position: relative;
+            margin: 5px 0 7px 15px !important;
+            padding: 3px 0 3px 17px !important;
+        }
+
+        .sidebar .submenu::before {
+            content: '';
+            position: absolute;
+            top: 4px;
+            bottom: 4px;
+            left: 0;
+            width: 1px;
+            background: linear-gradient(180deg, rgba(96, 165, 250, .55), rgba(96, 165, 250, .08));
+        }
+
+        .sidebar .submenu li {
+            position: relative;
+            margin: 3px 0;
+        }
+
+        .sidebar .submenu li::before {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: -17px;
+            width: 11px;
+            height: 1px;
+            background: rgba(96, 165, 250, .4);
+        }
+
+        .sidebar .submenu a {
+            min-height: 39px;
+            padding: 8px 10px;
+            color: #aebdd0;
+            border-radius: 10px;
+            font-size: .82rem;
+        }
+
+        .sidebar .submenu a:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, .07);
+        }
+
+        .sidebar .submenu-icon {
+            color: #7187a5;
+            font-size: .75rem;
+        }
+
+        .content {
+            margin-left: 272px;
+            transition: margin-left .3s ease;
+        }
+
+        @media (max-width: 991px) {
+            .sidebar {
+                left: -286px;
+                box-shadow: 18px 0 45px rgba(15, 23, 42, .28);
+            }
+
+            .sidebar.show {
+                left: 0;
+            }
+
+            .content {
+                margin-left: 0;
+            }
+        }
     </style>
 
+    <link href="{{ asset('assets/css/app-theme.css') }}" rel="stylesheet">
 </head>
 
 <body>
@@ -262,12 +425,14 @@
     if(toggle && sidebar){
         toggle.addEventListener('click', function(){
             sidebar.classList.toggle('show');
+            toggle.setAttribute('aria-expanded', sidebar.classList.contains('show') ? 'true' : 'false');
         });
         document.addEventListener('click', function(e){
             if(window.innerWidth <= 991){
                 if(!sidebar.contains(e.target)
                 && !toggle.contains(e.target)){
                     sidebar.classList.remove('show');
+                    toggle.setAttribute('aria-expanded', 'false');
                 }
             }
         });

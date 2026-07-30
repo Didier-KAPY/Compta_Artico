@@ -17,13 +17,13 @@
                     </td>
                     <td class="text-center">
                         <h3 class="fw-bold">
-                            {{ $entreprise->nom_entreprise  }}
+                            {{ $entreprise?->nom_entreprise ?? config('app.name') }}
                         </h3>
                         <p class="mb-0">
-                            Découvre ton habilité
+                            {{ $entreprise?->adresse }}
                         </p>
                         <p class="mb-2">
-                            Kinshasa - RDC
+                            {{ $entreprise?->telephone }}
                         </p>
                         <h4 class="fw-bold">
                             BON DE REGULARISATION COMPTABLE
@@ -60,7 +60,7 @@
                         <strong>
                             Préparé par :
                         </strong>
-                        {{ auth()->user()->name ?? 'Utilisateur' }}
+                        {{ trim((auth()->user()->prenom ?? '').' '.(auth()->user()->nom ?? '')) ?: 'Utilisateur' }}
                     </td>
                 </tr>
             </table>
@@ -74,13 +74,19 @@
                             Date
                         </th>
                         <th>
+                            Journal
+                        </th>
+                        <th>
+                            Pièce
+                        </th>
+                        <th>
                             Référence
                         </th>
                         <th>
                             Compte
                         </th>
                         <th>
-                            Désignation
+                            Libellé
                         </th>
                         <th class="text-end">
                             Débit CDF
@@ -91,12 +97,18 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach($brc as $ligne)
+                    @forelse($brc as $ligne)
                         <tr>
                             <td>
                                 {{ \Carbon\Carbon::parse(
                                     $ligne['date']
                                 )->format('d/m/Y') }}
+                            </td>
+                            <td>
+                                {{ $ligne['journal'] }}
+                            </td>
+                            <td>
+                                {{ $ligne['piece'] }}
                             </td>
                             <td>
                                 {{ $ligne['reference'] }}
@@ -105,7 +117,7 @@
                                 {{ $ligne['compte'] }}
                             </td>
                             <td>
-                                {{ $ligne['designation'] }}
+                                {{ $ligne['libelle'] }}
                             </td>
                             <td class="text-end">
                                 {{ number_format(
@@ -124,11 +136,13 @@
                                 ) }}
                             </td>
                         </tr>
-                    @endforeach
+                    @empty
+                        <tr><td colspan="8" class="text-center text-muted py-4">Aucune écriture validée pour ces critères.</td></tr>
+                    @endforelse
                 </tbody>
                 <tfoot class="table-light">
                     <tr class="fw-bold">
-                        <td colspan="4"
+                        <td colspan="6"
                             class="text-end">
                             TOTAL GENERAL
                         </td>
@@ -150,13 +164,13 @@
                         </td>
                     </tr>
                     <tr>
-                        <td colspan="4"
+                        <td colspan="6"
                             class="text-end fw-bold">
                             Contrôle équilibre
                         </td>
                         <td colspan="2"
                             class="text-center">
-                            @if($totalDebit == $totalCredit)
+                            @if(abs($ecart) < 0.01)
                                 <span class="badge bg-success">
                                     ECRITURE EQUILIBREE
                                 </span>
@@ -164,7 +178,7 @@
                                 <span class="badge bg-danger">
                                     ECART :
                                     {{ number_format(
-                                        abs($totalDebit-$totalCredit),
+                                        abs($ecart),
                                         2,
                                         ',',
                                         ' '
@@ -209,7 +223,8 @@
             'ecritures.brc.pdf',
             [
                 'date_debut'=>$dateDebut,
-                'date_fin'=>$dateFin
+                'date_fin'=>$dateFin,
+                'journal_type_id'=>$journalSelectionne?->id
             ]
         ) }}"
         class="btn btn-danger">

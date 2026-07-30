@@ -1,8 +1,12 @@
 @extends('layouts.app')
 
 @section('content')
+@php $isSuperAdmin = auth()->user()?->hasRole('Super Admin') ?? false; @endphp
 
 <div class="container py-4">
+    <div class="d-flex justify-content-end mb-3">
+        @include('partials.period-export-buttons', ['rapport' => 'etat-besoins'])
+    </div>
 
     <!-- HEADER -->
     <div class="d-flex justify-content-between align-items-center mb-3">
@@ -71,6 +75,18 @@
 
                     </div>
 
+                    @if($peutVoirTout)
+                    <div class="col-md-4">
+                        <label class="form-label">Département</label>
+                        <select name="departement_id" class="form-select">
+                            <option value="">Tous les départements</option>
+                            @foreach($departements as $departement)
+                                <option value="{{ $departement->id }}" {{ (string) request('departement_id') === (string) $departement->id ? 'selected' : '' }}>{{ $departement->designation }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    @endif
+
                 </div>
 
                 <div class="mt-3">
@@ -101,11 +117,11 @@
                         <tr>
                         <th>N°</th>
 
-                        @if(strtolower(auth()->user()->role?->designation ?? '') == 'super admin')
+                        @if($isSuperAdmin)
                             <th>Utilisateur</th>
                         @endif
                         <th>Date</th>
-                        <th>Service</th>
+                        <th>Département</th>
                         <th>Demandeur</th>
                         <th>Désignation</th>
                         <th>Monnaie</th>
@@ -123,7 +139,7 @@
                         <tr>
 
                             <td><strong>{{ $etat->numero }}</strong></td>
-                                @if(strtolower(auth()->user()->role?->designation ?? '') == 'super admin')
+                                @if($isSuperAdmin)
 
                             <td>
                                 {{ $etat->user?->prenom ?? '' }}
@@ -135,7 +151,7 @@
                                 {{ \Carbon\Carbon::parse($etat->date)->format('d/m/Y') }}
                             </td>
 
-                            <td>{{ $etat->service }}</td>
+                            <td>{{ $etat->departement?->designation ?? $etat->service }}</td>
 
                             <td>{{ $etat->demandeur }}</td>
 
@@ -200,7 +216,7 @@
                         @empty
 
                         <tr>
-                            <td colspan="{{ strtolower(auth()->user()->role?->designation ?? '') == 'super admin' ? 10 : 9 }}"
+                            <td colspan="{{ $isSuperAdmin ? 10 : 9 }}"
                             class="text-center text-muted py-4">
                                 Aucun état de besoin trouvé
                             </td>

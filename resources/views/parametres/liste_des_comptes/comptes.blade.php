@@ -1,6 +1,7 @@
 @extends('layouts.app')
 
 @section('content')
+@php $isSuperAdmin = auth()->user()?->hasRole('Super Admin') ?? false; @endphp
 
 <div class="container py-4">
 
@@ -60,6 +61,9 @@
                             <th>Désignation</th>
                             <th>Nature</th>
                             <th>Observation</th>
+                            @if($isSuperAdmin)
+                                <th>Utilisateur</th>
+                            @endif
                             <th width="150">Actions</th>
                         </tr>
                     </thead>
@@ -84,6 +88,9 @@
                                 <td>
                                     {{ $compte->observation }}
                                 </td>
+                                @if($isSuperAdmin)
+                                    <td>{{ trim(($compte->user?->prenom ?? '').' '.($compte->user?->nom ?? '')) ?: 'Système' }}</td>
+                                @endif
                                 <td>
                                     <a href="{{ route('parametres.comptes.edit',$compte->id) }}"
                                     class="btn btn-sm btn-warning">
@@ -109,7 +116,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="text-center text-muted">
+                                <td colspan="{{ $isSuperAdmin ? 7 : 6 }}" class="text-center text-muted">
                                     Aucun compte enregistré.
                                 </td>
                             </tr>

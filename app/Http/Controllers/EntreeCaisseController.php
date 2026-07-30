@@ -5,8 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\EntreeCaisse;
 use App\Models\EntreeCaisseLigne;
 use App\Models\Journaux;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
+use App\Services\WorkflowComptableService;
 
 class EntreeCaisseController extends Controller
 {
@@ -96,6 +100,53 @@ class EntreeCaisseController extends Controller
         $entree = EntreeCaisse::with(['user', 'lignes'])->findOrFail($id);
 
         return view('entree_caisses.show', compact('entree'));
+    }
+
+    public function statistiques(Request $request)
+    {
+        $year = (int) $request->input('year', now()->year);
+        $month = $request->input('month');
+
+        $query = EntreeCaisse::whereYear('date', $year)
+            ->when($month, function ($query) use ($month) {
+                $query->whereMonth('date', $month);
+            });
+
+        $totalEntrees = (clone $query)->count();
+        $enAttente = (clone $query)->where('statut', 'En attente')->count();
+        $totalValidees = (clone $query)->where('statut', 'Validé')->count();
+        $totalRejetees = (clone $query)->where('statut', 'Rejeté')->count();
+
+        $labels = [];
+        $values = [];
+
+        foreach (range(1, 12) as $numeroMois) {
+            $labels[] = Carbon::create()->month($numeroMois)->format('M');
+            $values[] = EntreeCaisse::whereYear('date', $year)
+                ->whereMonth('date', $numeroMois)
+                ->count();
+        }
+
+        $years = EntreeCaisse::query()
+            ->pluck('date')
+            ->filter()
+            ->map(fn ($date) => Carbon::parse($date)->year)
+            ->push(now()->year)
+            ->unique()
+            ->sortDesc()
+            ->values();
+
+        return view('entree_caisses.statistiques', compact(
+            'year',
+            'month',
+            'years',
+            'totalEntrees',
+            'enAttente',
+            'totalValidees',
+            'totalRejetees',
+            'labels',
+            'values'
+        ));
     }
 
     // =========================
@@ -260,7 +311,11 @@ public function edit($id)
 {
     $entree = EntreeCaisse::with('lignes')->findOrFail($id);
 
-    return view('entree_caisses.edit', compact('entree', 'statut'));
+    if ($entree->statut === 'Validé') {
+        return back()->with('error', 'Ce Bon validé doit d’abord être réouvert.');
+    }
+
+    return view('entree_caisses.edit', compact('entree'));
 }
 public function update(Request $request, $id)
 {
@@ -271,11 +326,15 @@ public function update(Request $request, $id)
 
         $entree = EntreeCaisse::findOrFail($id);
 
+        if ($entree->statut === 'Validé') {
+            return back()->with('error', 'Ce Bon validé doit d’abord être réouvert.');
+        }
+
         // 🚨 VERIFICATION SIMPLE DU STATUT DANS JOURNAUX
             $statut = \App\Models\Journaux::where('reference', $entree->numero)
     ->value('statut');
 
-    if ($statut === 'valide') {
+    if ($statut === 'Validé') {
 
         return redirect()
             ->back()
@@ -298,7 +357,7 @@ public function update(Request $request, $id)
             'montant' => $total,
 
             // retour automatique en attente
-            'statut' => 'en attente',
+            'statut' => 'En attente',
         ]);
 
         // ================= SUPPRIMER ANCIENNES LIGNES =================
@@ -333,5 +392,32 @@ public function update(Request $request, $id)
 
         return back()->with('error', $e->getMessage());
     }
+}
+
+public function destroy($id)
+{
+    DB::transaction(function () use ($id) {
+        $entree = EntreeCaisse::lockForUpdate()->findOrFail($id);
+        if ($entree->statut === 'Validé') {
+            throw ValidationException::withMessages(['statut' => 'Un Bon validé doit d’abord être réouvert.']);
+        }
+        if ($entree->journaux()->exists()) {
+            throw ValidationException::withMessages(['dependance' => 'Suppression impossible : un Journal est lié.']);
+        }
+        $entree->delete();
+    });
+
+    return redirect()
+        ->route('entree-caisses.index')
+        ->with('success', 'Entrée de caisse supprimée avec succès.');
+}
+
+public function reouvrir($id, WorkflowComptableService $workflow)
+{
+    $entree = EntreeCaisse::findOrFail($id);
+    Gate::authorize('reouvrir', $entree);
+    $workflow->reouvrirEntreeCaisse($entree);
+
+    return back()->with('success', 'Bon d’entrée réouvert avec succès.');
 }
 }

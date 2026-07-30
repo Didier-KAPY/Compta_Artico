@@ -18,6 +18,8 @@ class User extends Authenticatable
         'email',
         'password',
         'role_id',
+        'departement_id',
+        'fonction_id',
          'adresse',
         'password_default',
         'photo',
@@ -49,6 +51,16 @@ class User extends Authenticatable
     {
         return $this->belongsTo(Role::class, 'role_id');
     }
+
+    public function departement()
+    {
+        return $this->belongsTo(Departement::class);
+    }
+
+    public function fonction()
+    {
+        return $this->belongsTo(Fonction::class);
+    }
     /**
      * Un utilisateur possède plusieurs entreprises
      */
@@ -68,7 +80,7 @@ class User extends Authenticatable
      */
     public function journaux()
     {
-        return $this->hasMany(Journal::class);
+        return $this->hasMany(Journaux::class);
     }
     /**
      * Taux de change
@@ -76,5 +88,22 @@ class User extends Authenticatable
     public function tauxDeChanges()
     {
         return $this->hasMany(TauxDeChange::class);
+    }
+
+    public function hasRole(string|array $roles): bool
+    {
+        $roles = is_array($roles) ? $roles : [$roles];
+        $current = mb_strtolower(trim((string) $this->role?->designation));
+        $allowed = array_map(
+            static fn (string $role): string => mb_strtolower(trim($role)),
+            $roles
+        );
+
+        return in_array($current, $allowed, true);
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->hasRole(['Super Admin', 'Super admin', 'super_admin']);
     }
 }

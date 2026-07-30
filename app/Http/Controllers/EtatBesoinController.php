@@ -4,9 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\EtatBesoin;
 use App\Models\EtatBesoinLigne;
+use App\Models\Departement;
 use Illuminate\Http\Request;
 use App\Models\SortieCaisse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
+use App\Services\WorkflowComptableService;
 use Carbon\Carbon;
 
 class EtatBesoinController extends Controller
@@ -18,8 +22,15 @@ class EtatBesoinController extends Controller
 {
     $query = EtatBesoin::with([
         'lignes',
-        'user'
+        'user',
+        'departement'
     ]);
+
+    $this->limiterAuDepartement($query);
+    $peutVoirTout = auth()->user()->hasRole(['Super Admin', 'Admin', 'Gérant', 'Gerant']);
+    if ($peutVoirTout && $request->filled('departement_id')) {
+        $query->where('departement_id', $request->departement_id);
+    }
 
 
     // Recherche par numéro
@@ -62,7 +73,8 @@ class EtatBesoinController extends Controller
     if (
         !$request->filled('numero') &&
         !$request->filled('date_debut') &&
-        !$request->filled('date_fin')
+        !$request->filled('date_fin') &&
+        !$request->filled('departement_id')
     ) {
 
         $query->whereDate(
@@ -79,9 +91,11 @@ class EtatBesoinController extends Controller
         ->withQueryString();
 
 
+    $departements = $peutVoirTout ? Departement::orderBy('designation')->get() : collect();
+
     return view(
         'etat_besoins.index',
-        compact('etatBesoins')
+        compact('etatBesoins', 'peutVoirTout', 'departements')
     );
 }
     /**
@@ -89,7 +103,8 @@ class EtatBesoinController extends Controller
      */
     public function create()
     {
-        return view('etat_besoins.create');
+        $departements = Departement::orderBy('designation')->get();
+        return view('etat_besoins.create', compact('departements'));
     }
 
     /**
@@ -99,7 +114,7 @@ class EtatBesoinController extends Controller
 {
     $request->validate([
         'date' => 'required|date',
-        'service' => 'required|string|max:255',
+        'departement_id' => 'required|exists:departements,id',
         'demandeur' => 'required|string|max:255',
         'motif' => 'required|string',
         'monnaie' => 'required|in:CDF,USD',
@@ -109,12 +124,15 @@ class EtatBesoinController extends Controller
 
     try {
 
+        $departement = Departement::findOrFail($request->departement_id);
+
         // Création de l'état de besoin
         $etat = EtatBesoin::create([
             'user_id' => auth()->id(),
+            'departement_id' => $departement->id,
             'numero' => $this->generateNumero(),
             'date' => $request->date,
-            'service' => $request->service,
+            'service' => $departement->designation,
             'demandeur' => $request->demandeur,
             'motif' => $request->motif,
             'monnaie' => $request->monnaie,
@@ -176,7 +194,11 @@ class EtatBesoinController extends Controller
      */
    public function show($id)
     {
-        $etat = EtatBesoin::with('lignes')->findOrFail($id);
+        $etat = $this->etatAccessible($id, ['lignes', 'departement']);
+
+        if ($etat->statut === 'Validé') {
+            return back()->with('error', 'Cet état validé doit d’abord être réouvert.');
+        }
 
         return view('etat_besoins.show', compact('etat'));
     }
@@ -186,9 +208,35 @@ class EtatBesoinController extends Controller
      */
     public function edit(string $id)
     {
-        $etat = EtatBesoin::with('lignes')->findOrFail($id);
+        $etat = $this->etatAccessible($id, ['lignes', 'departement']);
 
-        return view('etat_besoins.edit', compact('etat'));
+        $departements = Departement::orderBy('designation')->get();
+        return view('etat_besoins.edit', compact('etat', 'departements'));
+    }
+
+    public function update(Request $request, string $id)
+    {
+        $request->validate([
+            'departement_id' => 'required|exists:departements,id',
+            'demandeur' => 'required|string|max:255',
+        ]);
+
+        $etat = $this->etatAccessible($id);
+        $departement = Departement::findOrFail($request->departement_id);
+
+        if ($etat->statut === 'Validé') {
+            return back()->with('error', 'Cet état validé doit d’abord être réouvert.');
+        }
+
+        $etat->update([
+            'departement_id' => $departement->id,
+            'service' => $departement->designation,
+            'demandeur' => $request->demandeur,
+        ]);
+
+        return redirect()
+            ->route('etat-besoins.show', $etat->id)
+            ->with('success', 'État de besoin modifié avec succès.');
     }
 
     /**
@@ -196,8 +244,18 @@ class EtatBesoinController extends Controller
      */
     public function destroy($id)
     {
-        $etat = EtatBesoin::findOrFail($id);
-        $etat->delete();
+        DB::transaction(function () use ($id) {
+            $query = EtatBesoin::query();
+            $this->limiterAuDepartement($query);
+            $etat = $query->lockForUpdate()->findOrFail($id);
+            if ($etat->statut === 'Validé') {
+                throw ValidationException::withMessages(['statut' => 'Un état validé doit d’abord être réouvert.']);
+            }
+            if ($etat->sortieCaisses()->exists()) {
+                throw ValidationException::withMessages(['dependance' => 'Suppression impossible : un Bon de sortie est lié.']);
+            }
+            $etat->delete();
+        });
 
         return redirect()
             ->route('etat-besoins.index')
@@ -237,6 +295,9 @@ class EtatBesoinController extends Controller
 }
 public function valider(Request $request, $id)
 {
+    $etatAutorisation = $this->etatAccessible($id);
+    Gate::authorize('valider', $etatAutorisation);
+
     $request->validate([
         'observation' => 'required|string',
         'action'      => 'required|in:valider,rejeter,attente',
@@ -247,7 +308,7 @@ public function valider(Request $request, $id)
 
     try {
 
-        $etat = EtatBesoin::findOrFail($id);
+        $etat = $this->etatAccessible($id);
 
         /*
         |--------------------------------------------------------------------------
@@ -369,5 +430,36 @@ public function valider(Request $request, $id)
 
         return back()->with('error', $e->getMessage());
     }
+}
+
+public function reouvrir($id, WorkflowComptableService $workflow)
+{
+    $etat = $this->etatAccessible($id);
+    Gate::authorize('reouvrir', $etat);
+    $workflow->reouvrirEtatBesoin($etat);
+
+    return back()->with('success', 'État de besoin réouvert avec succès.');
+}
+
+private function limiterAuDepartement($query): void
+{
+    $user = auth()->user();
+    if ($user->hasRole(['Super Admin', 'Admin', 'Gérant', 'Gerant'])) {
+        return;
+    }
+
+    if ($user->departement_id) {
+        $query->where('departement_id', $user->departement_id);
+    } else {
+        // Compatibilité pour les utilisateurs non encore affectés.
+        $query->where('user_id', $user->id);
+    }
+}
+
+private function etatAccessible($id, array $relations = []): EtatBesoin
+{
+    $query = EtatBesoin::with($relations);
+    $this->limiterAuDepartement($query);
+    return $query->findOrFail($id);
 }
 }
