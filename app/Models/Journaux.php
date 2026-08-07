@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 use App\Models\User;
 use App\Models\JournalType;
@@ -16,7 +17,7 @@ use App\Models\ListeDesComptes;
 class Journaux extends Model
 {
 
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
 
     protected $table = 'journaux';
@@ -74,6 +75,8 @@ class Journaux extends Model
         'date_validation',
 
         'valide_par',
+        'statut_regroupement', 'cloture_journaliere_id', 'regroupe_le',
+        'motif_suppression', 'supprime_par', 'restaure_par', 'restaure_le',
 
     ];
 
@@ -102,6 +105,8 @@ class Journaux extends Model
         'entrees_usd' => 'decimal:2',
 
         'sorties_usd' => 'decimal:2',
+        'restaure_le' => 'datetime',
+        'regroupe_le' => 'datetime',
 
     ];
 
@@ -218,6 +223,21 @@ class Journaux extends Model
             'journal_id'
         );
 
+    }
+
+    public function brcs()
+    {
+        return $this->belongsToMany(BRC::class, 'brc_journal', 'journal_id', 'brc_id');
+    }
+
+    public function clotureJournaliere()
+    {
+        return $this->belongsTo(ClotureJournaliere::class);
+    }
+
+    public function rattachementCloture()
+    {
+        return $this->hasOne(ClotureJournaliereJournal::class, 'journal_id');
     }
 
 

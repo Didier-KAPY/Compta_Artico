@@ -3,6 +3,7 @@
 @section('content')
 
 <div class="container py-4">
+    @if($entree->clotureJournaliere)<div class="alert alert-primary d-flex justify-content-between align-items-center"><span><i class="bi bi-diagram-3 me-2"></i>Généré par la clôture <strong>{{ $entree->clotureJournaliere->numero_cloture }}</strong></span><a class="btn btn-sm btn-primary" href="{{ route('parametres.clotures.show',$entree->clotureJournaliere) }}">Voir la clôture</a></div>@endif
 
     <!-- HEADER -->
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -18,13 +19,18 @@
             </small>
         </div>
 
-        <a href="{{ route('entree-caisses.index') }}"
-           class="btn btn-secondary">
+        <div class="d-flex gap-2">
+        @can('deleteFinancialDocument')<button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#modalSuppressionDocument"><i class="bi bi-trash me-1"></i>Supprimer</button>@endcan
+        <a href="{{ route('entree-caisses.index') }}" class="btn btn-secondary">
             <i class="bi bi-arrow-left"></i>
             Retour
         </a>
+        </div>
 
     </div>
+
+    @include('partials.document-navigation')
+    @include('partials.financial-delete-modal', ['documentType'=>"Bon d'entrée",'documentReference'=>$entree->numero,'documentStatus'=>$entree->statut,'deleteRoute'=>route('entree-caisses.destroy',$entree)])
 
 
 
@@ -217,6 +223,7 @@
         </h5>
 
     </div>
+@can('manageEntreeCaisse')
 @if($entree->statut == 'En attente')
 
 <div class="card shadow-lg border-0 mt-4">
@@ -343,6 +350,26 @@
             <strong>{{ $entree->statut }}</strong>
         </p>
 
+        @if($entree->statut === 'Validé')
+            @can('reouvrir', $entree)
+                @if($journalValide)
+                    <div class="alert alert-danger">
+                        Remise en attente impossible : le journal lié est déjà validé.
+                    </div>
+                @endif
+                <form method="POST" action="{{ route('entree-caisses.reouvrir', $entree->id) }}" class="d-inline">
+                    @csrf
+                    @method('PATCH')
+                    <button type="submit" class="btn btn-warning"
+                            @disabled($journalValide)
+                            onclick="return confirm('Voulez-vous remettre ce bon d’entrée en attente ?')">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>
+                        Remettre en attente
+                    </button>
+                </form>
+            @endcan
+        @endif
+
         <a href="{{ route('entree-caisses.index') }}"
            class="btn btn-secondary">
             <i class="bi bi-arrow-left me-1"></i>
@@ -353,5 +380,6 @@
 </div>
 
 @endif
+@endcan
 
 @endsection

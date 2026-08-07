@@ -10,8 +10,9 @@
 $role = strtolower(auth()->user()->role?->designation ?? '');
 
 $isSuperAdmin = $role == 'super admin';
-$canCreateSortie = in_array($role, ['super admin', 'admin', 'directeur général', 'caissier', 'caissière', 'trésorier', 'trésorière'], true);
-$canManageSortie = in_array($role, ['super admin', 'admin', 'directeur général'], true);
+$showActions = ! auth()->user()->isAccounting();
+$canCreateSortie = auth()->user()->isSuperAdmin() || auth()->user()->isManagement() || in_array($role, ['caissier', 'caissière', 'trésorier', 'trésorière'], true);
+$canManageSortie = auth()->user()->isSuperAdmin() || auth()->user()->isManagement();
 
 
 @endphp
@@ -211,7 +212,7 @@ Réinitialiser
 
 
 @if($isSuperAdmin)
-<th>Utilisateur</th>
+<th>Validé par</th>
 @endif
 
 
@@ -237,9 +238,11 @@ Statut
 </th>
 
 
+@if($showActions)
 <th class="text-center">
 Actions
 </th>
+@endif
 
 
 
@@ -276,7 +279,7 @@ Actions
 
 
 @if($isSuperAdmin)
-<td>{{ trim(($sortie->user?->prenom ?? '').' '.($sortie->user?->nom ?? '')) ?: 'Système' }}</td>
+<td>{{ trim(($sortie->validateur?->prenom ?? '').' '.($sortie->validateur?->nom ?? '')) ?: 'Non validé' }}</td>
 @endif
 
 
@@ -387,6 +390,7 @@ En attente
 
 
 
+@if($showActions)
 <td class="text-center">
 
 
@@ -424,15 +428,11 @@ href="{{ route('sortie-caisses.show',$sortie->id) }}">
 
 </li>
 
+<li><a class="dropdown-item" href="{{ route('sortie-caisses.imprimer', $sortie->id) }}" target="_blank"><i class="bi bi-printer me-2"></i>Imprimer</a></li>
+<li><a class="dropdown-item" href="{{ route('sortie-caisses.pdf', $sortie->id) }}"><i class="bi bi-file-earmark-pdf me-2"></i>Télécharger PDF</a></li>
+
 @if($canManageSortie && $sortie->statut !== 'Validé')
 <li><a class="dropdown-item" href="{{ route('sortie-caisses.edit', $sortie->id) }}"><i class="bi bi-pencil-square me-2"></i>Modifier</a></li>
-<li><hr class="dropdown-divider"></li>
-<li>
-    <form action="{{ route('sortie-caisses.destroy', $sortie->id) }}" method="POST" onsubmit="return confirm('Supprimer définitivement ce bon de sortie ?')">
-        @csrf @method('DELETE')
-        <button type="submit" class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Supprimer</button>
-    </form>
-</li>
 @endif
 
 
@@ -445,6 +445,7 @@ href="{{ route('sortie-caisses.show',$sortie->id) }}">
 
 
 </td>
+@endif
 
 
 
@@ -461,7 +462,7 @@ href="{{ route('sortie-caisses.show',$sortie->id) }}">
 <tr>
 
 
-<td colspan="{{ $isSuperAdmin ? 9 : 8 }}"
+<td colspan="{{ $isSuperAdmin ? 9 : ($showActions ? 8 : 7) }}"
     class="text-center text-muted py-4">
 
 

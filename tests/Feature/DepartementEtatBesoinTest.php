@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Departement;
 use App\Models\EtatBesoin;
+use App\Models\Entreprise;
 use App\Models\Fonction;
 use App\Models\Role;
 use App\Models\User;
@@ -19,11 +20,19 @@ class DepartementEtatBesoinTest extends TestCase
         [$userA, $userB, $admin, $departementA, $departementB] = $this->contexte();
         $etatA = $this->etat($userA, $departementA, 'EB-DEPT-A');
         $etatB = $this->etat($userB, $departementB, 'EB-DEPT-B');
+        Entreprise::forceCreate([
+            'user_id' => $admin->id,
+            'nom_entreprise' => 'Entreprise test',
+            'slogan' => 'Le slogan configuré',
+        ]);
 
         $this->actingAs($userA)->get(route('etat-besoins.index'))
             ->assertOk()->assertSee('EB-DEPT-A')->assertDontSee('EB-DEPT-B');
-        $this->actingAs($userA)->get(route('etat-besoins.show', $etatB))->assertNotFound();
-        $this->actingAs($userA)->get(route('etat-besoins.show', $etatA))->assertOk();
+        $this->actingAs($userA)->get(route('etat-besoins.show', $etatB))->assertForbidden();
+        $this->actingAs($userA)->get(route('etat-besoins.show', $etatA))->assertForbidden();
+        $this->actingAs($userA)->get(route('etat-besoins.imprimer', $etatA))->assertForbidden();
+        $this->actingAs($userA)->get(route('etat-besoins.pdf', $etatA))->assertForbidden();
+        $this->actingAs($userA)->get(route('etat-besoins.pdf', $etatB))->assertForbidden();
 
         $this->actingAs($admin)->get(route('etat-besoins.index'))
             ->assertOk()->assertSee('EB-DEPT-A')->assertSee('EB-DEPT-B');
@@ -117,7 +126,7 @@ class DepartementEtatBesoinTest extends TestCase
     private function contexte(): array
     {
         $roleAgent = Role::firstOrCreate(['designation' => 'Chef de Service']);
-        $roleAdmin = Role::firstOrCreate(['designation' => 'Admin']);
+        $roleAdmin = Role::firstOrCreate(['designation' => 'Super Admin']);
         $departementA = Departement::create(['designation' => 'Technique']);
         $departementB = Departement::create(['designation' => 'Finance']);
         $userA = $this->user($roleAgent, $departementA, 'a');

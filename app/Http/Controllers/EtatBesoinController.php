@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\EtatBesoin;
 use App\Models\EtatBesoinLigne;
+use App\Models\Journaux;
 use App\Models\Departement;
 use Illuminate\Http\Request;
 use App\Models\SortieCaisse;
@@ -12,6 +13,12 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use App\Services\WorkflowComptableService;
 use Carbon\Carbon;
+use Barryvdh\DomPDF\Facade\Pdf;
+use App\Models\Entreprise;
+use Illuminate\Support\Facades\Storage;
+use App\Http\Requests\DeleteFinancialDocumentRequest;
+use App\Services\FinancialDocumentService;
+use App\Services\DocumentNumberService;
 
 class EtatBesoinController extends Controller
 {
@@ -23,6 +30,7 @@ class EtatBesoinController extends Controller
     $query = EtatBesoin::with([
         'lignes',
         'user',
+        'validateur',
         'departement'
     ]);
 
@@ -110,7 +118,7 @@ class EtatBesoinController extends Controller
     /**
      * STORE AVEC LIGNES + NUMERO AUTO
      */
-    public function store(Request $request)
+    public function store(Request $request, DocumentNumberService $numbers)
 {
     $request->validate([
         'date' => 'required|date',
@@ -130,7 +138,7 @@ class EtatBesoinController extends Controller
         $etat = EtatBesoin::create([
             'user_id' => auth()->id(),
             'departement_id' => $departement->id,
-            'numero' => $this->generateNumero(),
+            'numero' => $numbers->next('EB', $request->date),
             'date' => $request->date,
             'service' => $departement->designation,
             'demandeur' => $request->demandeur,
@@ -192,15 +200,28 @@ class EtatBesoinController extends Controller
     /**
      * SHOW
      */
-   public function show($id)
+   public function show($id, FinancialDocumentService $documents)
     {
-        $etat = $this->etatAccessible($id, ['lignes', 'departement']);
+        $etat = $this->etatAccessible($id, ['lignes', 'departement', 'sortieCaisses.journaux.ecritures']);
+        $suppressionDependencies = $documents->dependencies($etat);
+        $documentLinks = collect();
 
-        if ($etat->statut === 'Validé') {
-            return back()->with('error', 'Cet état validé doit d’abord être réouvert.');
-        }
+        return view('etat_besoins.show', compact('etat', 'suppressionDependencies', 'documentLinks'));
+    }
 
-        return view('etat_besoins.show', compact('etat'));
+    public function imprimer($id)
+    {
+        return view('etat_besoins.document', $this->donneesDocument($id) + ['pdfMode' => false]);
+    }
+
+    public function telechargerPdf($id)
+    {
+        $data = $this->donneesDocument($id) + ['pdfMode' => true];
+        $nom = preg_replace('/[^A-Za-z0-9_-]/', '-', $data['etat']->numero);
+
+        return Pdf::loadView('etat_besoins.document', $data)
+            ->setPaper('a4', 'portrait')
+            ->download('etat-de-besoin-'.$nom.'.pdf');
     }
 
     /**
@@ -209,6 +230,8 @@ class EtatBesoinController extends Controller
     public function edit(string $id)
     {
         $etat = $this->etatAccessible($id, ['lignes', 'departement']);
+        abort_if($etat->statut !== 'En attente' && ! $this->estGestionnaire(request()->user()), 403);
+        $this->verifierBonSortieNonValide($etat);
 
         $departements = Departement::orderBy('designation')->get();
         return view('etat_besoins.edit', compact('etat', 'departements'));
@@ -222,16 +245,18 @@ class EtatBesoinController extends Controller
         ]);
 
         $etat = $this->etatAccessible($id);
+        abort_if($etat->statut !== 'En attente' && ! $this->estGestionnaire($request->user()), 403);
+        $this->verifierBonSortieNonValide($etat);
         $departement = Departement::findOrFail($request->departement_id);
-
-        if ($etat->statut === 'Validé') {
-            return back()->with('error', 'Cet état validé doit d’abord être réouvert.');
-        }
 
         $etat->update([
             'departement_id' => $departement->id,
             'service' => $departement->designation,
             'demandeur' => $request->demandeur,
+        ]);
+
+        $etat->sortieCaisses()->update([
+            'beneficiaire' => $etat->demandeur,
         ]);
 
         return redirect()
@@ -242,58 +267,17 @@ class EtatBesoinController extends Controller
     /**
      * DELETE
      */
-    public function destroy($id)
+    public function destroy(DeleteFinancialDocumentRequest $request, $id, FinancialDocumentService $documents)
     {
-        DB::transaction(function () use ($id) {
-            $query = EtatBesoin::query();
-            $this->limiterAuDepartement($query);
-            $etat = $query->lockForUpdate()->findOrFail($id);
-            if ($etat->statut === 'Validé') {
-                throw ValidationException::withMessages(['statut' => 'Un état validé doit d’abord être réouvert.']);
-            }
-            if ($etat->sortieCaisses()->exists()) {
-                throw ValidationException::withMessages(['dependance' => 'Suppression impossible : un Bon de sortie est lié.']);
-            }
-            $etat->delete();
-        });
+        $etat = $this->etatAccessible($id);
+        $documents->delete($etat, $request->validated('motif'), $request->validated('strategie'), $request);
 
         return redirect()
             ->route('etat-besoins.index')
-            ->with('success', 'État de besoin supprimé avec succès.');
+            ->with('success', 'État de besoin placé dans la corbeille avec sa traçabilité complète.');
     }
 
-    /**
-     * GENERATEUR NUMERO AUTO
-     * Format: EB-0001-26-06
-     */
-    private function generateNumero()
-    {
-        $year = date('y');
-        $month = date('m');
-
-        $last = EtatBesoin::orderBy('id', 'desc')->first();
-
-        if (!$last) {
-            $num = 1;
-        } else {
-            $parts = explode('-', $last->numero);
-            $num = isset($parts[1]) ? intval($parts[1]) + 1 : 1;
-        }
-
-        return 'EB-' . str_pad($num, 4, '0', STR_PAD_LEFT) . '-' . $year . '-' . $month;
-    }
-
-    private function generateNumeroSortie()
-{
-    $year = date('y');
-    $month = date('m');
-    $last = SortieCaisse::latest('id')->first();
-
-    $number = $last ? $last->id + 1 : 1;
-
-    return 'BSC-' . $year . '-' . $month . '-'. str_pad($number, 4, '0', STR_PAD_LEFT);
-}
-public function valider(Request $request, $id)
+public function valider(Request $request, $id, FinancialDocumentService $documents, DocumentNumberService $numbers)
 {
     $etatAutorisation = $this->etatAccessible($id);
     Gate::authorize('valider', $etatAutorisation);
@@ -303,6 +287,10 @@ public function valider(Request $request, $id)
         'action'      => 'required|in:valider,rejeter,attente',
         'monnaie'     => 'required|in:CDF,USD',
     ]);
+
+    if ($request->user()->isManagement() && $request->action !== 'valider') {
+        abort(403, 'Ce rôle peut uniquement valider un état de besoin.');
+    }
 
     DB::beginTransaction();
 
@@ -316,30 +304,19 @@ public function valider(Request $request, $id)
         |--------------------------------------------------------------------------
         */
         if ($request->action == 'attente') {
-
-            $sortieValidee = SortieCaisse::where('etat_besoin_id', $etat->id)
-                ->where('statut', 'Validé')
-                ->exists();
-
-            if ($sortieValidee) {
-
-                DB::rollBack();
-
-                return back()->with(
-                    'error',
-                    'Vous ne pouvez pas remettre cet état de besoin en attente, car le bon de sortie caisse a déjà été validé. Veuillez d\'abord remettre le bon de sortie en attente.'
-                );
-            }
+            $this->verifierBonSortieNonValide($etat);
 
             $etat->update([
                 'observation' => $request->observation,
                 'statut'      => 'En attente',
+                'valide_par' => null,
+                'date_validation' => null,
             ]);
 
             $sortie = SortieCaisse::where('etat_besoin_id', $etat->id)->first();
 
             if ($sortie) {
-                $sortie->delete();
+                $documents->delete($sortie, 'Suppression automatique lors de la remise en attente de l’état de besoin.', 'cascade', $request);
             }
 
             $message = "État de besoin remis en attente avec succès.";
@@ -355,6 +332,8 @@ public function valider(Request $request, $id)
             $etat->update([
                 'observation' => $request->observation,
                 'statut'      => 'Validé',
+                'valide_par' => auth()->id(),
+                'date_validation' => now(),
             ]);
 
             $sortieExiste = SortieCaisse::where(
@@ -367,8 +346,8 @@ public function valider(Request $request, $id)
                 SortieCaisse::create([
 
                     'user_id'          => auth()->id(),
-                    'numero'           => $this->generateNumeroSortie(),
-                    'date'             => now(),
+                    'numero'           => $numbers->next('BSC', $etat->date, 'Caisse'),
+                    'date'             => $etat->date,
                     'etat_besoin_id'   => $etat->id,
                     'beneficiaire'     => $etat->demandeur,
                     'motif'            => $etat->motif,
@@ -389,30 +368,19 @@ public function valider(Request $request, $id)
         |--------------------------------------------------------------------------
         */
         else {
-
-            $sortieValidee = SortieCaisse::where('etat_besoin_id', $etat->id)
-                ->where('statut', 'Validé')
-                ->exists();
-
-            if ($sortieValidee) {
-
-                DB::rollBack();
-
-                return back()->with(
-                    'error',
-                    'Vous ne pouvez pas rejeter cet état de besoin, car le bon de sortie caisse a déjà été validé. Veuillez d\'abord remettre le bon de sortie en attente.'
-                );
-            }
+            $this->verifierBonSortieNonValide($etat);
 
             $etat->update([
                 'observation' => $request->observation,
                 'statut'      => 'Rejeté',
+                'valide_par' => null,
+                'date_validation' => null,
             ]);
 
             $sortie = SortieCaisse::where('etat_besoin_id', $etat->id)->first();
 
             if ($sortie) {
-                $sortie->delete();
+                $documents->delete($sortie, 'Suppression automatique lors du rejet de l’état de besoin.', 'cascade', $request);
             }
 
             $message = "État de besoin rejeté avec succès.";
@@ -432,11 +400,19 @@ public function valider(Request $request, $id)
     }
 }
 
-public function reouvrir($id, WorkflowComptableService $workflow)
+public function reouvrir(Request $request, $id, WorkflowComptableService $workflow, FinancialDocumentService $documents)
 {
     $etat = $this->etatAccessible($id);
     Gate::authorize('reouvrir', $etat);
     $workflow->reouvrirEtatBesoin($etat);
+    $etat->sortieCaisses()->where('statut', '!=', 'Validé')->get()->each(
+        fn (SortieCaisse $sortie) => $documents->delete(
+            $sortie,
+            'Suppression automatique lors de la réouverture de l’état de besoin.',
+            'cascade',
+            $request
+        )
+    );
 
     return back()->with('success', 'État de besoin réouvert avec succès.');
 }
@@ -461,5 +437,35 @@ private function etatAccessible($id, array $relations = []): EtatBesoin
     $query = EtatBesoin::with($relations);
     $this->limiterAuDepartement($query);
     return $query->findOrFail($id);
+}
+
+private function donneesDocument($id): array
+{
+    $entreprise = Entreprise::first();
+    $logoData = null;
+    if ($entreprise?->logo && Storage::disk('public')->exists($entreprise->logo)) {
+        $mime = Storage::disk('public')->mimeType($entreprise->logo) ?: 'image/png';
+        $logoData = 'data:'.$mime.';base64,'.base64_encode(Storage::disk('public')->get($entreprise->logo));
+    }
+
+    return [
+        'etat' => $this->etatAccessible($id, ['lignes', 'departement', 'user']),
+        'entrepriseDocument' => $entreprise,
+        'logoData' => $logoData,
+    ];
+}
+
+private function verifierBonSortieNonValide(EtatBesoin $etat): void
+{
+    if ($etat->sortieCaisses()->where('statut', 'Validé')->exists()) {
+        throw ValidationException::withMessages([
+            'statut' => 'Action impossible : le bon de sortie lié est déjà validé. Remettez d’abord le bon de sortie en attente.',
+        ]);
+    }
+}
+
+private function estGestionnaire($user): bool
+{
+    return $user->hasRole(['Super Admin', 'Admin', 'Gérant', 'Gerant', 'Directeur Général']);
 }
 }

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 use App\Models\ListeDesComptes;
 use App\Models\Journaux;
@@ -13,7 +14,7 @@ use App\Models\User;
 class EcritureComptable extends Model
 {
 
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
 
     protected $table = 'ecritures_comptables';
@@ -32,6 +33,8 @@ class EcritureComptable extends Model
 
         'piece',
 
+        'piece_justificative',
+
         'libelle',
 
         'debit_cdf',
@@ -40,6 +43,7 @@ class EcritureComptable extends Model
         'statut',
         'valide_par',
         'date_validation',
+        'motif_suppression', 'supprime_par', 'restaure_par', 'restaure_le',
 
     ];
 
@@ -55,6 +59,7 @@ class EcritureComptable extends Model
 
         'credit_cdf' => 'decimal:2',
         'date_validation' => 'datetime',
+        'restaure_le' => 'datetime',
     ];
 
 
@@ -77,6 +82,11 @@ class EcritureComptable extends Model
             'user_id'
         );
 
+    }
+
+    public function validateur()
+    {
+        return $this->belongsTo(User::class, 'valide_par');
     }
 
 

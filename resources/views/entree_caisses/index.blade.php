@@ -16,10 +16,13 @@
 
         <div class="d-flex gap-2 flex-wrap">
         @include('partials.period-export-buttons', ['rapport' => 'entrees'])
+        @can('manageEntreeCaisse')
         <a href="{{ route('entree-caisses.create') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i>
             Nouveau
-        </a></div>
+        </a>
+        @endcan
+        </div>
 
     </div>
 
@@ -91,7 +94,7 @@
                         <tr>
                             <th>N°</th>
                             @if($isSuperAdmin)
-                                <th>Utilisateur</th>
+                                <th>Validé par</th>
                             @endif
                             <th>Date</th>
                             <th>Motif</th>
@@ -110,7 +113,7 @@
 
                             <td><strong>{{ $entree->numero }}</strong></td>
                             @if($isSuperAdmin)
-                                <td>{{ trim(($entree->user?->prenom ?? '').' '.($entree->user?->nom ?? '')) ?: 'Système' }}</td>
+                                <td>{{ trim(($entree->validateur?->prenom ?? '').' '.($entree->validateur?->nom ?? '')) ?: 'Non validé' }}</td>
                             @endif
 
                             <td>
@@ -159,29 +162,25 @@
                                         </li>
 
                                         <li>
+                                            <a class="dropdown-item" href="{{ route('entree-caisses.imprimer', $entree->id) }}" target="_blank">
+                                                <i class="bi bi-printer me-2"></i>Imprimer le bon
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="{{ route('entree-caisses.pdf', $entree->id) }}">
+                                                <i class="bi bi-file-earmark-pdf me-2"></i>Télécharger PDF
+                                            </a>
+                                        </li>
+
+                                        @can('manageEntreeCaisse')
+                                        <li>
                                             <a class="dropdown-item text-warning"
                                                href="{{ route('entree-caisse.edit', $entree->id) }}">
                                                 ✏ Modifier
                                             </a>
                                         </li>
 
-                                        <li><hr class="dropdown-divider"></li>
-
-                                        <li>
-                                            <form action="{{ route('entree-caisses.destroy', $entree->id) }}"
-                                                  method="POST"
-                                                  onsubmit="return confirm('Voulez-vous supprimer cette entrée ?')">
-
-                                                @csrf
-                                                @method('DELETE')
-
-                                                <button type="submit"
-                                                        class="dropdown-item text-danger">
-                                                    🗑 Supprimer
-                                                </button>
-
-                                            </form>
-                                        </li>
+                                        @endcan
 
                                     </ul>
 

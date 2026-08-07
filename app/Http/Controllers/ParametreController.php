@@ -13,7 +13,9 @@ use App\Models\Departement;
 use App\Models\Fonction;
 use App\Models\User;
 use App\Models\Role;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class ParametreController extends Controller
 {
@@ -30,10 +32,12 @@ class ParametreController extends Controller
 
     public function departements()
     {
-        $departements = Departement::withCount(['users', 'etatBesoins'])->orderBy('designation')->get();
-        $fonctions = Fonction::withCount('users')->orderBy('designation')->get();
-        $users = User::with(['role', 'departement', 'fonction'])->orderBy('nom')->orderBy('prenom')->get();
-        return view('parametres.departements.index', compact('departements', 'fonctions', 'users'));
+        $departements = Departement::withCount(['users', 'etatBesoins'])->orderBy('designation')->paginate(10, ['*'], 'departements_page');
+        $fonctions = Fonction::withCount('users')->orderBy('designation')->paginate(10, ['*'], 'fonctions_page');
+        $users = User::with(['role', 'departement', 'fonction'])->orderBy('nom')->orderBy('prenom')->paginate(10, ['*'], 'users_page');
+        $tousDepartements = Departement::orderBy('designation')->get();
+        $toutesFonctions = Fonction::orderBy('designation')->get();
+        return view('parametres.departements.index', compact('departements', 'fonctions', 'users', 'tousDepartements', 'toutesFonctions'));
     }
 
     public function storeDepartement(Request $request)
@@ -100,6 +104,43 @@ class ParametreController extends Controller
         return back()->with('success', 'Affectation de l’utilisateur mise à jour.');
     }
 
+    public function changerRole(Request $request, User $user)
+    {
+        $data = $request->validate([
+            'role_id' => 'required|exists:roles,id',
+        ]);
+
+        $role = Role::findOrFail($data['role_id']);
+        $acteur = $request->user();
+
+        abort_if(($user->isSuperAdmin() || $role->designation === 'Super Admin') && ! $acteur->isSuperAdmin(), 403,
+            'Seul le Super Admin peut modifier ou attribuer le rôle Super Admin.');
+
+        $user->update(['role_id' => $role->id]);
+
+        return back()->with('success', 'Le rôle de l’utilisateur a été mis à jour.');
+    }
+
+    public function reinitialiserMotDePasse(Request $request, User $user)
+    {
+        abort_if($user->isSuperAdmin() && ! $request->user()->isSuperAdmin(), 403,
+            'Seul le Super Admin peut réinitialiser le mot de passe d’un Super Admin.');
+
+        $password = Str::password(12);
+
+        $user->forceFill([
+            'password' => Hash::make($password),
+            'password_default' => true,
+            'remember_token' => null,
+        ])->save();
+
+        return back()->with([
+            'success' => 'Le mot de passe a été réinitialisé.',
+            'agent_email' => $user->email,
+            'password_default' => $password,
+        ]);
+    }
+
     public function parametre()
     {
         $entreprise = Entreprise::first();
@@ -120,11 +161,13 @@ class ParametreController extends Controller
     {
         $request->validate([
             'nom_entreprise' => 'required',
+            'slogan' => 'nullable|string|max:255',
             'adresse' => 'required',
             'telephone' => 'required',
             'forme_juridique' => 'required',
             'numero_identification_fiscal' => 'required',
             'logo' => 'nullable|image|max:2048',
+            'cachet' => 'nullable|image|max:2048',
         ]);
         $entreprise = Entreprise::first();
         if(!$entreprise){
@@ -133,6 +176,7 @@ class ParametreController extends Controller
             $entreprise->user_id = Auth::id();
         }
         $entreprise->nom_entreprise = $request->nom_entreprise;
+        $entreprise->slogan = $request->slogan;
         $entreprise->adresse = $request->adresse;
         $entreprise->telephone = $request->telephone;
         $entreprise->forme_juridique = $request->forme_juridique;
@@ -148,6 +192,12 @@ class ParametreController extends Controller
             $entreprise->logo =
             $request->file('logo')
             ->store('logos','public');
+        }
+        if ($request->hasFile('cachet')) {
+            if ($entreprise->cachet) {
+                Storage::disk('public')->delete($entreprise->cachet);
+            }
+            $entreprise->cachet = $request->file('cachet')->store('cachets', 'public');
         }
         // sécurité : associer aussi l'utilisateur connecté
         $entreprise->user_id = Auth::id();
@@ -299,7 +349,7 @@ public function storeTauxChange(Request $request)
 
         $journalTypes = JournalType::with(['compte', 'user'])
             ->orderBy('code')
-            ->get();
+            ->paginate(15);
 
 
         return view(
@@ -326,7 +376,7 @@ public function storeTauxChange(Request $request)
 
     $journalTypes = JournalType::with('compte')
         ->orderBy('code')
-        ->get();
+        ->paginate(15);
 
 
     return view(
@@ -541,7 +591,7 @@ public function index()
     $comptes = ListeDesComptes::orderBy('compte')->get();
 
     $parametrages = ParametrageComptable::with(['compte', 'user'])
-        ->get();
+        ->paginate(15);
 
 
     $journaux = JournalType::with('compte')

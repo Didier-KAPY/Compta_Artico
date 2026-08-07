@@ -2,14 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\DeleteFinancialDocumentRequest;
+use App\Services\FinancialDocumentService;
 use Illuminate\Http\Request;
 use App\Models\EcritureComptable;
 use Illuminate\Support\Facades\DB;
 use App\Models\JournalType;
 use App\Models\Journaux;
 use App\Models\ListeDesComptes;
+use App\Models\TauxDeChange;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use App\Services\WorkflowComptableService;
 use Barryvdh\DomPDF\Facade\Pdf;
 
@@ -23,8 +28,14 @@ public function liste(Request $request)
     $query = EcritureComptable::with([
         'journal',
         'compte',
-        'user'
+        'user',
+        'validateur'
     ]);
+    $query->when($request->filled('journal_id'), fn ($q) => $q->where('journal_id', $request->integer('journal_id')));
+    $query->when($request->filled('journal_ids'), function ($q) use ($request) {
+        $ids = collect(explode(',', (string) $request->input('journal_ids')))->filter()->map(fn ($id) => (int) $id);
+        $q->whereIn('journal_id', $ids);
+    });
 
     // Si aucune date n'est saisie, afficher uniquement les écritures du jour
     if (!$request->filled('date_debut') && !$request->filled('date_fin')) {
@@ -44,6 +55,14 @@ public function liste(Request $request)
 
     $ecritures = $query
         ->orderBy('date', 'desc')
+        ->orderByDesc(
+            Journaux::query()
+                ->select('reference')
+                ->whereColumn('journaux.id', 'ecritures_comptables.journal_id')
+                ->limit(1)
+        )
+        ->orderByRaw('CASE WHEN debit_cdf > 0 THEN 0 ELSE 1 END')
+        ->orderBy('id', 'desc')
         ->paginate(20)
         ->withQueryString();
 
@@ -63,14 +82,33 @@ public function liste(Request $request)
     );
 }
 
+public function show($id, FinancialDocumentService $documents)
+{
+    $ecriture = EcritureComptable::with(['journal.entreeCaisse', 'journal.sortieCaisse.etatBesoin', 'journal.brcs', 'journal.clotureJournaliere', 'compte', 'user', 'validateur'])->findOrFail($id);
+    $suppressionDependencies = $documents->dependencies($ecriture);
+    $journal = $ecriture->journal;
+    $documentLinks = collect([
+        $journal?->clotureJournaliere ? ['label' => 'Voir la clôture '.$journal->clotureJournaliere->numero_cloture, 'url' => route('parametres.clotures.show', $journal->clotureJournaliere), 'icon' => 'calendar2-check'] : null,
+        $journal?->brcs?->isNotEmpty() ? ['label' => $journal->brcs->count() > 1 ? 'Voir les BRC' : 'Voir le BRC', 'url' => $journal->brcs->count() === 1 ? route('brc.show', $journal->brcs->first()) : route('brc.index', ['journal_id' => $journal->id]), 'icon' => 'file-earmark-check'] : null,
+        $journal?->entreeCaisse ? ['label' => "Voir le Bon d’entrée", 'url' => route('entree-caisses.show', $journal->entreeCaisse), 'icon' => 'box-arrow-in-down'] : null,
+        $journal?->sortieCaisse?->etatBesoin ? ['label' => "Voir l’État de besoin", 'url' => route('etat-besoins.show', $journal->sortieCaisse->etatBesoin), 'icon' => 'file-earmark-text'] : null,
+    ])->filter()->values();
+
+    return view('Comptabilite.ecritures.show', compact('ecriture', 'suppressionDependencies', 'documentLinks'));
+}
+
     /**
      * Validation d'une écriture
      */
-    public function valider($id)
+public function valider(Request $request, $id)
 {
     abort_unless(Auth::user()?->hasRole(['Super Admin', 'Comptable']), 403);
 
-    $alreadyValidated = DB::transaction(function () use ($id): bool {
+    $request->validate([
+        'piece_justificative' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+    ]);
+
+    $alreadyValidated = DB::transaction(function () use ($request, $id): bool {
         $ecriture = EcritureComptable::query()
             ->lockForUpdate()
             ->findOrFail($id);
@@ -79,7 +117,25 @@ public function liste(Request $request)
             return true;
         }
 
+        $reference = mb_strtoupper(trim((string) $ecriture->piece));
+        if (str_starts_with($reference, 'BSC')
+            && ! $ecriture->piece_justificative
+            && ! $request->hasFile('piece_justificative')) {
+            throw ValidationException::withMessages([
+                'piece_justificative' => 'La pièce justificative est obligatoire pour une écriture dont la référence commence par BSC.',
+            ]);
+        }
+
+        $chemin = $ecriture->piece_justificative;
+        if ($request->hasFile('piece_justificative')) {
+            if ($chemin) {
+                Storage::disk('public')->delete($chemin);
+            }
+            $chemin = $request->file('piece_justificative')->store('ecritures/pieces', 'public');
+        }
+
         $ecriture->update([
+            'piece_justificative' => $chemin,
             'statut' => 'Validé',
             'date_validation' => now(),
             'valide_par' => Auth::id(),
@@ -97,6 +153,23 @@ public function liste(Request $request)
         'Écriture validée avec succès.'
     );
 }
+
+    public function pieceJustificative($id)
+    {
+        Gate::authorize('viewAccountingReports');
+
+        $ecriture = EcritureComptable::findOrFail($id);
+        $chemin = $ecriture->piece_justificative;
+        abort_unless(filled($chemin) && Storage::disk('public')->exists($chemin), 404, 'Pièce justificative introuvable.');
+
+        $nom = basename($chemin);
+
+        return response()->file(Storage::disk('public')->path($chemin), [
+            'Content-Type' => Storage::disk('public')->mimeType($chemin) ?: 'application/octet-stream',
+            'Content-Disposition' => 'inline; filename="'.$nom.'"',
+        ]);
+    }
+
     public function reouvrir($id, WorkflowComptableService $workflow)
     {
         $ecriture = EcritureComptable::findOrFail($id);
@@ -154,19 +227,14 @@ public function liste(Request $request)
     /**
      * Suppression
      */
-    public function destroy($id)
+    public function destroy(DeleteFinancialDocumentRequest $request, $id, FinancialDocumentService $documents)
     {
         $ecriture = EcritureComptable::findOrFail($id);
-
-        if ($ecriture->statut === 'Validé') {
-            return back()->with('error', 'Une écriture comptable validée ne peut plus être supprimée.');
-        }
-
-        $ecriture->delete();
+        $documents->delete($ecriture, $request->validated('motif'), 'individuelle', $request);
 
         return back()->with(
             'success',
-            'Écriture supprimée avec succès.'
+            'Écriture comptable placée dans la corbeille.'
         );
     }
    public function brc(Request $request)
@@ -396,6 +464,8 @@ private function construireBrc(Request $request): array
     $comptes = ListeDesComptes::orderBy('compte')
         ->get();
 
+    $taux = TauxDeChange::latest()->first();
+
 
 
     return view(
@@ -403,7 +473,8 @@ private function construireBrc(Request $request): array
         compact(
             'journaux',
             'journalTypes',
-            'comptes'
+            'comptes',
+            'taux'
         )
     );
 
@@ -420,11 +491,15 @@ private function construireBrc(Request $request): array
 
         'journal_type_id' => 'required|exists:journal_types,id',
 
+        'monnaie' => 'required|in:CDF,USD',
+
         'sens' => 'required|in:debit,credit',
 
         'lignes' => 'required|array|min:1',
 
         'lignes.*.compte_id' => 'required|exists:liste_des_comptes,id',
+
+        'lignes.*.libelle' => 'required|string|max:255',
 
         'lignes.*.montant' => 'required|numeric|min:0.01',
 
@@ -454,9 +529,27 @@ private function construireBrc(Request $request): array
             $total += floatval($ligne['montant']);
         }
 
+        $libellePrincipal = collect($request->lignes)
+            ->pluck('libelle')
+            ->map(fn ($libelle) => trim((string) $libelle))
+            ->filter()
+            ->unique()
+            ->implode(' / ');
+
         if($total <= 0){
             throw new \Exception("Le montant doit être supérieur à zéro.");
         }
+
+        $tauxChange = 1.0;
+        if ($request->monnaie === 'USD') {
+            $tauxChange = (float) (TauxDeChange::latest()->value('taux_de_change') ?? 0);
+            if ($tauxChange <= 0) {
+                throw ValidationException::withMessages([
+                    'monnaie' => 'Aucun taux de change valide n’est configuré pour convertir les USD en CDF.',
+                ]);
+            }
+        }
+        $totalCdf = round($total * $tauxChange, 2);
 
 
 
@@ -501,7 +594,7 @@ private function construireBrc(Request $request): array
             'date'=>$request->date,
 
 
-            'description'=>$request->description ?? 'Opération diverse',
+            'description'=>$libellePrincipal,
 
 
 
@@ -518,7 +611,7 @@ private function construireBrc(Request $request): array
 
 
 
-            'monnaie'=>'CDF',
+            'monnaie'=>$request->monnaie,
 
 
             'montant_ht'=>$total,
@@ -527,10 +620,17 @@ private function construireBrc(Request $request): array
             'montant_ttc'=>$total,
 
 
-            'entrees_cdf'=>0,
+            'entrees_cdf'=> $request->monnaie === 'CDF' && $request->sens == 'debit'
+                ? $total
+                : 0,
 
 
-            'sorties_cdf'=>0,
+            'sorties_cdf'=> $request->monnaie === 'CDF' && $request->sens == 'credit'
+                ? $total
+                : 0,
+
+            'entrees_usd'=> $request->monnaie === 'USD' && $request->sens == 'debit' ? $total : 0,
+            'sorties_usd'=> $request->monnaie === 'USD' && $request->sens == 'credit' ? $total : 0,
 
 
 
@@ -569,19 +669,19 @@ private function construireBrc(Request $request): array
             'date'=>$request->date,
 
 
-            'libelle'=>$request->description ?? 'Contrepartie',
+            'libelle'=>$libellePrincipal,
 
 
 
 
             'debit_cdf'=> $request->sens == 'debit'
-                ? $total
+                ? $totalCdf
                 : 0,
 
 
 
             'credit_cdf'=> $request->sens == 'credit'
-                ? $total
+                ? $totalCdf
                 : 0,
 
 
@@ -615,6 +715,26 @@ private function construireBrc(Request $request): array
                 throw new \Exception("Le compte du journal ne peut pas être utilisé comme imputation.");
             }
 
+            $journalContrepartie = Journaux::create([
+                'user_id'=>auth()->id(),
+                'journal_type_id'=>$journalType->id,
+                'liste_des_comptes_id'=>$ligne['compte_id'],
+                'reference'=>$reference,
+                'date'=>$request->date,
+                'description'=>$ligne['libelle'] ?? ($request->description ?? 'Contrepartie'),
+                'type'=>'od',
+                'monnaie'=>$request->monnaie,
+                'montant_ht'=>$ligne['montant'],
+                'montant_ttc'=>$ligne['montant'],
+                'entrees_cdf'=> $request->monnaie === 'CDF' && $request->sens == 'credit' ? $ligne['montant'] : 0,
+                'sorties_cdf'=> $request->monnaie === 'CDF' && $request->sens == 'debit' ? $ligne['montant'] : 0,
+                'entrees_usd'=> $request->monnaie === 'USD' && $request->sens == 'credit' ? $ligne['montant'] : 0,
+                'sorties_usd'=> $request->monnaie === 'USD' && $request->sens == 'debit' ? $ligne['montant'] : 0,
+                'statut'=>'Validé',
+                'date_validation'=>now(),
+                'valide_par'=>auth()->id(),
+            ]);
+
 
 
             EcritureComptable::create([
@@ -625,7 +745,7 @@ private function construireBrc(Request $request): array
 
 
 
-                'journal_id'=>$journal->id,
+                'journal_id'=>$journalContrepartie->id,
 
 
 
@@ -642,11 +762,11 @@ private function construireBrc(Request $request): array
 
 
 
-                'debit_cdf'=> $request->sens == 'credit' ? $ligne['montant'] : 0,
+                'debit_cdf'=> $request->sens == 'credit' ? round($ligne['montant'] * $tauxChange, 2) : 0,
 
 
 
-                'credit_cdf'=> $request->sens == 'debit' ? $ligne['montant'] : 0,
+                'credit_cdf'=> $request->sens == 'debit' ? round($ligne['montant'] * $tauxChange, 2) : 0,
 
 
 

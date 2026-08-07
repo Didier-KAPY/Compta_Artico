@@ -13,7 +13,14 @@
             </h4>
             <small class="text-muted">Consultation de l'écriture comptable</small>
         </div>
+        <div class="d-flex gap-2">
+            @can('deleteFinancialDocument')<button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#modalSuppressionDocument"><i class="bi bi-trash me-1"></i>Supprimer</button>@endcan
+            <a href="{{ route('journaux.index') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Retour</a>
+        </div>
     </div>
+
+    @include('partials.document-navigation')
+    @include('partials.financial-delete-modal', ['documentType'=>'Journal','documentReference'=>$journal->reference,'documentStatus'=>$journal->statut,'deleteRoute'=>route('journaux.destroy',$journal)])
 
     <!-- STATUT -->
     <div class="alert
@@ -81,6 +88,37 @@
         <div class="card-header"><strong>Description</strong></div>
         <div class="card-body">
             {{ $journal->description }}
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-3">
+        <div class="card-header d-flex align-items-center gap-2">
+            <i class="bi bi-paperclip text-primary"></i><strong>Pièce justificative</strong>
+        </div>
+        <div class="card-body">
+            @if($pieceExiste)
+                @if(str_starts_with($pieceMime, 'image/'))
+                    <a href="{{ $pieceUrl }}" target="_blank" class="d-inline-block mb-3">
+                        <img src="{{ $pieceUrl }}" alt="Pièce justificative {{ $journal->reference }}" class="img-fluid rounded border" style="max-height: 360px">
+                    </a>
+                @endif
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <span class="text-muted">{{ basename($piecePath) }}</span>
+                    <a href="{{ $pieceUrl }}" target="_blank" class="btn btn-primary btn-sm">
+                        <i class="bi bi-eye me-1"></i>Consulter la pièce
+                    </a>
+                    <a href="{{ $pieceUrl }}?download=1" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-download me-1"></i>Télécharger
+                    </a>
+                </div>
+            @elseif($piecePath)
+                <div class="alert alert-light border mb-0">
+                    <i class="bi bi-file-earmark-text me-2"></i>
+                    Référence de la pièce : <strong>{{ $piecePath }}</strong>
+                </div>
+            @else
+                <span class="text-muted"><i class="bi bi-file-earmark-x me-2"></i>Aucune pièce justificative jointe.</span>
+            @endif
         </div>
     </div>
 
@@ -200,42 +238,8 @@
         </div>
     </div>
     
-    <!-- INFORMATIONS COMPLÉMENTAIRES -->
-    <div class="card shadow-sm">
-        <div class="card-header"><strong>Informations Comptables</strong></div>
-
-        <div class="card-body">
-
-            <div class="row g-3">
-
-                <div class="col-md-3">
-                    <div class="p-3 border rounded bg-light h-100">
-                        <strong>Pièce justificative</strong>
-                        <div class="mt-2">
-                            @if($journal->piece_justificatif)
-                                        <a class="dropdown-item"
-                                        href="{{ asset('storage/'.$journal->piece_justificatif) }}"
-                                        target="_blank">
-                                            <i class="bi bi-paperclip me-2"></i>
-                                            Voir pièce justificative
-                                        </a>
-                                    @else
-                                        <span class="dropdown-item text-muted">
-                                            <i class="bi bi-paperclip me-2"></i>
-                                            Aucune pièce jointe
-                                        </span>
-                                    @endif
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-
-        </div>
-    </div>
-
     <!-- ACTIONS MODAL -->
-@if($journal->statut === 'En attente' && auth()->user()->can('valider', $journal))
+@if($journal->statut === 'En attente' && (auth()->user()->can('valider', $journal) || auth()->user()->can('rejeter', $journal)))
 
 <div class="card shadow-lg border-0 mt-4">
 
@@ -409,8 +413,6 @@
 
                                 {{ old('journal_type_id', $journal->journal_type_id) == $journalType->id ? 'selected' : '' }}>
                                 {{ $journalType->libelle }}
-                                @if($journalType->compte)
-                                @endif
 
 
                                 </option>
@@ -426,6 +428,25 @@
 
                     </div>
 
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            Libellé
+                            <span class="text-danger">*</span>
+                        </label>
+                        <select name="liste_des_comptes_id"
+                                id="liste_des_comptes_id_modal"
+                                class="form-select searchable-account"
+                                required>
+                            <option value="">-- Rechercher un libellé --</option>
+                            @foreach($comptes as $compte)
+                                <option value="{{ $compte->id }}"
+                                    {{ old('liste_des_comptes_id', $journal->liste_des_comptes_id) == $compte->id ? 'selected' : '' }}>
+                                    {{ $compte->designation }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
                 </div>
                 <!-- FOOTER -->
                 <div class="modal-footer">
@@ -435,18 +456,23 @@
                         Annuler
                     </button>
                     <!-- REJET -->
-                    <button type="submit"
-                            formaction="{{ route('journaux.rejeter',$journal->id) }}"
-                            class="btn btn-danger">
-                        <i class="bi bi-x-circle"></i>
-                        Rejeter
-                    </button>
+                    @can('rejeter', $journal)
+                        <button type="submit"
+                                formaction="{{ route('journaux.rejeter',$journal->id) }}"
+                                formnovalidate
+                                class="btn btn-danger">
+                            <i class="bi bi-x-circle"></i>
+                            Rejeter
+                        </button>
+                    @endcan
                     <!-- VALIDATION -->
-                    <button type="submit"
-                            class="btn btn-success">
-                        <i class="bi bi-check-circle"></i>
-                        Valider
-                    </button>
+                    @can('valider', $journal)
+                        <button type="submit"
+                                class="btn btn-success">
+                            <i class="bi bi-check-circle"></i>
+                            Valider
+                        </button>
+                    @endcan
                 </div>
             </form>
         </div>
@@ -486,12 +512,22 @@
             Retour
         </a>
         @can('reouvrir', $journal)
-            @if($journal->statut === 'Validé')
+            @if($journal->statut !== 'En attente')
                 <form method='POST' action='{{ route('journaux.reouvrir', $journal->id) }}' class='d-inline'>
                     @csrf
                     @method('PATCH')
-                    <button class='btn btn-warning'>
-                        <i class='bi bi-arrow-counterclockwise'></i> Réouvrir
+                    <button class='btn btn-warning' onclick="return confirm('Remettre ce journal en attente ?')">
+                        <i class='bi bi-arrow-counterclockwise'></i> Remettre en attente
+                    </button>
+                </form>
+            @endif
+        @endcan
+        @can('rejeter', $journal)
+            @if($journal->statut !== 'Rejeté')
+                <form method="POST" action="{{ route('journaux.rejeter', $journal->id) }}" class="d-inline">
+                    @csrf
+                    <button class="btn btn-danger" onclick="return confirm('Rejeter ce journal ?')">
+                        <i class="bi bi-x-circle"></i> Rejeter
                     </button>
                 </form>
             @endif
@@ -500,3 +536,21 @@
 </div>
 @endif
 @endsection
+
+@push('scripts')
+<script>
+$(function () {
+    const modal = $('#modalTraitementJournal');
+    $('#liste_des_comptes_id_modal').select2({
+        width: '100%',
+        dropdownParent: modal,
+        placeholder: 'Rechercher un libellé',
+        allowClear: true,
+        language: {
+            noResults: function () { return 'Aucun libellé trouvé'; },
+            searching: function () { return 'Recherche…'; }
+        }
+    });
+});
+</script>
+@endpush

@@ -67,10 +67,10 @@ return new class extends Migration
 
             // Paiement
             $table->enum('mode_paiement', [
-                'especes',
+                'espèces',
                 'banque',
                 'mobile_money'
-            ])->default('especes');
+            ])->default('espèces');
 
             // Montants
             $table->decimal('montant_ht', 15, 2)->default(0);

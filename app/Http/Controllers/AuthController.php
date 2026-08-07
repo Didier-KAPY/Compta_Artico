@@ -40,14 +40,14 @@ class AuthController extends Controller
                 $credentials['email']
             )
             ->first();
-        if(!$user)
+        if (! $user || $user->statut !== 'Actif')
         {
 
             return back()
                 ->withInput()
                 ->with(
                     'error_msg',
-                    'Utilisateur inexistant.'
+                    'Identifiants incorrects.'
                 );
         }
         // Connexion
@@ -58,8 +58,6 @@ class AuthController extends Controller
                 ->regenerate();
             $user = Auth::user()
                 ->load('role');
-            // activation
-            $user->statut = 'Actif';
             $user->last_logged_in = now();
             $user->save();
 
@@ -80,7 +78,7 @@ class AuthController extends Controller
             ->withInput()
             ->with(
                 'error_msg',
-                'Email ou mot de passe incorrect.'
+                'Identifiants incorrects.'
             );
     }
     
@@ -95,10 +93,7 @@ protected function authenticated($user)
 
 
     // Comptable et DAF → Caisses par défaut
-    if(in_array($role, [
-        'comptable',
-        'daf'
-    ])) {
+    if ($user->isAccounting()) {
 
         return redirect()
             ->route('journaux.index');
@@ -118,12 +113,11 @@ protected function authenticated($user)
     }
 
 
-    // Directeur Général, Chef de Service, Chef de département
-    // → Etat de besoin par défaut
-    if(in_array($role, [
-        'chef de service',
-        'chef de département',
-        'directeur technique'
+    // Direction technique et chefs → États de besoin par défaut.
+    if ($user->hasRole([
+        'Chef de Service',
+        'Chef de Département',
+        'Directeur Technique',
     ])) {
 
         return redirect()

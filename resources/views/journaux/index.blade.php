@@ -2,7 +2,10 @@
 
 @section('content')
 
-@php $isSuperAdmin = auth()->user()?->hasRole('Super Admin') ?? false; @endphp
+@php
+    $isSuperAdmin = auth()->user()?->hasRole('Super Admin') ?? false;
+    $canManageJournaux = auth()->user()?->can('manageJournaux') ?? false;
+@endphp
 
 <div class="container py-4">
 
@@ -19,10 +22,12 @@
     </h4>
 
     <div class="d-flex gap-2 flex-wrap">
+        @if($canManageJournaux)
         @include('partials.period-export-buttons', ['rapport' => 'journaux'])
         <a href="{{ route('journaux.create.caisse') }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-cash-stack me-1"></i>Journal Caisse</a>
         <a href="{{ route('journaux.create.banque') }}" class="btn btn-outline-success btn-sm"><i class="bi bi-bank me-1"></i>Journal Banque</a>
         <a href="{{ route('journaux.create.mobile') }}" class="btn btn-outline-warning btn-sm"><i class="bi bi-phone me-1"></i>Journal Mobile Money</a>
+        @endif
     </div>
 
 </div>
@@ -166,7 +171,7 @@
                     <tr>
                         <th>Référence</th>
                         @if($isSuperAdmin)
-                            <th>Utilisateur</th>
+                            <th>Validé par</th>
                         @endif
                         <th>Date</th>
                         <th>Description</th>
@@ -176,7 +181,7 @@
                         <th class="text-end">Entrées USD</th>
                         <th class="text-end">Sorties USD</th>
                         <th>Statut</th>
-                        <th class="text-center">Actions</th>
+                        @if($canManageJournaux)<th class="text-center">Actions</th>@endif
                     </tr>
                 </thead>
 
@@ -191,7 +196,7 @@
                         </td>
 
                         @if($isSuperAdmin)
-                            <td>{{ trim(($journal->user?->prenom ?? '').' '.($journal->user?->nom ?? '')) ?: 'Système' }}</td>
+                            <td>{{ trim(($journal->validateur?->prenom ?? '').' '.($journal->validateur?->nom ?? '')) ?: 'Non validé' }}</td>
                         @endif
 
                         <td>
@@ -264,6 +269,7 @@
 
                             </td>
 
+                        @if($canManageJournaux)
                         <td class="text-center">
 
                             <div class="dropdown">
@@ -300,17 +306,6 @@
                                     <li><a class="dropdown-item" href="{{ route('journaux.edit', $journal->id) }}"><i class="bi bi-pencil-square me-2"></i>Modifier</a></li>
                                     @endcan
 
-                                    @can('delete', $journal)
-                                    <li><hr class="dropdown-divider"></li>
-                                    <li>
-                                        <form action="{{ route('journaux.destroy', $journal->id) }}" method="POST" onsubmit="return confirm('Supprimer définitivement ce journal ?')">
-                                            @csrf @method('DELETE')
-                                            <button type="submit" class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Supprimer</button>
-                                        </form>
-                                    </li>
-                                    @endcan
-
-
                                     <li>
 
                                         <a class="dropdown-item"
@@ -330,7 +325,7 @@
                                         @if($journal->piece_justificatif)
 
                                             <a class="dropdown-item"
-                                            href="{{ asset('storage/'.$journal->piece_justificatif) }}"
+                                            href="{{ route('journaux.piece', $journal) }}"
                                             target="_blank">
 
                                                 <i class="bi bi-paperclip me-2"></i>
@@ -357,6 +352,7 @@
                             </div>
 
                         </td>
+                        @endif
 
 
                     </tr>
@@ -366,7 +362,7 @@
 
                     <tr>
 
-                        <td colspan="{{ $isSuperAdmin ? 11 : 10 }}" class="text-center text-muted py-4">
+                        <td colspan="{{ $isSuperAdmin ? 11 : ($canManageJournaux ? 10 : 9) }}" class="text-center text-muted py-4">
 
                             Aucun journal trouvé
 
@@ -383,9 +379,20 @@
     </div>
 </div>
 
+
 <!-- PAGINATION -->
-<div class="mt-3 d-flex justify-content-center">
-    {{ $journaux->links() }}
+<div class="mt-3 d-flex flex-column flex-md-row justify-content-between align-items-center gap-2">
+    <div class="text-muted small">
+        @if($journaux->total() > 0)
+            Affichage de {{ $journaux->firstItem() }} à {{ $journaux->lastItem() }}
+            sur {{ $journaux->total() }} journaux
+        @else
+            Aucun journal
+        @endif
+    </div>
+    <div>
+        {{ $journaux->onEachSide(1)->links() }}
+    </div>
 </div>
 </div>
 

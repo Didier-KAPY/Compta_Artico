@@ -23,6 +23,7 @@ class User extends Authenticatable
          'adresse',
         'password_default',
         'photo',
+        'signature',
         'statut',
     ];
     /**
@@ -60,6 +61,11 @@ class User extends Authenticatable
     public function fonction()
     {
         return $this->belongsTo(Fonction::class);
+    }
+
+    public function cartesService()
+    {
+        return $this->hasMany(CarteService::class);
     }
     /**
      * Un utilisateur possède plusieurs entreprises
@@ -99,11 +105,42 @@ class User extends Authenticatable
             $roles
         );
 
+        $managementRoles = ['admin', 'directeur général', 'gérant', 'gerant'];
+        if (in_array($current, $managementRoles, true)
+            && array_intersect($allowed, $managementRoles) !== []) {
+            return true;
+        }
+
+        $accountingRoles = [
+            'daf', 'comptable', 'chargé des finances',
+            'chargé de finance', 'charge de finance', 'charger de finance',
+        ];
+        if (in_array($current, $accountingRoles, true)
+            && array_intersect($allowed, $accountingRoles) !== []) {
+            return true;
+        }
+
+        $technicalRoles = ['directeur technique', 'chargé technique', 'charge technique', 'charger technique'];
+        if (in_array($current, $technicalRoles, true)
+            && array_intersect($allowed, $technicalRoles) !== []) {
+            return true;
+        }
+
         return in_array($current, $allowed, true);
+    }
+
+    public function isManagement(): bool
+    {
+        return $this->hasRole(['Admin', 'Directeur Général', 'Gérant', 'Gerant']);
     }
 
     public function isSuperAdmin(): bool
     {
         return $this->hasRole(['Super Admin', 'Super admin', 'super_admin']);
+    }
+
+    public function isAccounting(): bool
+    {
+        return $this->hasRole(['DAF', 'Comptable']);
     }
 }

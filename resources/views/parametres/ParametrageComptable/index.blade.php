@@ -337,6 +337,8 @@ Aucun paramètre configuré
 
 </tbody>
 
+<tfoot><tr><td colspan="{{ $isSuperAdmin ? 5 : 4 }}">{{ $parametrages->withQueryString()->links() }}</td></tr></tfoot>
+
 
 </table>
 

@@ -75,19 +75,6 @@
             </a>
 
         </li>
-        <li class="nav-item">
-
-            <a href="{{ route('ecritures.brc') }}"
-            class="nav-link">
-
-                <i class="bi bi-file-earmark-text me-2"></i>
-
-                BRC
-
-            </a>
-
-        </li>
-
         @can('viewAccountingReports')
             <li class="mt-2 px-3 text-uppercase small text-secondary">États financiers</li>
             <li>

@@ -17,6 +17,7 @@ return new class extends Migration
                   ->cascadeOnDelete();
 
             $table->string('nom_entreprise');
+            $table->string('slogan')->nullable();
             $table->string('adresse')->nullable();
             $table->string('telephone')->nullable();
             $table->string('forme_juridique')->nullable();

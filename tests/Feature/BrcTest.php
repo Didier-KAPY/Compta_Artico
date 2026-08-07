@@ -2,9 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\BRC;
 use App\Models\EcritureComptable;
-use App\Models\Journaux;
 use App\Models\JournalType;
+use App\Models\Journaux;
 use App\Models\ListeDesComptes;
 use App\Models\Role;
 use App\Models\User;
@@ -15,46 +16,70 @@ class BrcTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_brc_affiche_chaque_ecriture_validee_et_conserve_les_references(): void
+    public function test_creation_genere_une_reference_brc_et_conserve_les_lignes_en_attente(): void
     {
-        [$user, $type, $journal, $debit, $credit] = $this->contexte();
-        $this->ecriture($user, $journal, $debit, '2026-07-10', 'Débit banque', 150, 0, 'CHQ-01');
-        $this->ecriture($user, $journal, $credit, '2026-07-10', 'Crédit client', 0, 150, 'CHQ-01');
-        $this->ecriture($user, $journal, $debit, '2026-07-11', 'Non validée', 99, 0, 'BROUILLON', 'En attente');
+        [$user, $type, , $compteImputation] = $this->contexte();
 
-        $response = $this->actingAs($user)->get(route('ecritures.brc.generer', [
-            'date_debut' => '2026-07-01', 'date_fin' => '2026-07-31', 'journal_type_id' => $type->id,
-        ]));
-        $response->assertOk()->assertSee('CHQ-01')->assertSee('Débit banque')
-            ->assertSee('Crédit client')->assertDontSee('Non validée')
-            ->assertSee('ECRITURE EQUILIBREE')->assertSee('150,00');
+        $this->actingAs($user)->post(route('brc.store'), [
+            'date' => '2026-08-04', 'journal_type_id' => $type->id,
+            'monnaie' => 'CDF', 'sens' => 'debit',
+            'lignes' => [['compte_id' => $compteImputation->id, 'libelle' => 'Régularisation client', 'montant' => 250]],
+        ])->assertRedirect(route('brc.index'));
 
-        $this->actingAs($user)->get(route('ecritures.brc.pdf', [
-            'date_debut' => '2026-07-01', 'date_fin' => '2026-07-31', 'journal_type_id' => $type->id,
-        ]))->assertOk()->assertHeader('content-type', 'application/pdf');
+        $brc = BRC::with('lignes')->firstOrFail();
+        $this->assertSame('BRC-20260804-000001', $brc->reference);
+        $this->assertSame('En attente', $brc->statut);
+        $this->assertSame(250.0, (float) $brc->total);
+        $this->assertCount(1, $brc->lignes);
+        $this->assertDatabaseCount('journaux', 0);
+        $this->assertDatabaseCount('ecritures_comptables', 0);
     }
 
-    public function test_brc_refuse_une_periode_inversee(): void
+    public function test_validation_cree_un_journal_valide_et_des_ecritures_equilibrees_en_attente(): void
     {
-        [$user] = $this->contexte();
-        $this->actingAs($user)->get(route('ecritures.brc.generer', [
-            'date_debut' => '2026-07-31', 'date_fin' => '2026-07-01',
-        ]))->assertSessionHasErrors('date_fin');
+        [$user, $type, $compteJournal, $compteImputation] = $this->contexte();
+        $this->actingAs($user)->post(route('brc.store'), [
+            'date' => '2026-08-04', 'journal_type_id' => $type->id,
+            'monnaie' => 'CDF', 'sens' => 'debit',
+            'lignes' => [['compte_id' => $compteImputation->id, 'libelle' => 'Régularisation client', 'montant' => 250]],
+        ]);
+
+        $brc = BRC::firstOrFail();
+        $this->actingAs($user)->post(route('brc.valider', $brc))
+            ->assertRedirect(route('brc.index'));
+
+        $journal = Journaux::firstOrFail();
+        $this->assertSame('Validé', $journal->statut);
+        $this->assertSame($brc->reference, $journal->reference);
+        $this->assertSame('Validé', $brc->fresh()->statut);
+        $this->assertSame($journal->id, $brc->fresh()->journal_id);
+        $this->assertDatabaseHas('brc_journal', ['brc_id' => $brc->id, 'journal_id' => $journal->id]);
+
+        $journalLine = EcritureComptable::where('liste_des_comptes_id', $compteJournal->id)->firstOrFail();
+        $imputation = EcritureComptable::where('liste_des_comptes_id', $compteImputation->id)->firstOrFail();
+        $this->assertSame('En attente', $journalLine->statut);
+        $this->assertSame('En attente', $imputation->statut);
+        $this->assertSame(250.0, (float) $journalLine->debit_cdf);
+        $this->assertSame(250.0, (float) $imputation->credit_cdf);
+
+        $this->actingAs($user)->get(route('brc.show', $brc))
+            ->assertOk();
+        $this->actingAs($user)->get(route('journaux.show', $journal))
+            ->assertOk()
+            ->assertSee('Voir le BRC');
+        $this->actingAs($user)->get(route('ecritures.show', $journalLine))
+            ->assertOk()
+            ->assertSee('Voir le BRC');
     }
 
     private function contexte(): array
     {
-        $role = Role::create(['designation' => 'Admin']);
+        $role = Role::create(['designation' => 'Comptable']);
         $user = User::create(['nom' => 'Test', 'prenom' => 'BRC', 'email' => uniqid().'@test.local', 'password' => bcrypt('password'), 'role_id' => $role->id, 'password_default' => 0, 'statut' => 'Actif']);
-        $debit = ListeDesComptes::create(['user_id' => $user->id, 'compte' => '521100', 'designation' => 'Banque', 'nature' => 'Actif']);
-        $credit = ListeDesComptes::create(['user_id' => $user->id, 'compte' => '411100', 'designation' => 'Client', 'nature' => 'Actif']);
-        $type = JournalType::create(['user_id' => $user->id, 'code' => 'BQ', 'libelle' => 'Banque', 'liste_des_comptes_id' => $debit->id, 'nature' => 'banque', 'est_tresorerie' => true]);
-        $journal = Journaux::create(['user_id' => $user->id, 'journal_type_id' => $type->id, 'liste_des_comptes_id' => $debit->id, 'reference' => 'BRC-JRN-01', 'date' => '2026-07-10', 'description' => 'Remise', 'statut' => 'Validé']);
-        return [$user, $type, $journal, $debit, $credit];
-    }
+        $compteJournal = ListeDesComptes::create(['user_id' => $user->id, 'compte' => '471100', 'designation' => 'Compte OD', 'nature' => 'Passif']);
+        $compteImputation = ListeDesComptes::create(['user_id' => $user->id, 'compte' => '411100', 'designation' => 'Client', 'nature' => 'Actif']);
+        $type = JournalType::create(['user_id' => $user->id, 'code' => 'OD', 'libelle' => 'Opérations diverses', 'liste_des_comptes_id' => $compteJournal->id, 'nature' => 'od', 'est_tresorerie' => false]);
 
-    private function ecriture(User $user, Journaux $journal, ListeDesComptes $compte, string $date, string $libelle, float $debit, float $credit, string $piece, string $statut = 'Validé'): void
-    {
-        EcritureComptable::create(['user_id' => $user->id, 'journal_id' => $journal->id, 'liste_des_comptes_id' => $compte->id, 'date' => $date, 'piece' => $piece, 'libelle' => $libelle, 'debit_cdf' => $debit, 'credit_cdf' => $credit, 'statut' => $statut]);
+        return [$user, $type, $compteJournal, $compteImputation];
     }
 }

@@ -33,14 +33,14 @@ class EtatFinancierController extends Controller
     {
         return Pdf::loadView('Comptabilite.etats_financiers.bilan_pdf', $this->donnees($request))
             ->setPaper('a4', 'landscape')
-            ->download('bilan-syscohada.pdf');
+            ->download('bilan-final.pdf');
     }
 
     public function compteResultatPdf(Request $request)
     {
         return Pdf::loadView('Comptabilite.etats_financiers.compte_resultat_pdf', $this->donnees($request))
             ->setPaper('a4', 'landscape')
-            ->download('compte-resultat-syscohada.pdf');
+            ->download('compte-resultat.pdf');
     }
 
     private function donnees(Request $request): array

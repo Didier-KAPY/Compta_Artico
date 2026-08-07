@@ -5,7 +5,7 @@
                 <i class="bi bi-list"></i>
             </button>
 
-            <a href="{{ route('dashboard') }}" class="topbar-brand text-decoration-none">
+            <a href="{{ $user?->hasRole(['Directeur Technique', 'Chef de Service', 'Chef de Département']) ? route('etat-besoins.index') : route('dashboard') }}" class="topbar-brand text-decoration-none">
                 <span class="topbar-logo">
                     @if(!empty($entreprise?->logo))
                         <img src="{{ asset('storage/'.$entreprise->logo) }}" alt="Logo {{ $entreprise->nom_entreprise ?? 'entreprise' }}">
@@ -38,10 +38,9 @@
                 @php
                     $nomComplet = trim(($user->prenom ?? '').' '.($user->nom ?? ''));
                     $initiales = mb_strtoupper(mb_substr($user->prenom ?? '', 0, 1).mb_substr($user->nom ?? '', 0, 1));
-                    $peutConfigurer = in_array(mb_strtolower($user->role?->designation ?? ''), [
-                        'super admin', 'admin', 'directeur général', 'gérant', 'comptable', 'daf',
-                        'chef de service', 'directeur technique', 'chef de département'
-                    ], true);
+                    $peutConfigurer = $user->hasRole([
+                        'Super Admin', 'Admin', 'Comptable', 'DAF', 'Directeur Technique',
+                    ]);
                 @endphp
                 <div class="dropdown">
                     <button class="topbar-user" type="button" data-bs-toggle="dropdown" aria-expanded="false">

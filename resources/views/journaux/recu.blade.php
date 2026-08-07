@@ -111,7 +111,7 @@
         <div class="bold company-name">
             {{ $entreprise->nom_entreprise ?? 'DOXA SERVICES' }}
         </div>
-        <div class="slogan">Découvre ton habilité</div>
+        @if($entreprise?->slogan)<div class="slogan">{{ $entreprise->slogan }}</div>@endif
         <div>
             {{ $entreprise->adresse ?? 'Kinshasa - RDC' }}
         </div>
@@ -172,7 +172,7 @@
             </td>
         </tr>
         <tr>
-            <td>TVA</td>
+            <td>TVA{{ (float) $journal->taux_tva > 0 ? ' ('.number_format($journal->taux_tva, 2, ',', ' ').' %)' : '' }}</td>
             <td class="text-right">
                 {{ number_format($journal->montant_tva,2,',',' ') }}
                 {{ $journal->monnaie }}
@@ -192,12 +192,6 @@
             <td>Paiement :</td>
             <td class="text-right">
                 {{ ucfirst(str_replace('_', ' ', $journal->mode_paiement ?? 'Non renseigné')) }}
-            </td>
-        </tr>
-        <tr>
-            <td>Type :</td>
-            <td class="text-right">
-                {{ ucfirst($journal->type ?? 'Opération') }}
             </td>
         </tr>
     </table>

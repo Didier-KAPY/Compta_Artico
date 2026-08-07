@@ -29,10 +29,15 @@ class DashboardTest extends TestCase
             ->assertOk()
             ->assertSee('Situation de caisse')
             ->assertSee('Entrées vs sorties par mois')
-            ->assertSee('10 dernières opérations');
+            ->assertSee('10 dernières opérations')
+            ->assertSee('BRC')
+            ->assertSee("Bons d'entrée")
+            ->assertSee('Nouveau BRC')
+            ->assertDontSee('Validé par')
+            ->assertSee('window.location.reload(), 30000', false);
     }
 
-    public function test_director_sees_statistics_and_treasury_situation(): void
+    public function test_director_has_the_same_dashboard_as_admin(): void
     {
         $role = Role::create(['designation' => 'Directeur Général']);
         $user = User::create([
@@ -50,11 +55,13 @@ class DashboardTest extends TestCase
             ->assertOk()
             ->assertSee('Statistiques')
             ->assertSee('Situation de trésorerie')
-            ->assertDontSee('Situation de caisse')
-            ->assertDontSee('10 dernières opérations');
+            ->assertSee('Situation de caisse')
+            ->assertSee('Entrées vs sorties par mois')
+            ->assertSee('10 dernières opérations')
+            ->assertDontSee('Validé par');
     }
 
-    public function test_manager_sees_treasury_situation(): void
+    public function test_manager_has_the_same_dashboard_as_admin(): void
     {
         $role = Role::create(['designation' => 'Gérant']);
         $user = User::create([
@@ -71,6 +78,10 @@ class DashboardTest extends TestCase
             ->get(route('dashboard'))
             ->assertOk()
             ->assertSee('Situation de trésorerie')
-            ->assertSee('Disponibilités par compte');
+            ->assertSee('Disponibilités par compte')
+            ->assertSee('Situation de caisse')
+            ->assertSee('Entrées vs sorties par mois')
+            ->assertSee('10 dernières opérations')
+            ->assertDontSee('Validé par');
     }
 }

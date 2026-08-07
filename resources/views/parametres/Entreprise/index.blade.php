@@ -126,6 +126,16 @@
                                required>
                     </div>
                     <div class="col-md-6">
+                        <label class="form-label fw-bold">Slogan</label>
+                        <input type="text"
+                               name="slogan"
+                               class="form-control @error('slogan') is-invalid @enderror"
+                               value="{{ old('slogan', $entreprise->slogan ?? '') }}"
+                               maxlength="255"
+                               placeholder="Slogan de l’entreprise">
+                        @error('slogan')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="col-md-6">
                         <label class="form-label fw-bold">
                             Forme juridique
                         </label>
@@ -159,6 +169,15 @@
                         <textarea name="adresse"
                                   class="form-control"
                                   rows="2">{{ old('adresse',$entreprise->adresse ?? '') }}</textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Cachet de l'entreprise</label>
+                        @if($entreprise?->cachet)
+                            <div class="mb-2"><img src="{{ asset('storage/'.$entreprise->cachet) }}" alt="Cachet de l'entreprise" class="border rounded bg-white p-2" style="max-width:220px;max-height:120px;object-fit:contain"></div>
+                        @endif
+                        <input type="file" name="cachet" accept="image/*" class="form-control @error('cachet') is-invalid @enderror">
+                        @error('cachet')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        <div class="form-text">Image PNG, JPG ou WEBP, 2 Mo maximum.</div>
                     </div>
                 </div>
                 <div class="text-end mt-4">

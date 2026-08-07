@@ -2,15 +2,24 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\DeleteFinancialDocumentRequest;
+use App\Services\FinancialDocumentService;
+
 use Illuminate\Http\Request;
 use App\Models\SortieCaisse;
 use App\Models\JournalType;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use App\Services\WorkflowComptableService;
 use App\Models\Journaux;
 use Carbon\Carbon;
+use Barryvdh\DomPDF\Facade\Pdf;
+use App\Models\Entreprise;
+use Illuminate\Support\Facades\Storage;
+use App\Services\DocumentNumberService;
 
 class SortieCaisseController extends Controller
 {
@@ -31,7 +40,7 @@ class SortieCaisseController extends Controller
 
     private function sortiesFiltrees(Request $request)
     {
-        return SortieCaisse::with(['etatBesoin', 'user'])
+        return SortieCaisse::with(['etatBesoin', 'user', 'validateur'])
             ->when($request->filled('numero'), fn ($query) => $query->where('numero', 'like', '%'.$request->numero.'%'))
             ->when($request->filled('date_debut'), fn ($query) => $query->whereDate('date', '>=', $request->date_debut))
             ->when($request->filled('date_fin'), fn ($query) => $query->whereDate('date', '<=', $request->date_fin))
@@ -50,7 +59,7 @@ class SortieCaisseController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(Request $request, DocumentNumberService $numbers)
     {
         $request->validate([
             'date' => 'required|date',
@@ -62,18 +71,20 @@ class SortieCaisseController extends Controller
             'observation' => 'required|string',
         ]);
 
-        SortieCaisse::create([
-            'numero' => 'BS-' . time(),
-            'date' => $request->date,
-            'beneficiaire' => $request->beneficiaire,
-            'motif' => $request->motif,
-            'montant' => $request->montant,
-            'monnaie' => $request->monnaie,
-            'type' => $request->type,
-            'observation' => $request->observation,
-            'statut' => 'En attente',
-            'user_id' => auth()->id(),
-        ]);
+        DB::transaction(function () use ($request, $numbers) {
+            SortieCaisse::create([
+                'numero' => $numbers->next('BSC', $request->date, $request->type),
+                'date' => $request->date,
+                'beneficiaire' => $request->beneficiaire,
+                'motif' => $request->motif,
+                'montant' => $request->montant,
+                'monnaie' => $request->monnaie,
+                'type' => $request->type,
+                'observation' => $request->observation,
+                'statut' => 'En attente',
+                'user_id' => auth()->id(),
+            ]);
+        });
 
         return redirect()
             ->route('sortie-caisses.index')
@@ -83,12 +94,19 @@ class SortieCaisseController extends Controller
     /**
      * Display the specified resource.
      */
- public function show($id)
+ public function show($id, FinancialDocumentService $documents)
 {
     $sortie = SortieCaisse::with([
         'user',
-        'etatBesoin.lignes'
+        'etatBesoin.lignes',
+        'journaux.ecritures',
+        'clotureJournaliere',
+        'lignesCloture.journal',
     ])->findOrFail($id);
+    $suppressionDependencies = $documents->dependencies($sortie);
+    $documentLinks = collect([
+        $sortie->etatBesoin ? ['label' => "Voir l’État de besoin", 'url' => route('etat-besoins.show', $sortie->etatBesoin), 'icon' => 'file-earmark-text'] : null,
+    ])->filter()->values();
 
 
 
@@ -127,14 +145,36 @@ class SortieCaisseController extends Controller
 
     }
 
+    $journalCaisseValide = $this->journauxDuBon($sortie)
+        ->get()
+        ->contains(fn ($journal) => $this->statutEstValide($journal->statut));
+
     
     return view(
         'sortie_caisses.show',
         compact(
             'sortie',
-            'journalTypes'
+            'journalTypes',
+            'journalCaisseValide',
+            'suppressionDependencies',
+            'documentLinks',
         )
     );
+}
+
+public function imprimer($id)
+{
+    return view('sortie_caisses.document', $this->donneesDocument($id) + ['pdfMode' => false]);
+}
+
+public function telechargerPdf($id)
+{
+    $data = $this->donneesDocument($id) + ['pdfMode' => true];
+    $nom = preg_replace('/[^A-Za-z0-9_-]/', '-', $data['sortie']->numero);
+
+    return Pdf::loadView('sortie_caisses.document', $data)
+        ->setPaper('a4', 'portrait')
+        ->download('bon-de-sortie-'.$nom.'.pdf');
 }
 
     /**
@@ -151,32 +191,10 @@ class SortieCaisseController extends Controller
         return view('sortie_caisses.edit', compact('sortie'));
     }
 
-    private function generateNumero()
-{
-    $annee = date('y');
-    $mois = date('m');
-
-    $base = $annee . $mois; // Exemple : 2606
-
-    $last = SortieCaisse::where('numero', 'like', $base . '%')
-        ->orderByDesc('id')
-        ->first();
-
-    $next = 1;
-
-    if ($last) {
-        // Exemple : 26060025
-        $lastNumber = intval(substr($last->numero, 4));
-
-        $next = $lastNumber + 1;
-    }
-
-    return $base . str_pad($next, 4, '0', STR_PAD_LEFT);
-}
     /**
      * Update the specified resource in storage.
      */
- public function update(Request $request, string $id)
+ public function update(Request $request, string $id, DocumentNumberService $numbers)
 {
     $request->validate([
         'date' => 'required|date',
@@ -196,7 +214,7 @@ class SortieCaisseController extends Controller
 
     // Générer un numéro seulement si absent
     if (empty($sortie->numero)) {
-        $sortie->numero = $this->generateNumero();
+        $sortie->numero = $numbers->next('BSC', $request->date, $request->type);
     }
 
     $sortie->date = $request->date;
@@ -217,24 +235,16 @@ class SortieCaisseController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy(DeleteFinancialDocumentRequest $request, string $id, FinancialDocumentService $documents)
     {
-        DB::transaction(function () use ($id) {
-            $sortie = SortieCaisse::lockForUpdate()->findOrFail($id);
-            if ($sortie->statut === 'Validé') {
-                throw ValidationException::withMessages(['statut' => 'Un Bon validé doit d’abord être réouvert.']);
-            }
-            if ($sortie->journaux()->exists()) {
-                throw ValidationException::withMessages(['dependance' => 'Suppression impossible : un Journal est lié.']);
-            }
-            $sortie->delete();
-        });
+        $sortie = SortieCaisse::findOrFail($id);
+        $documents->delete($sortie, $request->validated('motif'), $request->validated('strategie'), $request);
 
         return redirect()->route('sortie-caisses.index')
-            ->with('success', 'Bon de sortie supprimé avec succès.');
+            ->with('success', 'Bon de sortie placé dans la corbeille.');
     }
 
-public function valider(Request $request, $id)
+public function valider(Request $request, $id, FinancialDocumentService $documents, DocumentNumberService $numbers)
 {
     
 
@@ -251,7 +261,7 @@ public function valider(Request $request, $id)
         // Générer le numéro si absent
         if(empty($sortie->numero)) {
 
-            $sortie->numero = $this->generateNumero();
+            $sortie->numero = $numbers->next('BSC', $sortie->date, $sortie->type);
             $sortie->save();
 
         }
@@ -290,8 +300,7 @@ public function valider(Request $request, $id)
 
 
             if($journal){
-
-                $journal->delete();
+                $documents->delete($journal, 'Suppression automatique lors de la remise en attente du Bon de sortie.', 'cascade', $request);
 
             }
 
@@ -345,6 +354,12 @@ public function valider(Request $request, $id)
 
         ]);
 
+        if ($sortie->origine === 'cloture') {
+            DB::commit();
+            return redirect()->route('sortie-caisses.index')
+                ->with('success', 'Bon de sortie quotidien validé sans duplication de journal.');
+        }
+
 
 
 
@@ -379,7 +394,7 @@ public function valider(Request $request, $id)
                 'piece_justificatif'=>$sortie->numero,
 
                 'type'=>'depense',
-                'mode_paiement'=>'espèce',
+                'mode_paiement'=>'espèces',
 
 
                 'monnaie'=>$sortie->monnaie,
@@ -429,108 +444,71 @@ public function valider(Request $request, $id)
         DB::rollBack();
 
 
-        dd([
-
-            'message'=>$e->getMessage(),
-
-            'line'=>$e->getLine(),
-
-            'file'=>$e->getFile()
-
+        Log::error('Échec de la validation du bon de sortie.', [
+            'sortie_caisse_id' => $id,
+            'user_id' => Auth::id(),
+            'exception' => $e,
         ]);
-
-    }
-}
-public function rejeter($id)
-{
-    $sortie = SortieCaisse::findOrFail($id);
-
-    $sortie->update([
-        'statut' => 'Rejeté'
-    ]);
-
-    return redirect()
-        ->route('sortie-caisses.show', $id)
-        ->with('success', 'Bon de sortie rejeté.');
-}
-public function attente($id)
-{
-
-    DB::beginTransaction();
-
-    try {
-
-        $sortie = SortieCaisse::findOrFail($id);
-
-
-        // Vérifier si le journal existe
-        $journal = Journaux::where(
-            'reference',
-            $sortie->numero
-        )->first();
-
-
-
-        // Si le journal est déjà validé, blocage
-        if($journal && $journal->statut === 'Validé'){
-
-
-            DB::rollBack();
-
-
-            return back()->with(
-                'error',
-                'Vous ne pouvez pas remettre ce bon en attente car le journal comptable est déjà validé.'
-            );
-
-        }
-
-
-
-        // Supprimer le journal provisoire
-        if($journal){
-
-            $journal->delete();
-
-        }
-
-
-
-        // Remettre le bon en attente
-
-        $sortie->update([
-
-            'statut'=>'En attente',
-
-            'date_validation'=>null,
-
-            'valide_par'=>null,
-
-        ]);
-
-
-
-        DB::commit();
-
-
-        return back()->with(
-            'success',
-            'Le bon de sortie a été remis en attente.'
-        );
-
-
-
-    } catch(\Exception $e){
-
-
-        DB::rollBack();
-
 
         return back()->with(
             'error',
-            $e->getMessage()
+            'La validation du bon de sortie a échoué. Veuillez réessayer ou contacter un administrateur.'
         );
 
+    }
+}
+public function rejeter(Request $request, $id, FinancialDocumentService $documents)
+{
+    try {
+        DB::transaction(function () use ($id, $request, $documents) {
+            $sortie = SortieCaisse::lockForUpdate()->findOrFail($id);
+            $journauxQuery = $this->journauxDuBon($sortie);
+            $journaux = (clone $journauxQuery)->lockForUpdate()->get();
+
+            if ($journaux->contains(fn ($journal) => $this->statutEstValide($journal->statut))) {
+                throw ValidationException::withMessages([
+                    'statut' => 'Vous ne pouvez pas rejeter ce bon de sortie, car le statut du journal lié est déjà Validé.',
+                ]);
+            }
+
+            $journaux->each(fn (Journaux $journal) => $documents->delete($journal, 'Suppression automatique lors du rejet du Bon de sortie.', 'cascade', $request));
+            $sortie->update([
+                'statut' => 'Rejeté',
+                'date_validation' => null,
+                'valide_par' => null,
+            ]);
+        });
+
+        return back()->with('success', 'Bon de sortie rejeté.');
+    } catch (ValidationException $e) {
+        return back()->withErrors($e->errors());
+    }
+}
+public function attente(Request $request, $id, FinancialDocumentService $documents)
+{
+    try {
+        DB::transaction(function () use ($id, $request, $documents) {
+            $sortie = SortieCaisse::lockForUpdate()->findOrFail($id);
+            $journauxQuery = $this->journauxDuBon($sortie);
+            $journaux = (clone $journauxQuery)->lockForUpdate()->get();
+
+            if ($journaux->contains(fn ($journal) => $this->statutEstValide($journal->statut))) {
+                throw ValidationException::withMessages([
+                    'statut' => 'Vous ne pouvez pas remettre ce bon de sortie en attente, car le statut du journal lié est déjà Validé.',
+                ]);
+            }
+
+            $journaux->each(fn (Journaux $journal) => $documents->delete($journal, 'Suppression automatique lors de la remise en attente du Bon de sortie.', 'cascade', $request));
+            $sortie->update([
+                'statut' => 'En attente',
+                'date_validation' => null,
+                'valide_par' => null,
+            ]);
+        });
+
+        return back()->with('success', 'Le bon de sortie a été remis en attente.');
+    } catch (ValidationException $e) {
+        return back()->withErrors($e->errors());
     }
 
 }
@@ -542,5 +520,31 @@ public function reouvrir($id, WorkflowComptableService $workflow)
     $workflow->reouvrirSortieCaisse($sortie);
 
     return back()->with('success', 'Bon de sortie réouvert avec succès.');
+}
+
+private function journauxDuBon(SortieCaisse $sortie)
+{
+    return Journaux::query()->where(function ($query) use ($sortie) {
+        $query->where('sortie_caisse_id', $sortie->id)
+            ->orWhere('reference', $sortie->numero);
+    });
+}
+
+private function donneesDocument($id): array
+{
+    $sortie = SortieCaisse::with(['user', 'etatBesoin.lignes', 'etatBesoin.departement'])->findOrFail($id);
+    $entreprise = Entreprise::first();
+    $logoData = null;
+    if ($entreprise?->logo && Storage::disk('public')->exists($entreprise->logo)) {
+        $mime = Storage::disk('public')->mimeType($entreprise->logo) ?: 'image/png';
+        $logoData = 'data:'.$mime.';base64,'.base64_encode(Storage::disk('public')->get($entreprise->logo));
+    }
+
+    return compact('sortie', 'entreprise', 'logoData');
+}
+
+private function statutEstValide(?string $statut): bool
+{
+    return mb_strtolower(trim((string) $statut)) === 'validé';
 }
 }

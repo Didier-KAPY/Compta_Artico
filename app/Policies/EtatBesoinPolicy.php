@@ -10,7 +10,8 @@ class EtatBesoinPolicy
     public function valider(User $user, EtatBesoin $etat): bool
     {
         return $user->hasRole([
-            'Super Admin', 'Comptable', 'Chef de Service', 'Chef de Département',
+            'Super Admin', 'Admin', 'Gérant', 'Gerant', 'Directeur Général',
+            'Comptable',
         ]);
     }
 

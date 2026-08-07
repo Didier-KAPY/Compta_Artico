@@ -5,24 +5,24 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\EcritureComptable;
 use App\Models\ListeDesComptes;
+use Carbon\Carbon;
 
 class BalanceController extends Controller
 {
 
     public function index(Request $request)
     {
+        $request->validate([
+            'mois' => ['nullable', 'date_format:Y-m'],
+        ]);
 
-
-        $dateDebut = $request->input(
-            'date_debut',
-            now()->startOfMonth()->toDateString()
-        );
-
-
-        $dateFin = $request->input(
-            'date_fin',
-            now()->toDateString()
-        );
+        $moisSelectionne = $request->filled('mois')
+            ? Carbon::createFromFormat('Y-m', $request->input('mois'))->startOfMonth()
+            : now()->startOfMonth();
+        $dateDebut = $moisSelectionne->copy()->startOfMonth()->toDateString();
+        $dateFin = $moisSelectionne->isSameMonth(now())
+            ? now()->toDateString()
+            : $moisSelectionne->copy()->endOfMonth()->toDateString();
 
 
         /*
@@ -396,6 +396,7 @@ class BalanceController extends Controller
                 'balance',
                 'dateDebut',
                 'dateFin',
+                'moisSelectionne',
                 'classeRecherche'
             )
         );

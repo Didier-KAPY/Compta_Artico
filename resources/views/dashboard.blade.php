@@ -12,7 +12,7 @@
                 @endif
                 <div>
                     <span class="eyebrow">Tableau de bord</span>
-                    <h2 class="mb-1">Bonjour, {{ $user->prenom }} {{ $user->nom }}</h2>
+                    <h2 class="welcome-user-name mb-1">Bonjour, {{ $user->prenom }} {{ $user->nom }}</h2>
                     <span class="role-pill"><i class="bi bi-shield-check"></i> {{ $user->role?->designation ?? 'Sans rôle' }}</span>
                 </div>
             </div>
@@ -24,17 +24,31 @@
         </div>
     </section>
 
+    @if($sections['exchange'])
+        <div class="rate-card mb-4">
+            <span class="eyebrow rate-title">Taux du jour</span>
+            <i class="bi bi-currency-exchange"></i>
+            <h3>1 USD = {{ number_format((float) ($exchange_rate?->taux_de_change ?? 0), 2, ',', ' ') }} CDF</h3>
+            <div class="rate-help">Taux utilisé pour convertir les opérations en USD vers le CDF.</div>
+            <small>Mis à jour {{ $exchange_rate?->updated_at?->translatedFormat('d/m/Y à H:i') ?? '—' }}</small>
+        </div>
+    @endif
+
     @if($sections['statistics'])
         @php
-            $cards = [
-                ['users', 'Utilisateurs', 'people', 'primary'], ['journal_types', 'Journaux', 'journal-bookmark', 'info'],
-                ['entries', 'Écritures comptables', 'pencil-square', 'success'], ['cash_in', "Bons d'entrée", 'box-arrow-in-down', 'emerald'],
+            $operationalCards = [
+                ['brc', 'BRC', 'file-earmark-text', 'info'], ['cash_in', "Bons d'entrée", 'box-arrow-in-down', 'emerald'],
                 ['cash_out', 'Bons de sortie', 'box-arrow-up', 'danger'], ['needs', 'États de besoin', 'clipboard-check', 'warning'],
-                ['accounts', 'Comptes comptables', 'list-ol', 'violet'], ['treasury_journals', 'Journaux de trésorerie', 'cash-coin', 'teal'],
-                ['general_journals', 'Journaux généraux', 'book', 'slate'],
             ];
+            $configurationCards = [
+                ['users', 'Utilisateurs', 'people', 'primary'],
+                ['accounts', 'Comptes comptables', 'list-ol', 'violet'],
+            ];
+            $cards = $user->isAccounting()
+                ? $operationalCards
+                : array_merge($configurationCards, $operationalCards);
         @endphp
-        <div class="section-heading"><div><span class="eyebrow">Vue globale</span><h4>Statistiques</h4></div></div>
+        <div class="section-heading"><div><span class="eyebrow">{{ $user->isAccounting() ? 'Activité financière' : 'Vue globale' }}</span><h4>Statistiques</h4><small class="section-note">{{ $user->isAccounting() ? 'Nombre d’opérations actuellement enregistrées.' : 'Nombre total d’éléments enregistrés dans chaque module.' }}</small></div></div>
         <div class="row g-3 mb-4">
             @foreach($cards as [$key, $label, $icon, $color])
                 <div class="col-6 col-lg-4 col-xl-3">
@@ -56,7 +70,7 @@
             ];
         @endphp
         <div class="section-heading">
-            <div><span class="eyebrow">Liquidités disponibles</span><h4>Situation de trésorerie</h4></div>
+            <div><span class="eyebrow">Liquidités disponibles</span><h4>Situation de trésorerie</h4><small class="section-note">Mouvements validés jusqu’à aujourd’hui. Solde = entrées − sorties.</small></div>
             <a href="{{ route('journaux.tresorerie') }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye me-1"></i> Voir le détail</a>
         </div>
         <div class="row g-3 mb-3">
@@ -104,7 +118,7 @@
     @endif
 
     @if($sections['cash'])
-        <div class="section-heading"><div><span class="eyebrow">Liquidités</span><h4>Situation de caisse</h4></div></div>
+        <div class="section-heading"><div><span class="eyebrow">Liquidités</span><h4>Situation de caisse</h4><small class="section-note">Résumé des entrées, sorties et soldes enregistrés, séparés en CDF et USD.</small></div></div>
         <div class="row g-3 mb-4">
             @foreach([
                 ['Entrées CDF', $cash['in_cdf'], 'arrow-down-left', 'success', 'CDF'], ['Sorties CDF', $cash['out_cdf'], 'arrow-up-right', 'danger', 'CDF'],
@@ -118,24 +132,21 @@
 
     @if($sections['validations'])
         <div class="row g-3 mb-4">
-            <div class="col-lg-8">
+            <div class="col-12">
                 <div class="panel-card h-100">
-                    <div class="panel-title"><div><span class="eyebrow">À traiter</span><h5>Validations en attente</h5></div><i class="bi bi-bell"></i></div>
+                    <div class="panel-title"><div><span class="eyebrow">À traiter</span><h5>Validations en attente</h5><small class="section-note">Nombre de dossiers qui attendent encore une décision.</small></div><i class="bi bi-bell"></i></div>
                     <div class="row g-3">
-                        @foreach([['needs', 'États de besoin', 'clipboard'], ['cash_out', 'Bons de sortie', 'box-arrow-up'], ['entries', 'Écritures', 'pencil-square'], ['journals', 'Journaux', 'journal-text']] as [$key, $label, $icon])
+                        @foreach([['brc', 'BRC', 'file-earmark-text'], ['cash_in', "Bons d'entrée", 'box-arrow-in-down'], ['needs', 'États de besoin', 'clipboard'], ['cash_out', 'Bons de sortie', 'box-arrow-up'], ['entries', 'Écritures', 'pencil-square'], ['journals', 'Journaux', 'journal-text']] as [$key, $label, $icon])
                             <div class="col-6"><div class="validation-item"><i class="bi bi-{{ $icon }}"></i><span>{{ $label }}</span><span class="badge rounded-pill bg-danger">{{ $validations[$key] }}</span></div></div>
                         @endforeach
                     </div>
                 </div>
             </div>
-            @if($sections['exchange'])
-                <div class="col-lg-4"><div class="rate-card h-100"><span class="eyebrow text-white-50">Taux de change</span><i class="bi bi-currency-exchange"></i><h3>1 USD = {{ number_format((float) ($exchange_rate?->taux_de_change ?? 0), 2, ',', ' ') }} CDF</h3><small>Mis à jour {{ $exchange_rate?->updated_at?->translatedFormat('d/m/Y à H:i') ?? '—' }}</small></div></div>
-            @endif
         </div>
     @endif
 
     @if($sections['charts'])
-        <div class="section-heading"><div><span class="eyebrow">Analyse</span><h4>Indicateurs graphiques</h4></div></div>
+        <div class="section-heading"><div><span class="eyebrow">Analyse</span><h4>Indicateurs graphiques</h4><small class="section-note">Évolution des mouvements, répartition des opérations et modes de paiement.</small></div></div>
         <div class="row g-3 mb-4">
             <div class="col-xl-7"><div class="panel-card chart-card"><h5>Entrées vs sorties par mois</h5><canvas id="cashFlowChart"></canvas></div></div>
             <div class="col-xl-5"><div class="panel-card chart-card"><h5>Activité par opération</h5><canvas id="operationsChart"></canvas></div></div>
@@ -150,15 +161,16 @@
             <div class="shortcut-grid">
                 @php
                     $roleName = mb_strtolower($user->role?->designation ?? '');
-                    $isAdmin = in_array($roleName, ['super admin', 'admin']);
+                    $isAdmin = $user->isSuperAdmin() || $user->isManagement();
                     $isCash = in_array($roleName, ['caissier', 'caissière', 'trésorier', 'trésorière']);
-                    $isAccounting = in_array($roleName, ['daf', 'comptable']);
-                    $isNeeds = $isAdmin || in_array($roleName, ['gérant', 'gerant', 'chef de service', 'chef de département'], true);
+                    $isAccounting = $user->isAccounting();
                 @endphp
-                @if($isNeeds)<a href="{{ route('etat-besoins.create') }}"><i class="bi bi-clipboard-plus"></i><span>Nouvel état de besoin</span></a>@endif
-                @if($isAdmin || $isCash)<a href="{{ route('entree-caisses.create') }}"><i class="bi bi-box-arrow-in-down"></i><span>Nouvelle entrée</span></a><a href="{{ route('sortie-caisses.create') }}"><i class="bi bi-box-arrow-up"></i><span>Nouvelle sortie</span></a>@endif
-                @if($isAdmin || $isCash || $isAccounting)<a href="{{ route('journaux.create') }}"><i class="bi bi-journal-plus"></i><span>Nouveau journal</span></a>@endif
-                @if($isAdmin || $roleName === 'comptable')<a href="{{ route('ecritures.create') }}"><i class="bi bi-pencil-square"></i><span>Nouvelle écriture</span></a>@endif
+                @can('createEtatBesoin')<a href="{{ route('etat-besoins.create') }}"><i class="bi bi-clipboard-plus"></i><span>Nouvel état de besoin</span></a>@endcan
+                @can('manageEntreeCaisse')<a href="{{ route('entree-caisses.create') }}"><i class="bi bi-box-arrow-in-down"></i><span>Nouvelle entrée</span></a>@endcan
+                @if($isAdmin || $isCash)<a href="{{ route('sortie-caisses.create') }}"><i class="bi bi-box-arrow-up"></i><span>Nouvelle sortie</span></a>@endif
+                @can('manageJournaux')<a href="{{ route('journaux.create') }}"><i class="bi bi-journal-plus"></i><span>Nouveau journal</span></a>@endcan
+                @if(in_array($roleName, ['super admin', 'admin', 'comptable'], true))<a href="{{ route('brc.create') }}"><i class="bi bi-file-earmark-plus"></i><span>Nouveau BRC</span></a>@endif
+                @if($isAdmin || $isAccounting)<a href="{{ route('ecritures.create') }}"><i class="bi bi-pencil-square"></i><span>Nouvelle écriture</span></a>@endif
                 @if($isAdmin || $isAccounting)<a href="{{ route('balance.index') }}"><i class="bi bi-bar-chart"></i><span>Balance</span></a><a href="{{ route('grandlivre.index') }}"><i class="bi bi-book"></i><span>Grand livre</span></a><a href="{{ route('comptabilite.etats-financiers.index') }}"><i class="bi bi-file-earmark-bar-graph"></i><span>États financiers</span></a>@endif
             </div>
         </div>
@@ -166,11 +178,11 @@
 
     @if($sections['operations'])
         <div class="panel-card">
-            <div class="panel-title"><div><span class="eyebrow">Activité récente</span><h5>10 dernières opérations</h5></div></div>
-            <div class="table-responsive"><table class="table dashboard-table align-middle mb-0"><thead><tr><th>Date</th><th>Référence</th><th>Type</th><th>Montant</th><th>Monnaie</th><th>Utilisateur</th><th>Statut</th></tr></thead><tbody>
+            <div class="panel-title"><div><span class="eyebrow">Activité récente</span><h5>10 dernières opérations</h5><small class="section-note">Journaux les plus récents, classés par date d’opération.</small></div></div>
+            <div class="table-responsive"><table class="table dashboard-table align-middle mb-0"><thead><tr><th>Date</th><th>Référence</th><th>Type</th><th>Montant</th><th>Monnaie</th>@if($user->isSuperAdmin())<th>Validé par</th>@endif<th>Statut</th></tr></thead><tbody>
                 @forelse($latest_operations as $operation)
-                    <tr><td>{{ $operation->date?->format('d/m/Y') }}</td><td class="fw-semibold">{{ $operation->reference }}</td><td>{{ ucfirst($operation->type) }}</td><td>{{ number_format($operation->montant_ttc, 2, ',', ' ') }}</td><td>{{ $operation->monnaie }}</td><td>{{ $operation->user?->prenom }} {{ $operation->user?->nom }}</td><td><span class="status status-{{ $operation->statut === 'Validé' ? 'success' : ($operation->statut === 'Rejeté' ? 'danger' : 'warning') }}">{{ $operation->statut }}</span></td></tr>
-                @empty<tr><td colspan="7" class="text-center text-muted py-4">Aucune opération enregistrée</td></tr>@endforelse
+                    <tr><td>{{ $operation->date?->format('d/m/Y') }}</td><td class="fw-semibold">{{ $operation->reference }}</td><td>{{ ucfirst($operation->type) }}</td><td>{{ number_format($operation->montant_ttc, 2, ',', ' ') }}</td><td>{{ $operation->monnaie }}</td>@if($user->isSuperAdmin())<td>{{ trim(($operation->validateur?->prenom ?? '').' '.($operation->validateur?->nom ?? '')) ?: 'Non validé' }}</td>@endif<td><span class="status status-{{ $operation->statut === 'Validé' ? 'success' : ($operation->statut === 'Rejeté' ? 'danger' : 'warning') }}">{{ $operation->statut }}</span></td></tr>
+                @empty<tr><td colspan="{{ $user->isSuperAdmin() ? 7 : 6 }}" class="text-center text-muted py-4">Aucune opération enregistrée</td></tr>@endforelse
             </tbody></table></div>
         </div>
     @endif
@@ -178,6 +190,9 @@
 
 <style>
 .dashboard-shell{--ink:#14213d;--muted:#64748b;--line:#e7ebf1;color:var(--ink)}.welcome-panel{padding:1.5rem 1.7rem;border-radius:20px;background:linear-gradient(135deg,#0f2747,#1d4f91);color:#fff;box-shadow:0 14px 35px rgba(15,39,71,.18)}.welcome-avatar{width:70px;height:70px;border-radius:18px;object-fit:cover;border:3px solid rgba(255,255,255,.35)}.avatar-fallback{display:grid;place-items:center;background:rgba(255,255,255,.16);font-size:2rem}.eyebrow{display:block;text-transform:uppercase;letter-spacing:.11em;font-size:.68rem;font-weight:700;color:#718096;margin-bottom:.25rem}.welcome-panel .eyebrow{color:#9cc6ff}.role-pill{display:inline-flex;gap:.35rem;align-items:center;padding:.25rem .65rem;border-radius:99px;background:rgba(255,255,255,.13);font-size:.8rem}.welcome-meta{color:#dbeafe}.current-time{font-size:1.45rem;font-weight:700}.section-heading{display:flex;justify-content:space-between;align-items:end;margin:1.2rem 0 .8rem}.section-heading h4,.panel-title h5{margin:0;font-weight:700}.metric-card,.cash-card,.panel-card{background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 5px 18px rgba(15,23,42,.045)}.metric-card{display:flex;align-items:center;gap:1rem;padding:1.15rem;transition:.2s}.metric-card:hover{transform:translateY(-3px);box-shadow:0 10px 25px rgba(15,23,42,.09)}.metric-icon{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;font-size:1.25rem}.metric-primary{background:#e8f0ff;color:#2563eb}.metric-info{background:#e7f8ff;color:#0891b2}.metric-success,.metric-emerald{background:#e9fbf3;color:#059669}.metric-danger{background:#ffeded;color:#dc2626}.metric-warning{background:#fff6dd;color:#d97706}.metric-violet{background:#f3edff;color:#7c3aed}.metric-teal{background:#e6fbf8;color:#0f766e}.metric-slate{background:#eef2f6;color:#475569}.metric-label{display:block;color:var(--muted);font-size:.8rem}.metric-card strong{font-size:1.55rem}.cash-card{padding:1.1rem 1.2rem;display:flex;gap:1rem;align-items:center;border-left-width:4px!important}.cash-card>i{font-size:1.55rem}.cash-card span{display:block;color:var(--muted);font-size:.8rem}.cash-card strong{font-size:1.15rem}.cash-card small{font-size:.7rem}.panel-card{padding:1.25rem}.panel-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}.panel-title>i{font-size:1.3rem;color:#64748b}.validation-item{padding:.8rem;border-radius:12px;background:#f8fafc;display:flex;align-items:center;gap:.65rem}.validation-item .badge{margin-left:auto}.rate-card{position:relative;overflow:hidden;border-radius:16px;padding:1.4rem;background:linear-gradient(135deg,#075985,#0891b2);color:#fff;box-shadow:0 10px 25px rgba(8,145,178,.2)}.rate-card>i{position:absolute;right:1rem;top:.6rem;font-size:4rem;opacity:.13}.rate-card h3{margin:.8rem 0 .25rem;font-size:1.35rem}.chart-card{height:360px}.chart-card canvas{max-height:290px}.shortcut-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem}.shortcut-grid a{padding:1rem;border:1px solid var(--line);border-radius:13px;text-decoration:none;color:var(--ink);display:flex;align-items:center;gap:.7rem;background:#fbfcfe;transition:.2s}.shortcut-grid a:hover{color:#0d6efd;border-color:#9ec5fe;transform:translateY(-2px)}.shortcut-grid i{font-size:1.25rem}.dashboard-table thead th{background:#f8fafc;color:#64748b;font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--line)}.dashboard-table td{font-size:.86rem;border-color:#eef2f6}.status{display:inline-block;padding:.25rem .6rem;border-radius:99px;font-size:.72rem;font-weight:700}.status-success{background:#dcfce7;color:#15803d}.status-danger{background:#fee2e2;color:#b91c1c}.status-warning{background:#fff4cf;color:#a16207}@media(max-width:991px){.shortcut-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:575px){.welcome-panel{padding:1.2rem}.welcome-avatar{width:58px;height:58px}.welcome-panel h2{font-size:1.25rem}.shortcut-grid{grid-template-columns:1fr}.chart-card{height:320px}.metric-card{padding:.9rem}.metric-icon{width:42px;height:42px}.metric-card strong{font-size:1.25rem}}
+.section-note{display:block;margin-top:.3rem;color:var(--muted);font-size:.78rem;font-weight:400}.rate-help{margin:-.1rem 0 .45rem;color:rgba(255,255,255,.82);font-size:.82rem}
+.welcome-panel .welcome-user-name{color:#fff!important}
+.rate-card .rate-title,.rate-card h3{color:#fff!important;opacity:1}
 </style>
 @endsection
 
@@ -202,5 +217,8 @@ document.addEventListener('DOMContentLoaded', () => {
 const dashboardClock = document.getElementById('dashboardClock');
 const updateClock = () => { if (dashboardClock) dashboardClock.textContent = new Intl.DateTimeFormat('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}).format(new Date()); };
 updateClock(); setInterval(updateClock, 1000);
+
+// Actualise les données de tous les tableaux de bord toutes les 30 secondes.
+window.setInterval(() => window.location.reload(), 30000);
 </script>
 @endpush

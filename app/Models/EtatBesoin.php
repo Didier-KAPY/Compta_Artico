@@ -3,9 +3,11 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class EtatBesoin extends Model
 {
+    use SoftDeletes;
     protected $fillable = [
         'user_id',
         'departement_id',
@@ -20,7 +22,10 @@ class EtatBesoin extends Model
         'observation',
         'valide_par',
         'date_validation',
+        'motif_suppression', 'supprime_par', 'restaure_par', 'restaure_le',
     ];
+
+    protected $casts = ['date' => 'date', 'date_validation' => 'datetime', 'restaure_le' => 'datetime'];
 
     /**
      * Relation avec l'utilisateur
@@ -28,6 +33,11 @@ class EtatBesoin extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function validateur()
+    {
+        return $this->belongsTo(User::class, 'valide_par');
     }
 
     public function departement()

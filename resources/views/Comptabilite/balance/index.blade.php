@@ -13,7 +13,7 @@
         <strong>
             Balance générale
         </strong>
-        <div class="ms-auto">@include('partials.period-export-buttons', ['rapport'=>'balance','exportParams'=>['date_debut'=>$dateDebut,'date_fin'=>$dateFin,'classe'=>$classeRecherche]])</div>
+        <div class="ms-auto">@include('partials.period-export-buttons', ['rapport'=>'balance','exportParams'=>['date_debut'=>$dateDebut,'date_fin'=>$dateFin,'mois'=>$moisSelectionne->format('Y-m'),'classe'=>$classeRecherche]])</div>
 
     </div>
 
@@ -32,51 +32,23 @@
 
 
 
-            <div class="col-md-3">
+            <div class="col-md-4">
 
 
                 <label class="form-label">
 
-                    Date début
+                    Période (mois)
 
                 </label>
 
 
-                <input type="date"
-                       name="date_debut"
+                <input type="month"
+                       name="mois"
                        class="form-control"
-                       value="{{ $dateDebut }}">
+                       value="{{ $moisSelectionne->format('Y-m') }}">
 
 
             </div>
-
-
-
-
-
-            <div class="col-md-3">
-
-
-                <label class="form-label">
-
-                    Date fin
-
-                </label>
-
-
-                <input type="date"
-                       name="date_fin"
-                       class="form-control"
-                       value="{{ $dateFin }}">
-
-
-            </div>
-
-
-
-
-
-
             <div class="col-md-3">
 
 
@@ -395,9 +367,7 @@
 
                                 'compte'=>$ligne['compte'],
 
-                                'date_debut'=>$dateDebut,
-
-                                'date_fin'=>$dateFin
+                                'mois'=>$moisSelectionne->format('Y-m')
 
                             ]) }}">
 

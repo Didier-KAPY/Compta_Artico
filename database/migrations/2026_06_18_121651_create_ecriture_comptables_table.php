@@ -70,6 +70,8 @@ return new class extends Migration
             $table->string('piece')
                 ->nullable();
 
+            $table->string('piece_justificative')->nullable();
+
 
             $table->text('libelle');
 

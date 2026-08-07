@@ -28,15 +28,16 @@
             </a>
         </li>
 
-        <li>
-            <a href="{{ route('etat-besoins.create') }}"
-               class="nav-link {{ request()->routeIs('etat-besoins.create') ? 'active' : '' }}">
-                <i class="bi bi-plus-circle me-2"></i>
-                Nouveau État de Besoin
-            </a>
-        </li>
+        @can('createEtatBesoin')
+            <li>
+                <a href="{{ route('etat-besoins.create') }}"
+                   class="nav-link {{ request()->routeIs('etat-besoins.create') ? 'active' : '' }}">
+                    <i class="bi bi-plus-circle me-2"></i>
+                    Nouveau État de Besoin
+                </a>
+            </li>
+        @endcan
 
     </ul>
 
 </li>
-

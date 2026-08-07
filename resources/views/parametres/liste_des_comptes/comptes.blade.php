@@ -59,8 +59,6 @@
                             <th>#</th>
                             <th>Compte</th>
                             <th>Désignation</th>
-                            <th>Nature</th>
-                            <th>Observation</th>
                             @if($isSuperAdmin)
                                 <th>Utilisateur</th>
                             @endif
@@ -79,14 +77,6 @@
                                 </td>
                                 <td>
                                     {{ $compte->designation }}
-                                </td>
-                                <td>
-                                    <span class="badge bg-info">
-                                        {{ $compte->nature }}
-                                    </span>
-                                </td>
-                                <td>
-                                    {{ $compte->observation }}
                                 </td>
                                 @if($isSuperAdmin)
                                     <td>{{ trim(($compte->user?->prenom ?? '').' '.($compte->user?->nom ?? '')) ?: 'Système' }}</td>
@@ -116,7 +106,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="{{ $isSuperAdmin ? 7 : 6 }}" class="text-center text-muted">
+                                <td colspan="{{ $isSuperAdmin ? 5 : 4 }}" class="text-center text-muted">
                                     Aucun compte enregistré.
                                 </td>
                             </tr>

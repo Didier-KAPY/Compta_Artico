@@ -2,21 +2,29 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\DeleteFinancialDocumentRequest;
+use App\Services\FinancialDocumentService;
+
 use App\Models\EntreeCaisse;
 use App\Models\EntreeCaisseLigne;
 use App\Models\Journaux;
+use App\Models\JournalType;
+use App\Models\Entreprise;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use App\Services\WorkflowComptableService;
+use App\Services\DocumentNumberService;
 
 class EntreeCaisseController extends Controller
 {
     public function index()
     {
-        $entrees = EntreeCaisse::with('user')
+        $entrees = EntreeCaisse::with(['user', 'validateur'])
             ->latest()
             ->paginate(10);
 
@@ -28,7 +36,7 @@ class EntreeCaisseController extends Controller
         return view('entree_caisses.create');
     }
 
-    public function store(Request $request)
+    public function store(Request $request, DocumentNumberService $numbers)
 {
     $request->validate([
         'date' => 'required|date',
@@ -46,7 +54,7 @@ class EntreeCaisseController extends Controller
 
         // 🔥 CREATE ENTRÉE
         $entree = EntreeCaisse::create([
-            'numero' => $this->generateNumero(),
+            'numero' => $numbers->next('BEC', $request->date, $request->input('type', 'Caisse')),
             'user_id' => auth()->id(),
             'date' => $request->date,
             'motif' => $request->motif,
@@ -95,11 +103,30 @@ class EntreeCaisseController extends Controller
     }
 }
 
-    public function show($id)
+    public function show($id, FinancialDocumentService $documents)
     {
-        $entree = EntreeCaisse::with(['user', 'lignes'])->findOrFail($id);
+        $entree = EntreeCaisse::with(['user', 'lignes', 'journaux.ecritures', 'clotureJournaliere'])->findOrFail($id);
+        $suppressionDependencies = $documents->dependencies($entree);
+        $documentLinks = collect();
+        $journalValide = $this->journauxDuBon($entree)->get()
+            ->contains(fn (Journaux $journal) => $this->statutEstValide($journal->statut));
 
-        return view('entree_caisses.show', compact('entree'));
+        return view('entree_caisses.show', compact('entree', 'journalValide', 'suppressionDependencies', 'documentLinks'));
+    }
+
+    public function imprimer($id)
+    {
+        return view('entree_caisses.document', $this->donneesDocument($id) + ['pdfMode' => false]);
+    }
+
+    public function telechargerPdf($id)
+    {
+        $data = $this->donneesDocument($id) + ['pdfMode' => true];
+        $nom = preg_replace('/[^A-Za-z0-9_-]/', '-', $data['entree']->numero);
+
+        return Pdf::loadView('entree_caisses.document', $data)
+            ->setPaper('a4', 'portrait')
+            ->download('bon-entree-'.$nom.'.pdf');
     }
 
     public function statistiques(Request $request)
@@ -192,8 +219,23 @@ class EntreeCaisseController extends Controller
 
         ]);
 
+        if ($caisse->origine === 'cloture') {
+            DB::commit();
+            return back()->with('success', 'Bon d’entrée quotidien validé sans duplication de journal.');
+        }
 
-        // Création du journal
+
+        // Création du journal comptable, qui devra être validé séparément.
+        $journalExistant = $this->journauxDuBon($caisse)->first();
+        $journalTypeId = $journalExistant?->journal_type_id
+            ?? JournalType::where('est_tresorerie', true)->where('nature', 'caisse')->value('id');
+
+        if (! $journalTypeId) {
+            throw ValidationException::withMessages([
+                'journal' => 'Aucun type de journal de caisse n’est configuré.',
+            ]);
+        }
+
         Journaux::updateOrCreate(
 
             [
@@ -203,6 +245,8 @@ class EntreeCaisseController extends Controller
             [
 
                 'user_id' => auth()->id(),
+
+                'journal_type_id' => $journalTypeId,
 
                 'entree_caisse_id' => $caisse->id,
 
@@ -228,11 +272,11 @@ class EntreeCaisseController extends Controller
                 'sorties_usd' => 0,
 
 
-                'statut' => 'Validé',
+                'statut' => 'En attente',
 
-                'date_validation' => now(),
+                'date_validation' => null,
 
-                'valide_par' => auth()->id()
+                'valide_par' => null
 
             ]
         );
@@ -281,32 +325,6 @@ class EntreeCaisseController extends Controller
     return back()->with('success', 'Statut mis à jour.');
 }
 
-    // =========================
-    // GENERATE NUMERO
-    // =========================
-    private function generateNumero()
-{
-    $prefix = now()->format('ym'); // 2606
-
-    $last = EntreeCaisse::where('numero', 'like', $prefix . '%')
-        ->latest('id')
-        ->first();
-
-    $next = 1;
-
-    if ($last) {
-
-        $lastNumero = substr($last->numero, 4);
-
-        if (is_numeric($lastNumero)) {
-            $next = ((int) $lastNumero) + 1;
-        }
-    }
-
-    return $prefix . str_pad($next, 4, '0', STR_PAD_LEFT);
-}
-
-
 public function edit($id)
 {
     $entree = EntreeCaisse::with('lignes')->findOrFail($id);
@@ -348,7 +366,6 @@ public function update(Request $request, $id)
 
         // ================= UPDATE ENTREE =================
         $entree->update([
-            'numero' => $request->numero ?? $entree->numero,
             'date' => $request->date,
             'motif' => $request->motif,
         //'type' => $request->type,
@@ -394,22 +411,14 @@ public function update(Request $request, $id)
     }
 }
 
-public function destroy($id)
+public function destroy(DeleteFinancialDocumentRequest $request, $id, FinancialDocumentService $documents)
 {
-    DB::transaction(function () use ($id) {
-        $entree = EntreeCaisse::lockForUpdate()->findOrFail($id);
-        if ($entree->statut === 'Validé') {
-            throw ValidationException::withMessages(['statut' => 'Un Bon validé doit d’abord être réouvert.']);
-        }
-        if ($entree->journaux()->exists()) {
-            throw ValidationException::withMessages(['dependance' => 'Suppression impossible : un Journal est lié.']);
-        }
-        $entree->delete();
-    });
+    $entree = EntreeCaisse::findOrFail($id);
+    $documents->delete($entree, $request->validated('motif'), $request->validated('strategie'), $request);
 
     return redirect()
         ->route('entree-caisses.index')
-        ->with('success', 'Entrée de caisse supprimée avec succès.');
+        ->with('success', 'Bon d’entrée placé dans la corbeille.');
 }
 
 public function reouvrir($id, WorkflowComptableService $workflow)
@@ -418,6 +427,33 @@ public function reouvrir($id, WorkflowComptableService $workflow)
     Gate::authorize('reouvrir', $entree);
     $workflow->reouvrirEntreeCaisse($entree);
 
-    return back()->with('success', 'Bon d’entrée réouvert avec succès.');
+    return back()->with('success', 'Bon d’entrée remis en attente et journal provisoire supprimé avec succès.');
+}
+
+private function journauxDuBon(EntreeCaisse $entree)
+{
+    return Journaux::query()->where(function ($query) use ($entree) {
+        $query->where('entree_caisse_id', $entree->id)
+            ->orWhere('reference', $entree->numero);
+    });
+}
+
+private function donneesDocument($id): array
+{
+    $entree = EntreeCaisse::with(['user', 'lignes'])->findOrFail($id);
+    $entreprise = Entreprise::first();
+    $logoData = null;
+
+    if ($entreprise?->logo && Storage::disk('public')->exists($entreprise->logo)) {
+        $mime = Storage::disk('public')->mimeType($entreprise->logo) ?: 'image/png';
+        $logoData = 'data:'.$mime.';base64,'.base64_encode(Storage::disk('public')->get($entreprise->logo));
+    }
+
+    return compact('entree', 'entreprise', 'logoData');
+}
+
+private function statutEstValide(?string $statut): bool
+{
+    return mb_strtolower(trim((string) $statut)) === 'validé';
 }
 }

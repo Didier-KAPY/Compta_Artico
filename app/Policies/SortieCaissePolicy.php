@@ -9,6 +9,6 @@ class SortieCaissePolicy
 {
     public function reouvrir(User $user, SortieCaisse $sortie): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isSuperAdmin() || $user->isManagement();
     }
 }

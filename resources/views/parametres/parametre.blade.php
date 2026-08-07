@@ -5,18 +5,23 @@
 @section('content')
 @php
     $user = auth()->user();
-    $isAdmin = $user->hasRole(['Super Admin', 'Admin']);
-    $isDirection = $user->hasRole(['Directeur Général', 'Gérant', 'Gerant']);
+    $isSuperAdmin = $user->isSuperAdmin();
+    $isAdmin = $user->isSuperAdmin() || $user->isManagement();
+    $isDirection = $user->isManagement();
     $isComptabilite = $user->hasRole(['Comptable', 'DAF']);
+    $peutGererCartes = $user->can('manageServiceCards');
 
     $rubriques = collect([
-        ['visible' => $isAdmin || $isDirection, 'route' => 'parametres.entreprise', 'icon' => 'bi-building', 'color' => 'primary', 'title' => 'Entreprise', 'text' => 'Identité, coordonnées et informations légales.'],
-        ['visible' => $isAdmin || $isDirection, 'route' => 'parametres.departements', 'icon' => 'bi-diagram-3', 'color' => 'info', 'title' => 'Départements et fonctions', 'text' => 'Structure organisationnelle et affectation des agents.'],
-        ['visible' => $isAdmin || $isDirection, 'route' => 'parametres.utilisateurs', 'icon' => 'bi-people', 'color' => 'primary', 'title' => 'Utilisateurs', 'text' => 'Créer les comptes et consulter les dernières connexions.'],
-        ['visible' => $isAdmin || $isComptabilite, 'route' => 'parametres.comptes', 'icon' => 'bi-journal-bookmark', 'color' => 'success', 'title' => 'Plan comptable', 'text' => 'Comptes généraux utilisés dans les écritures.'],
-        ['visible' => $isAdmin || $isComptabilite, 'route' => 'parametres.journal-types.create', 'icon' => 'bi-journal-text', 'color' => 'warning', 'title' => 'Types de journaux', 'text' => 'Codes journaux et comptes de trésorerie associés.'],
-        ['visible' => $isAdmin || $isComptabilite, 'route' => 'parametres.taux-change.create', 'icon' => 'bi-currency-exchange', 'color' => 'danger', 'title' => 'Taux de change', 'text' => 'Cours appliqué aux opérations multidevises.'],
-        ['visible' => $isAdmin || $isComptabilite, 'route' => 'parametres.comptables.index', 'icon' => 'bi-calculator', 'color' => 'secondary', 'title' => 'Paramétrage comptable', 'text' => 'Comptes automatiques et règles de comptabilisation.'],
+        ['visible' => $isAdmin, 'route' => 'parametres.entreprise', 'icon' => 'bi-building', 'color' => 'primary', 'title' => 'Entreprise', 'text' => 'Identité, coordonnées et informations légales.'],
+        ['visible' => $isAdmin, 'route' => 'parametres.departements', 'icon' => 'bi-diagram-3', 'color' => 'info', 'title' => 'Départements et fonctions', 'text' => 'Structure organisationnelle et affectation des agents.'],
+        ['visible' => $isAdmin, 'route' => 'parametres.utilisateurs', 'icon' => 'bi-people', 'color' => 'primary', 'title' => 'Utilisateurs', 'text' => 'Créer les comptes et consulter les dernières connexions.'],
+        ['visible' => $peutGererCartes, 'route' => 'parametres.cartes-service.index', 'icon' => 'bi-person-badge', 'color' => 'success', 'title' => 'Cartes de service', 'text' => 'Créer, imprimer et télécharger les cartes PVC du personnel.'],
+        ['visible' => $isSuperAdmin || $isComptabilite, 'route' => 'parametres.comptes', 'icon' => 'bi-journal-bookmark', 'color' => 'success', 'title' => 'Plan comptable', 'text' => 'Comptes généraux utilisés dans les écritures.'],
+        ['visible' => $isSuperAdmin || $isComptabilite, 'route' => 'parametres.journal-types.create', 'icon' => 'bi-journal-text', 'color' => 'warning', 'title' => 'Types de journaux', 'text' => 'Codes journaux et comptes de trésorerie associés.'],
+        ['visible' => $isSuperAdmin || $isComptabilite, 'route' => 'parametres.taux-change.create', 'icon' => 'bi-currency-exchange', 'color' => 'danger', 'title' => 'Taux de change', 'text' => 'Cours appliqué aux opérations multidevises.'],
+        ['visible' => $isSuperAdmin || $isComptabilite, 'route' => 'parametres.comptables.index', 'icon' => 'bi-calculator', 'color' => 'secondary', 'title' => 'Paramétrage comptable', 'text' => 'Comptes automatiques et règles de comptabilisation.'],
+        ['visible' => $isSuperAdmin, 'route' => 'parametres.audit.index', 'icon' => 'bi-shield-check', 'color' => 'danger', 'title' => 'Suivi et alertes comptables', 'text' => 'Surveiller les suppressions, restaurations et opérations sensibles.'],
+        ['visible' => $isSuperAdmin, 'route' => 'parametres.clotures.index', 'icon' => 'bi-calendar2-check', 'color' => 'primary', 'title' => 'Clôtures journalières', 'text' => 'Simuler, lancer, vérifier et suivre les clôtures comptables.'],
     ])->where('visible');
 @endphp
 

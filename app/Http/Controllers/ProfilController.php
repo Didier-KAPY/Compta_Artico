@@ -71,6 +71,8 @@ class ProfilController extends Controller
 
             'photo'=>'nullable|image|max:2048',
 
+            'signature'=>'nullable|image|max:2048',
+
             'telephone'=>'nullable|string|max:30',
 
             'adresse'=>'nullable|string|max:255',
@@ -103,6 +105,14 @@ class ProfilController extends Controller
                 ->file('photo')
                 ->store('profils','public');
 
+        }
+
+        if ($request->hasFile('signature')) {
+            if ($user->signature) {
+                Storage::disk('public')->delete($user->signature);
+            }
+
+            $user->signature = $request->file('signature')->store('signatures', 'public');
         }
 
 
@@ -165,6 +175,8 @@ class ProfilController extends Controller
             'fonction_id'=>'nullable|exists:fonctions,id',
 
             'photo'=>'nullable|image|max:2048',
+
+            'signature'=>'nullable|image|max:2048',
 
         ]);
 
@@ -246,6 +258,10 @@ class ProfilController extends Controller
                 ->file('photo')
                 ->store('profils','public');
 
+        }
+
+        if ($request->hasFile('signature')) {
+            $user->signature = $request->file('signature')->store('signatures', 'public');
         }
 
 

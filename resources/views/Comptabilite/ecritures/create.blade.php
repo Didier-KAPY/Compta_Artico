@@ -25,6 +25,15 @@
 
 @endif
 
+<div class="alert alert-light border py-2 d-flex align-items-center gap-2">
+    <i class="bi bi-currency-exchange text-primary"></i>
+    @if($taux)
+        <span>1 USD = <strong>{{ number_format($taux->taux_de_change, 2, ',', ' ') }} CDF</strong></span>
+    @else
+        <span class="text-warning">Aucun taux de change configuré pour les imputations en USD.</span>
+    @endif
+</div>
+
 
 <form method="POST" action="{{ route('ecritures.store') }}">
 
@@ -60,7 +69,8 @@ Journal *
 
 
 <select name="journal_type_id"
-class="form-select form-select-sm"
+id="journal_type_id_search"
+class="form-select form-select-sm journal-search"
 required>
 
 
@@ -71,7 +81,7 @@ Choisir
 
 @foreach($journaux as $journal)
 
-<option value="{{ $journal->id }}">
+<option value="{{ $journal->id }}" {{ (string) old('journal_type_id') === (string) $journal->id ? 'selected' : '' }}>
 
 {{ $journal->compte->compte }} - {{ $journal->compte->designation }}
 
@@ -85,8 +95,17 @@ Choisir
 
 
 </select>
+@error('journal_type_id')<div class="text-danger small">{{ $message }}</div>@enderror
 
+</div>
 
+<div class="col-md-2">
+<label class="small fw-bold">Monnaie *</label>
+<select name="monnaie" id="monnaie" class="form-select form-select-sm @error('monnaie') is-invalid @enderror" required>
+<option value="CDF" {{ old('monnaie', 'CDF') === 'CDF' ? 'selected' : '' }}>CDF</option>
+<option value="USD" {{ old('monnaie') === 'USD' ? 'selected' : '' }}>USD</option>
+</select>
+@error('monnaie')<div class="invalid-feedback">{{ $message }}</div>@enderror
 </div>
 
 <div class="col-md-2">
@@ -173,7 +192,7 @@ Action
 
 
 <select name="lignes[0][compte_id]"
-class="form-select form-select-sm"
+class="form-select form-select-sm compte-search"
 required>
 
 
@@ -265,7 +284,7 @@ TOTAL
 
 
 <th id="totalMontant">
-0.00
+0.00 {{ old('monnaie', 'CDF') }}
 </th>
 
 
@@ -324,6 +343,34 @@ Enregistrer
 
 let index = 1;
 
+function activerRecherche(selecteur, placeholder) {
+    $(selecteur).each(function () {
+        if (!$(this).hasClass('select2-hidden-accessible')) {
+            $(this).select2({
+                width: '100%',
+                placeholder: placeholder,
+                allowClear: true,
+                language: {
+                    noResults: function () { return 'Aucun résultat trouvé'; },
+                    searching: function () { return 'Recherche…'; }
+                }
+            });
+        }
+    });
+}
+
+activerRecherche('.journal-search', 'Rechercher un journal');
+activerRecherche('.compte-search', 'Rechercher un compte');
+
+const monnaieSelect = document.getElementById('monnaie');
+
+function actualiserMonnaie() {
+    calculerTotal();
+}
+
+monnaieSelect.addEventListener('change', actualiserMonnaie);
+actualiserMonnaie();
+
 
 
 // Ajouter une ligne
@@ -339,7 +386,7 @@ let ligne = `
 <td>
 
 <select name="lignes[${index}][compte_id]"
-class="form-select form-select-sm"
+class="form-select form-select-sm compte-search"
 required>
 
 
@@ -417,6 +464,8 @@ document.querySelector('#tableLignes tbody')
 ligne
 );
 
+activerRecherche('#tableLignes tbody tr:last-child .compte-search', 'Rechercher un compte');
+
 
 index++;
 
@@ -480,7 +529,7 @@ total += Number(m.value) || 0;
 
 });
 
-document.getElementById('totalMontant').innerHTML = total.toFixed(2);
+document.getElementById('totalMontant').textContent = total.toFixed(2) + ' ' + monnaieSelect.value;
 
 
 }

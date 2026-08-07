@@ -38,13 +38,14 @@
     </div>
 
     <div class="sage-panel mt-3">
-        <div class="sage-panel-head"><div><strong>Position par compte de trésorerie</strong><small>Mouvements validés uniquement</small></div><span>{{ $tresorerie->count() }} compte(s)</span></div>
+        <div class="sage-panel-head"><div><strong>Position par compte de trésorerie</strong><small>Mouvements validés uniquement</small></div><span>{{ $tresorerie->total() }} compte(s)</span></div>
         <div class="table-responsive"><table class="table sage-grid mb-0"><thead><tr><th>Code journal</th><th>Compte</th><th>Désignation</th><th>Nature</th><th class="text-end">Entrées CDF</th><th class="text-end">Sorties CDF</th><th class="text-end">Solde CDF</th><th class="text-end">Entrées USD</th><th class="text-end">Sorties USD</th><th class="text-end">Solde USD</th></tr></thead><tbody>
             @forelse($tresorerie as $ligne)
                 @php $cdf = (float)$ligne->entree_cdf - (float)$ligne->sortie_cdf; $usd = (float)$ligne->entree_usd - (float)$ligne->sortie_usd; @endphp
                 <tr><td><span class="journal-code">{{ $ligne->journalType?->code ?? '—' }}</span></td><td class="fw-semibold">{{ $ligne->journalType?->compte?->compte ?? '—' }}</td><td>{{ $ligne->journalType?->compte?->designation ?? '—' }}</td><td><span class="nature-badge">{{ ucfirst(str_replace('_',' ', $ligne->journalType?->nature ?? '')) }}</span></td><td class="text-end amount-in">{{ number_format($ligne->entree_cdf,2,',',' ') }}</td><td class="text-end amount-out">{{ number_format($ligne->sortie_cdf,2,',',' ') }}</td><td class="text-end fw-bold {{ $cdf < 0 ? 'text-danger' : '' }}">{{ number_format($cdf,2,',',' ') }}</td><td class="text-end amount-in">{{ number_format($ligne->entree_usd,2,',',' ') }}</td><td class="text-end amount-out">{{ number_format($ligne->sortie_usd,2,',',' ') }}</td><td class="text-end fw-bold {{ $usd < 0 ? 'text-danger' : '' }}">{{ number_format($usd,2,',',' ') }}</td></tr>
             @empty<tr><td colspan="10" class="empty-state"><i class="bi bi-inbox"></i>Aucun mouvement validé sur cette période.</td></tr>@endforelse
         </tbody><tfoot><tr><td colspan="4">TOTAL GÉNÉRAL</td><td class="text-end">{{ number_format($totaux['cdf_entree'],2,',',' ') }}</td><td class="text-end">{{ number_format($totaux['cdf_sortie'],2,',',' ') }}</td><td class="text-end">{{ number_format($totaux['cdf_solde'],2,',',' ') }}</td><td class="text-end">{{ number_format($totaux['usd_entree'],2,',',' ') }}</td><td class="text-end">{{ number_format($totaux['usd_sortie'],2,',',' ') }}</td><td class="text-end">{{ number_format($totaux['usd_solde'],2,',',' ') }}</td></tr></tfoot></table></div>
+        <div class="p-3 no-print">{{ $tresorerie->links() }}</div>
     </div>
 </div>
 @include('journaux._sage_styles')

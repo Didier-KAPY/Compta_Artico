@@ -11,6 +11,10 @@ class DashboardController extends Controller
     {
         $user = $request->user()->loadMissing('role');
 
+        if ($user->hasRole('Directeur Technique')) {
+            return redirect()->route('etat-besoins.index');
+        }
+
         return view('dashboard', $dashboard->getData($user));
     }
 }

@@ -642,6 +642,8 @@ Aucun journal configuré
 
 </div>
 
+<div class="p-3">{{ $journalTypes->withQueryString()->links() }}</div>
+
 
 </div>
 

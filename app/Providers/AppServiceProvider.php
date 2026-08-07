@@ -38,29 +38,58 @@ class AppServiceProvider extends ServiceProvider
             return $user->isSuperAdmin() ? true : null;
         });
 
-        Gate::define('viewAccountingReports', fn (User $user): bool => in_array(
-            $user->role?->designation,
-            ['Super Admin', 'Admin', 'Directeur Général', 'DAF', 'Comptable'],
-            true
+        Gate::define('viewAccountingReports', fn (User $user): bool => $user->hasRole(
+            ['Super Admin', 'Admin', 'DAF', 'Comptable']
         ));
 
-        Gate::define('manageUsers', fn (User $user): bool => in_array(
-            $user->role?->designation,
-            ['Super Admin', 'Admin'],
-            true
+        Gate::define('manageUsers', fn (User $user): bool => $user->isSuperAdmin() || $user->isManagement());
+
+        Gate::define('manageServiceCards', fn (User $user): bool => $user->isSuperAdmin()
+            || $user->isManagement()
+            || $user->hasRole('Directeur Technique'));
+
+        Gate::define('manageAccountingConfiguration', fn (User $user): bool => $user->hasRole(
+            ['Super Admin', 'Admin', 'DAF']
         ));
 
-        Gate::define('manageAccountingConfiguration', fn (User $user): bool => in_array(
-            $user->role?->designation,
-            ['Super Admin', 'Admin', 'DAF'],
-            true
-        ));
+        Gate::define('validateAccountingEntries', fn (User $user): bool => $user->hasRole(['Super Admin', 'Comptable']));
 
-        Gate::define('validateAccountingEntries', fn (User $user): bool => in_array(
-            $user->role?->designation,
-            ['Super Admin', 'Comptable'],
-            true
-        ));
+        Gate::define('createEtatBesoin', fn (User $user): bool => $user->hasRole([
+            'Super Admin', 'DAF', 'Comptable', 'Chef de Service', 'Chef de Département', 'Directeur Technique',
+        ]));
+
+        Gate::define('manageEtatBesoin', fn (User $user): bool => $user->hasRole([
+            'Super Admin', 'DAF', 'Comptable',
+        ]));
+
+        Gate::define('deleteEtatBesoin', fn (User $user): bool => $user->hasRole('Super Admin'));
+        Gate::define('deleteFinancialDocument', fn (User $user): bool => $user->isSuperAdmin());
+        Gate::define('restoreFinancialDocument', fn (User $user): bool => $user->isSuperAdmin());
+        Gate::define('forceDeleteFinancialDocument', fn (User $user): bool => $user->isSuperAdmin());
+        Gate::define('viewFinancialTrash', fn (User $user): bool => $user->isSuperAdmin());
+        Gate::define('viewFinancialAudit', fn (User $user): bool => $user->isSuperAdmin());
+
+        Gate::define('viewEtatBesoinDetail', fn (User $user): bool => ! $user->hasRole([
+            'Chef de Service', 'Chef de Département', 'Directeur Technique',
+        ]));
+
+        Gate::define('manageEntreeCaisse', fn (User $user): bool => $user->hasRole([
+            'Super Admin', 'DAF', 'Comptable', 'Caissier', 'Caissière', 'Trésorier', 'Trésorière',
+        ]));
+
+        Gate::define('manageJournaux', fn (User $user): bool => $user->hasRole([
+            'Super Admin', 'DAF', 'Comptable', 'Caissier', 'Caissière', 'Trésorier', 'Trésorière',
+        ]));
+
+        Gate::define('viewJournalIndex', fn (User $user): bool => $user->hasRole([
+            'Super Admin', 'DAF', 'Comptable', 'Caissier', 'Caissière', 'Trésorier', 'Trésorière',
+            'Directeur Technique',
+        ]));
+
+        Gate::define('viewTreasurySituation', fn (User $user): bool => $user->hasRole([
+            'Super Admin', 'Admin', 'Gérant', 'Gerant', 'Directeur Général',
+            'DAF', 'Comptable', 'Trésorier', 'Trésorière',
+        ]));
 
         Paginator::useBootstrap();
 

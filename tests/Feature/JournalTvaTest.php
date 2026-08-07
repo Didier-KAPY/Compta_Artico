@@ -34,8 +34,14 @@ class JournalTvaTest extends TestCase
         $this->assertEquals(116.0, $lignes->sum('debit_cdf'));
         $this->assertEquals(116.0, $lignes->sum('credit_cdf'));
         $this->assertEquals(16.0, (float) $lignes->firstWhere('liste_des_comptes_id', $tva->id)->credit_cdf);
-        $this->assertEquals(0.0, (float) $journal->montant_tva);
-        $this->assertEquals(0.0, (float) $journal->taux_tva);
+        $this->assertEquals(100.0, (float) $journal->montant_ht);
+        $this->assertEquals(16.0, (float) $journal->montant_tva);
+        $this->assertEquals(16.0, (float) $journal->taux_tva);
+        $this->actingAs($user)->get(route('journaux.recu', $journal->id))
+            ->assertOk()
+            ->assertSee('TVA (16,00 %)')
+            ->assertSee('100,00')
+            ->assertSee('116,00');
     }
 
     public function test_depense_usd_avec_tva_est_convertie_en_cdf_et_reste_equilibree(): void
@@ -104,7 +110,7 @@ class JournalTvaTest extends TestCase
             'journal_type_id' => $journalType->id, 'liste_des_comptes_id' => $operation->id,
             'date' => '2026-07-27', 'type' => 'recette', 'monnaie' => 'CDF',
             'montant_ttc' => 100, 'appliquer_tva' => 0, 'taux_tva' => null,
-            'mode_paiement' => 'especes', 'nom_partenaire' => 'Client',
+            'mode_paiement' => 'espèces', 'nom_partenaire' => 'Client',
             'telephone_partenaire' => '000', 'adresse_partenaire' => 'Kinshasa',
             'description' => 'Opération de test',
         ], $surcharge);

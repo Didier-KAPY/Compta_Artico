@@ -1,7 +1,7 @@
 <li class="nav-item mb-1">
 
     @php
-        $isActive = request()->routeIs('journaux.*');
+        $isActive = request()->routeIs('journaux.*', 'ecritures.create');
     @endphp
 
 
@@ -21,6 +21,7 @@
     </div>
     <!-- SOUS MENU -->
     <ul class="submenu list-unstyled ps-3 mt-2 {{ $isActive ? 'show' : '' }}">
+        @can('manageJournaux')
         <!-- Liste journaux -->
         <li>
             <a href="{{ route('journaux.index') }}"
@@ -45,6 +46,12 @@
                 <i class="bi bi-phone me-2"></i>Journal Mobile Money
             </a>
         </li>
+        <li>
+            <a href="{{ route('ecritures.create') }}" class="nav-link {{ request()->routeIs('ecritures.create') ? 'active-menu' : '' }}">
+                <i class="bi bi-journal-check me-2"></i>Journal des opérations diverses
+            </a>
+        </li>
+        @endcan
         <!-- Relevé -->
         <li class="nav-item">
             <a class="nav-link"
@@ -56,6 +63,7 @@
 
         </li>
         <!-- Situation trésorerie -->
+        @can('viewTreasurySituation')
         <li>
             <a href="{{ route('journaux.tresorerie') }}"
                class="nav-link {{ request()->routeIs('journaux.tresorerie') ? 'active-menu' : '' }}">
@@ -63,5 +71,6 @@
                 Situation trésorerie
             </a>
         </li>
+        @endcan
     </ul>
 </li>

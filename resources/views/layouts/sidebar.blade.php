@@ -9,15 +9,7 @@
 
 
 {{-- ADMINISTRATION --}}
-@if(in_array($role, [
-
-    'super admin',
-    'admin',
-    'directeur général',
-    'gérant'
-
-
-]))
+@if($user->isSuperAdmin() || $user->isManagement())
 
     <li>
         <a href="{{ route('dashboard') }}"
@@ -33,6 +25,7 @@
     @include('layouts.partials.etat-besoins')
     @include('layouts.partials.sortie-caisses')
     @include('layouts.partials.entree-caisses')
+    @include('layouts.partials.brc')
     @include('layouts.partials.journaux')
     @include('layouts.partials.comptabilite')
 
@@ -43,15 +36,19 @@
 
 
 {{-- DIRECTION : Etat de besoin uniquement --}}
-@if(in_array($role, [
-
-    'chef de service',
-    'directeur technique',
-    'chef de département'
-
-]))
+@if($user->hasRole(['Chef de Service', 'Directeur Technique', 'Chef de Département']))
 
     @include('layouts.partials.etat-besoins')
+
+    @if($user->hasRole('Directeur Technique'))
+        <li>
+            <a href="{{ route('journaux.index') }}"
+               class="nav-link {{ request()->routeIs('journaux.index') ? 'active-menu' : '' }}">
+                <i class="bi bi-journal-bookmark me-2"></i>
+                Journaux
+            </a>
+        </li>
+    @endif
 
 @endif
 
@@ -76,20 +73,25 @@
 
 
 {{-- COMPTABILITE --}}
-@if(in_array($role, [
+@if($user->isAccounting())
 
-    'comptable',
-    'daf'
-
-]))
+    <li>
+        <a href="{{ route('dashboard') }}"
+           class="nav-link {{ request()->routeIs('dashboard') ? 'active-menu' : '' }}">
+            <i class="bi bi-speedometer2 me-2"></i>
+            Dashboard
+        </a>
+    </li>
 
     @include('layouts.partials.etat-besoins')
     @include('layouts.partials.sortie-caisses')
     @include('layouts.partials.entree-caisses')
+    @include('layouts.partials.brc')
     @include('layouts.partials.journaux')
     @include('layouts.partials.comptabilite')
 
 @endif
+
 
 
 </ul>

@@ -39,6 +39,50 @@ class JournalNatureFormTest extends TestCase
             ->assertSee('REF-BANQUE')->assertDontSee('REF-CAISSE');
     }
 
+    public function test_index_affiche_le_journal_le_plus_recent_en_premier(): void
+    {
+        [$user, $types] = $this->contexte();
+        $attributes = [
+            'user_id' => $user->id,
+            'journal_type_id' => $types['caisse']->id,
+            'liste_des_comptes_id' => $types['caisse']->liste_des_comptes_id,
+            'statut' => 'En attente',
+        ];
+
+        Journaux::create($attributes + ['reference' => 'REF-ANCIEN', 'date' => '2026-07-28']);
+        Journaux::create($attributes + ['reference' => 'REF-RECENT-1', 'date' => '2026-07-30']);
+        Journaux::create($attributes + ['reference' => 'REF-RECENT-2', 'date' => '2026-07-30']);
+
+        $this->actingAs($user)->get(route('journaux.index'))
+            ->assertOk()
+            ->assertSeeInOrder(['REF-RECENT-2', 'REF-RECENT-1', 'REF-ANCIEN']);
+    }
+
+    public function test_index_est_pagine_par_dix_journaux(): void
+    {
+        [$user, $types] = $this->contexte();
+
+        foreach (range(1, 12) as $numero) {
+            Journaux::create([
+                'user_id' => $user->id,
+                'journal_type_id' => $types['caisse']->id,
+                'liste_des_comptes_id' => $types['caisse']->liste_des_comptes_id,
+                'reference' => 'REF-PAGE-'.str_pad((string) $numero, 2, '0', STR_PAD_LEFT),
+                'date' => '2026-07-30',
+                'statut' => 'En attente',
+            ]);
+        }
+
+        $this->actingAs($user)->get(route('journaux.index'))
+            ->assertOk()
+            ->assertViewHas('journaux', fn ($journaux) => $journaux->perPage() === 10 && $journaux->lastPage() === 2)
+            ->assertSee('sur 12 journaux');
+
+        $this->actingAs($user)->get(route('journaux.index', ['page' => 2]))
+            ->assertOk()
+            ->assertSee('REF-PAGE-01');
+    }
+
     public function test_monnaie_selectionne_automatiquement_le_compte_du_journal(): void
     {
         [$user, $types] = $this->contexte();
@@ -62,7 +106,7 @@ class JournalNatureFormTest extends TestCase
 
     private function contexte(): array
     {
-        $role = Role::create(['designation' => 'Admin']);
+        $role = Role::create(['designation' => 'Super Admin']);
         $user = User::create(['nom' => 'Test', 'prenom' => 'Journaux', 'email' => 'journaux@test.local', 'password' => bcrypt('password'), 'role_id' => $role->id, 'password_default' => 0, 'statut' => 'Actif']);
         $definitions = [
             'caisse' => ['CAI', '571100', 'Caisse'],

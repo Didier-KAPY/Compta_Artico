@@ -28,6 +28,7 @@
             </a>
         </li>
 
+        @can('manageEntreeCaisse')
         <!-- CREATE -->
         <li>
             <a href="{{ route('entree-caisses.create') }}"
@@ -45,6 +46,7 @@
                 statistiques
             </a>
         </li>
+        @endcan
 
     </ul>
 

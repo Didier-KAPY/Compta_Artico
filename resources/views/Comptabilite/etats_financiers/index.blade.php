@@ -1,7 +1,7 @@
 @extends('layouts.app')
 @section('content')
 <div class="container-fluid">
-    <h2>États financiers SYSCOHADA</h2>
+    <h2>États financiers</h2>
     <p class="text-muted">Période du {{ \Carbon\Carbon::parse($dateDebut)->format('d/m/Y') }} au {{ \Carbon\Carbon::parse($dateFin)->format('d/m/Y') }} — Devise de présentation : Franc congolais (CDF)</p>
     <div class="card shadow-sm border-0 mb-4"><div class="card-body">
         <form method="GET" class="row g-3">

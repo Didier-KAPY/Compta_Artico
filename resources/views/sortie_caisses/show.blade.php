@@ -6,14 +6,7 @@
 
 $role = strtolower(auth()->user()->role->designation ?? '');
 
-$rolesGestion = [
-    'super admin',
-    'admin',
-    'directeur général',
-    'gérant'
-];
-
-$isGestion = in_array($role,$rolesGestion);
+$isGestion = auth()->user()->isSuperAdmin() || auth()->user()->isManagement();
 
 $isSuperAdmin = $role === 'super admin';
 
@@ -21,6 +14,7 @@ $isSuperAdmin = $role === 'super admin';
 
 
 <div class="container py-4">
+@if($sortie->clotureJournaliere)<div class="alert alert-primary d-flex justify-content-between align-items-center"><span><i class="bi bi-diagram-3 me-2"></i>Généré par la clôture <strong>{{ $sortie->clotureJournaliere->numero_cloture }}</strong></span><a class="btn btn-sm btn-primary" href="{{ route('parametres.clotures.show',$sortie->clotureJournaliere) }}">Voir la clôture</a></div>@endif
 
 
 {{-- ======================================================
@@ -55,6 +49,10 @@ Dossier financier / validation caisse
 
 <div class="d-flex gap-2">
 
+@can('deleteFinancialDocument')
+<button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#modalSuppressionDocument"><i class="bi bi-trash me-1"></i>Supprimer</button>
+@endcan
+
 
 <a href="{{ route('sortie-caisses.index') }}"
 class="btn btn-secondary btn-sm">
@@ -78,6 +76,9 @@ Imprimer
 
 
 </div>
+
+@include('partials.document-navigation')
+@include('partials.financial-delete-modal', ['documentType'=>'Bon de sortie','documentReference'=>$sortie->numero,'documentStatus'=>$sortie->statut,'deleteRoute'=>route('sortie-caisses.destroy',$sortie)])
 
 
 </div>
@@ -217,6 +218,10 @@ Informations générales
 
 
 <div class="card-body">
+
+@if($errors->any())
+<div class="alert alert-danger"><i class="bi bi-lock-fill me-2"></i>{{ $errors->first() }}</div>
+@endif
 
 
 
@@ -782,37 +787,21 @@ Ce bon a déjà été traité.
 
 
 
-<div class="d-flex justify-content-end">
+<div class="d-flex justify-content-end gap-2">
 
-
-
-<form method="POST"
-
-action="{{ route('sortie-caisses.attente',$sortie->id) }}">
-
-
+<form method="POST" action="{{ route('sortie-caisses.attente',$sortie->id) }}">
 @csrf
-
-
-
-<button type="submit"
-
-class="btn btn-secondary">
-
-
-<i class="bi bi-arrow-counterclockwise me-1"></i>
-
-
-Remettre en attente
-
-
+<button type="submit" class="btn btn-secondary">
+<i class="bi bi-arrow-counterclockwise me-1"></i>Remettre en attente
 </button>
-
-
-
 </form>
 
-
+<form method="POST" action="{{ route('sortie-caisses.rejeter',$sortie->id) }}">
+@csrf
+<button type="submit" class="btn btn-danger" onclick="return confirm('Rejeter ce bon de sortie ?')">
+<i class="bi bi-x-circle me-1"></i>Rejeter
+</button>
+</form>
 
 </div>
 
@@ -844,7 +833,7 @@ VALIDATION / REJET DIRECT
 
 
 
-@if($isGestion && $sortie->statut == 'En attente')
+@if($isGestion && $sortie->statut == 'En attente' && !$journalCaisseValide)
 
 
 

@@ -425,6 +425,8 @@
 
             </div>
 
+            {{ $journalTypes->withQueryString()->links() }}
+
 
 
         </div>

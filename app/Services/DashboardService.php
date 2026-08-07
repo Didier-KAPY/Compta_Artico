@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\BRC;
 use App\Models\EcritureComptable;
 use App\Models\EntreeCaisse;
 use App\Models\EtatBesoin;
@@ -11,7 +12,6 @@ use App\Models\ListeDesComptes;
 use App\Models\SortieCaisse;
 use App\Models\TauxDeChange;
 use App\Models\User;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class DashboardService
@@ -21,11 +21,7 @@ class DashboardService
         $role = mb_strtolower(trim((string) $user->role?->designation));
         $sections = $this->sectionsFor($role);
 
-        return Cache::remember(
-            'dashboard.v2.'.md5($role),
-            now()->addMinutes(5),
-            fn (): array => $this->buildData($sections)
-        ) + ['sections' => $sections];
+        return $this->buildData($sections) + ['sections' => $sections];
     }
 
     private function buildData(array $sections): array
@@ -35,14 +31,11 @@ class DashboardService
         if ($sections['statistics']) {
             $data['statistics'] = [
                 'users' => User::count(),
-                'journal_types' => JournalType::count(),
-                'entries' => EcritureComptable::count(),
+                'brc' => BRC::count(),
                 'cash_in' => EntreeCaisse::count(),
                 'cash_out' => SortieCaisse::count(),
                 'needs' => EtatBesoin::count(),
                 'accounts' => ListeDesComptes::count(),
-                'treasury_journals' => JournalType::where('est_tresorerie', true)->count(),
-                'general_journals' => JournalType::where('est_tresorerie', false)->count(),
             ];
         }
 
@@ -125,7 +118,7 @@ class DashboardService
                 'treasury' => array_map(fn ($month): float => (float) (($month?->in_cdf ?? 0) - ($month?->out_cdf ?? 0)), array_values($monthly->all())),
                 'operations' => collect(['recette', 'achat', 'depense', 'vente'])->map(fn ($type) => (float) ($operations[$type] ?? 0))->all(),
                 'payments' => [
-                    (int) ($payments['especes'] ?? 0),
+                    (int) ($payments['espèces'] ?? 0),
                     (int) ($payments['banque'] ?? 0),
                     (int) ($payments['mobile_money'] ?? 0),
                 ],
@@ -135,6 +128,8 @@ class DashboardService
 
         if ($sections['validations']) {
             $data['validations'] = [
+                'brc' => BRC::where('statut', 'En attente')->count(),
+                'cash_in' => EntreeCaisse::where('statut', 'En attente')->count(),
                 'needs' => EtatBesoin::where('statut', 'En attente')->count(),
                 'cash_out' => SortieCaisse::where('statut', 'En attente')->count(),
                 'entries' => EcritureComptable::where('statut', 'En attente')->count(),
@@ -144,7 +139,7 @@ class DashboardService
 
         if ($sections['operations']) {
             $data['latest_operations'] = Journaux::query()
-                ->with('user:id,nom,prenom')
+                ->with('validateur:id,nom,prenom')
                 ->latest('date')->latest('id')->limit(10)->get();
         }
 
@@ -157,21 +152,24 @@ class DashboardService
 
     private function sectionsFor(string $role): array
     {
-        $admin = in_array($role, ['super admin', 'admin'], true);
+        $admin = in_array($role, ['super admin', 'admin', 'directeur général', 'gérant', 'gerant'], true);
         $cashier = in_array($role, ['caissier', 'caissière', 'trésorier', 'trésorière'], true);
-        $accounting = in_array($role, ['daf', 'comptable'], true);
-        $department = in_array($role, ['chef de département', 'chef de service', 'gérant', 'gerant'], true);
-        $management = $role === 'directeur général' || $department;
+        $accounting = in_array($role, [
+            'daf', 'comptable', 'chargé des finances',
+            'chargé de finance', 'charge de finance', 'charger de finance',
+        ], true);
+        $department = in_array($role, ['chef de département', 'chef de service'], true);
+        $management = $admin || $department;
 
         return [
-            'statistics' => $admin || $role === 'directeur général' || $department || $role === 'daf',
+            'statistics' => $admin || $department || $accounting,
             'cash' => $admin || $cashier,
             'treasury_situation' => $management,
             'charts' => $admin || $cashier || $accounting,
             'validations' => $admin || $cashier || $accounting || $department,
             'operations' => $admin || $cashier || $accounting,
             'exchange' => $admin || $cashier || $accounting,
-            'shortcuts' => $role !== 'directeur général',
+            'shortcuts' => true,
             'needs_only' => $department,
         ];
     }

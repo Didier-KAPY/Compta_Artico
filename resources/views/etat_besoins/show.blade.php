@@ -4,6 +4,9 @@
 
 @php
     $role = strtolower(auth()->user()->role?->designation ?? '');
+    $estGestionnaire = auth()->user()->isSuperAdmin();
+    $validationSeulement = auth()->user()->isManagement();
+    $bonSortieValide = $etat->sortieCaisses->contains('statut', 'Validé');
 @endphp
 
 
@@ -20,6 +23,9 @@
         {{ session('error') }}
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
+    @endif
+    @if($errors->any())
+        <div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>{{ $errors->first() }}</div>
     @endif
 
     <!-- HEADER -->
@@ -39,15 +45,32 @@
         </div>
 
 
-        <a href="{{ route('etat-besoins.index') }}"
-           class="btn btn-secondary btn-sm">
+        <div class="d-flex align-items-center gap-2">
+            @can('deleteFinancialDocument')
+                <button type="button"
+                        class="btn btn-danger btn-sm"
+                        data-bs-toggle="modal"
+                        data-bs-target="#modalSuppressionDocument">
+                    <i class="bi bi-trash me-1"></i>
+                    Supprimer
+                </button>
+            @endcan
 
-            <i class="bi bi-arrow-left me-1"></i>
-            Retour
-
-        </a>
+            <a href="{{ route('etat-besoins.index') }}"
+               class="btn btn-secondary btn-sm">
+                <i class="bi bi-arrow-left me-1"></i>
+                Retour
+            </a>
+        </div>
 
     </div>
+
+    @include('partials.document-navigation')
+
+    @include('partials.financial-delete-modal', [
+        'documentType' => 'État de besoin', 'documentReference' => $etat->numero,
+        'documentStatus' => $etat->statut, 'deleteRoute' => route('etat-besoins.destroy', $etat),
+    ])
 
 
 
@@ -111,7 +134,7 @@
                     <strong>Statut</strong><br>
 
 
-                    @if($etat->statut == 'Validé')
+                    @if($etat->statut != 'En attente')
 
                         <span class="badge bg-success">
                             Validé
@@ -322,17 +345,15 @@
 <!-- TRAITEMENT -->
 
 @if(
-    $etat->statut == 'En attente'
+    !$bonSortieValide
+    &&
+    ($etat->statut == 'En attente'
     ||
     (
-        $etat->statut == 'Validé'
+        in_array($etat->statut, ['Validé', 'Rejeté'])
         &&
-        in_array($role,[
-            'super admin',
-            'admin',
-            'directeur général',
-            'gérant'
-        ])
+        $estGestionnaire
+    )
     )
 )
 
@@ -384,8 +405,8 @@
         <div class="text-end">
 
 
-            @if($etat->statut == 'En attente')
-
+            @can('manageEtatBesoin')
+            @if($etat->statut == 'En attente' || $estGestionnaire)
                 <a href="{{ route('etat-besoins.edit',$etat->id) }}"
                    class="btn btn-warning">
 
@@ -394,10 +415,8 @@
                     Modifier
 
                 </a>
-
             @endif
-
-
+            @endcan
 
             <button class="btn btn-primary"
                     data-bs-toggle="modal"
@@ -532,7 +551,7 @@
                         Annuler
                     </button>
 
-                    {{-- Bouton Rejeter toujours visible --}}
+                    @unless($validationSeulement)
                     <button type="submit"
                             name="action"
                             value="rejeter"
@@ -542,9 +561,11 @@
                         Rejeter
 
                     </button>
+                    @endunless
 
                     @if($etat->statut == 'Validé')
 
+                        @unless($validationSeulement)
                         <button type="submit"
                                 name="action"
                                 value="attente"
@@ -554,6 +575,7 @@
                             Remettre en attente
 
                         </button>
+                        @endunless
 
                     @else
 
@@ -617,7 +639,7 @@
 
         <h5 class="mt-3">
 
-            Cet état de besoin a déjà été traité
+            {{ $bonSortieValide ? 'Action verrouillée par le bon de sortie validé' : 'Cet état de besoin a déjà été traité' }}
 
         </h5>
 
@@ -626,7 +648,7 @@
 
         <p class="text-muted">
 
-            Statut actuel :
+            {{ $bonSortieValide ? 'Remettez d’abord le bon de sortie en attente. Statut actuel :' : 'Statut actuel :' }}
 
             <strong>
                 {{ $etat->statut }}

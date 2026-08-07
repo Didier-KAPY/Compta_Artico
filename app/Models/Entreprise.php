@@ -15,11 +15,13 @@ class Entreprise extends Model
     // Champs assignables en masse
     protected $fillable = [
         'nom_entreprise',
+        'slogan',
         'adresse',
         'forme_juridique',
         'numero_identification_fiscal',
         'telephone',
         'logo',
+        'cachet',
     ];
 
     /**

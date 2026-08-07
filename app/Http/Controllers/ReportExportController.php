@@ -167,14 +167,14 @@ class ReportExportController extends Controller
     {
         $this->autoriser($request,['Super Admin','Admin','Directeur Général','DAF','Comptable']); $data=app(EtatFinancierController::class)->bilan($request)->getData(); $rows=collect();
         foreach(['actif'=>'ACTIF','passif'=>'PASSIF'] as $sens=>$type) foreach($data['etats']['bilan'][$sens] as $s){$rows->push([$type,'',$s['label'],$this->montant($s['total_actuel']),$this->montant($s['total_precedent'])]);foreach($s['lignes'] as $l)$rows->push([$type,$l['code'],$l['label'],$this->montant($l['actuel']),$this->montant($l['precedent'])]);}
-        return $this->telecharger($format,'Bilan final SYSCOHADA','bilan-syscohada',['Type','Réf.','Libellé','Exercice N','Exercice N-1'],$rows,$request,'landscape');
+        return $this->telecharger($format,'Bilan final','bilan-final',['Type','Réf.','Libellé','Exercice N','Exercice N-1'],$rows,$request,'landscape');
     }
 
     public function compteResultat(Request $request,string $format)
     {
         $this->autoriser($request,['Super Admin','Admin','Directeur Général','DAF','Comptable']); $data=app(EtatFinancierController::class)->compteResultat($request)->getData(); $rows=collect();
         foreach(['produits_exploitation','charges_exploitation','produits_financiers','charges_financieres','produits_hao','charges_hao','impot_resultat'] as $key){$s=$data['etats']['compte_resultat'][$key];$rows->push(['',$s['label'],$this->montant($s['total_actuel']),$this->montant($s['total_precedent'])]);foreach($s['lignes'] as $l)$rows->push([$l['code'],$l['label'],$this->montant($l['actuel']),$this->montant($l['precedent'])]);}
-        $net=$data['etats']['compte_resultat']['resultat_net'];$rows->push(['','RÉSULTAT NET',$this->montant($net['actuel']),$this->montant($net['precedent'])]); return $this->telecharger($format,'Compte de résultat SYSCOHADA','compte-resultat-syscohada',['Réf.','Libellé','Exercice N','Exercice N-1'],$rows,$request,'landscape');
+        $net=$data['etats']['compte_resultat']['resultat_net'];$rows->push(['','RÉSULTAT NET',$this->montant($net['actuel']),$this->montant($net['precedent'])]); return $this->telecharger($format,'Compte de résultat','compte-resultat',['Réf.','Libellé','Exercice N','Exercice N-1'],$rows,$request,'landscape');
     }
 
     private function periode(Request $request): array

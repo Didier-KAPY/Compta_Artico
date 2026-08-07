@@ -78,7 +78,7 @@
                     <tr>
                         <th>Date</th>
                         @if($isSuperAdmin)
-                            <th>Utilisateur</th>
+                            <th>Validé par</th>
                         @endif
                         <th>Compte</th>
                         <th>Désignation</th>
@@ -104,7 +104,7 @@
                                 {{ $ecriture->date->format('d/m/Y') }}
                             </td>
                             @if($isSuperAdmin)
-                                <td>{{ trim(($ecriture->user?->prenom ?? '').' '.($ecriture->user?->nom ?? '')) ?: 'Système' }}</td>
+                                <td>{{ trim(($ecriture->validateur?->prenom ?? '').' '.($ecriture->validateur?->nom ?? '')) ?: 'Non validé' }}</td>
                             @endif
                             <td>
                                 {{ $ecriture->compte->compte ?? '-' }}
@@ -153,9 +153,18 @@
                                 <form
                                     action="{{ route('ecritures.valider', $ecriture->id) }}"
                                     method="POST"
-                                    class="d-inline">
+                                    enctype="multipart/form-data"
+                                    class="d-inline-flex align-items-center gap-1">
 
                                     @csrf
+
+                                    <input type="file"
+                                           name="piece_justificative"
+                                           class="form-control form-control-sm"
+                                           style="max-width:180px"
+                                           accept=".pdf,.jpg,.jpeg,.png"
+                                           @required(str_starts_with(mb_strtoupper(trim((string) $ecriture->piece)), 'BSC'))
+                                           title="Pièce justificative{{ str_starts_with(mb_strtoupper(trim((string) $ecriture->piece)), 'BSC') ? ' obligatoire' : ' facultative' }}">
 
                                     <button type="submit"
                                             class="btn btn-sm btn-success"
@@ -169,6 +178,15 @@
                                 @endif
                                 @endcan
 
+                                @if($ecriture->piece_justificative)
+                                <a href="{{ route('ecritures.piece', $ecriture->id) }}"
+                                   target="_blank"
+                                   class="btn btn-sm btn-info"
+                                   title="Visualiser la pièce justificative">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                @endif
+
                                 @can('update', $ecriture)
                                 {{-- Modifier --}}
                                 <a
@@ -181,28 +199,7 @@
                                 </a>
                                 @endcan
 
-                                @can('delete', $ecriture)
-                                {{-- Supprimer --}}
-                                <form
-                                    action="{{ route('ecritures.destroy', $ecriture->id) }}"
-                                    method="POST"
-                                    class="d-inline">
-
-                                    @csrf
-
-                                    @method('DELETE')
-
-                                    <button type="submit"
-                                            class="btn btn-sm btn-danger"
-                                            title="Supprimer"
-                                            onclick="return confirm('Supprimer cette écriture ?')">
-
-                                        <i class="bi bi-trash"></i>
-
-                                    </button>
-
-                                </form>
-                                @endcan
+                                <a href="{{ route('ecritures.show', $ecriture) }}" class="btn btn-sm btn-outline-primary" title="Voir"><i class="bi bi-eye"></i></a>
 
                                 @can('reouvrir', $ecriture)
                                 @if($ecriture->statut === 'Validé')

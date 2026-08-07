@@ -1,12 +1,17 @@
 @extends('layouts.app')
 
 @section('content')
-@php $isSuperAdmin = auth()->user()?->hasRole('Super Admin') ?? false; @endphp
+@php
+    $isSuperAdmin = auth()->user()?->hasRole('Super Admin') ?? false;
+    $canViewDetails = auth()->user()?->can('viewEtatBesoinDetail') ?? false;
+@endphp
 
 <div class="container py-4">
+    @if($canViewDetails)
     <div class="d-flex justify-content-end mb-3">
         @include('partials.period-export-buttons', ['rapport' => 'etat-besoins'])
     </div>
+    @endif
 
     <!-- HEADER -->
     <div class="d-flex justify-content-between align-items-center mb-3">
@@ -16,10 +21,12 @@
             États de Besoin
         </h4>
 
-        <a href="{{ route('etat-besoins.create') }}" class="btn btn-primary">
-            <i class="bi bi-plus-circle me-1"></i>
-            Nouveau
-        </a>
+        @can('createEtatBesoin')
+            <a href="{{ route('etat-besoins.create') }}" class="btn btn-primary">
+                <i class="bi bi-plus-circle me-1"></i>
+                Nouveau
+            </a>
+        @endcan
 
     </div>
 
@@ -118,7 +125,7 @@
                         <th>N°</th>
 
                         @if($isSuperAdmin)
-                            <th>Utilisateur</th>
+                            <th>Validé par</th>
                         @endif
                         <th>Date</th>
                         <th>Département</th>
@@ -127,7 +134,7 @@
                         <th>Monnaie</th>
                         <th class="text-end">Montant</th>
                         <th>Statut</th>
-                        <th class="text-center">Actions</th>
+                        @if($canViewDetails)<th class="text-center">Actions</th>@endif
 
                     </tr>
                     </thead>
@@ -142,8 +149,7 @@
                                 @if($isSuperAdmin)
 
                             <td>
-                                {{ $etat->user?->prenom ?? '' }}
-                                {{ $etat->user?->nom ?? '' }}
+                                {{ trim(($etat->validateur?->prenom ?? '').' '.($etat->validateur?->nom ?? '')) ?: 'Non validé' }}
                             </td>
 
                             @endif
@@ -183,6 +189,7 @@
                                 @endif
                             </td>
 
+                            @if($canViewDetails)
                             <td class="text-center">
 
                                 <div class="dropdown">
@@ -203,6 +210,18 @@
                                             </a>
                                         </li>
 
+                                        <li>
+                                            <a class="dropdown-item" href="{{ route('etat-besoins.imprimer', $etat->id) }}" target="_blank">
+                                                <i class="bi bi-printer me-2"></i>Imprimer
+                                            </a>
+                                        </li>
+
+                                        <li>
+                                            <a class="dropdown-item" href="{{ route('etat-besoins.pdf', $etat->id) }}">
+                                                <i class="bi bi-file-earmark-pdf me-2"></i>Télécharger PDF
+                                            </a>
+                                        </li>
+
                                         <li><hr class="dropdown-divider"></li>
 
                                     </ul>
@@ -210,13 +229,14 @@
                                 </div>
 
                             </td>
+                            @endif
 
                         </tr>
 
                         @empty
 
                         <tr>
-                            <td colspan="{{ $isSuperAdmin ? 10 : 9 }}"
+                            <td colspan="{{ $isSuperAdmin ? 10 : ($canViewDetails ? 9 : 8) }}"
                             class="text-center text-muted py-4">
                                 Aucun état de besoin trouvé
                             </td>

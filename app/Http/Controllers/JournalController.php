@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\DeleteFinancialDocumentRequest;
+use App\Services\FinancialDocumentService;
+
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
@@ -20,6 +23,7 @@ use App\Models\TauxDeChange;
 use App\Services\WorkflowComptableService;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 
 class JournalController extends Controller
@@ -28,7 +32,12 @@ class JournalController extends Controller
 
     public function index(Request $request)
 {
-    $journaux = Journaux::with(['journalType.compte', 'user'])
+    $journaux = Journaux::with(['journalType.compte', 'user', 'validateur'])
+
+        ->when($request->filled('brc_id'), fn ($query) => $query->whereHas('brcs', fn ($brc) => $brc->whereKey($request->integer('brc_id'))))
+        ->when($request->filled('entree_caisse_id'), fn ($query) => $query->where('entree_caisse_id', $request->integer('entree_caisse_id')))
+        ->when($request->filled('sortie_caisse_id'), fn ($query) => $query->where('sortie_caisse_id', $request->integer('sortie_caisse_id')))
+        ->when($request->filled('etat_besoin_id'), fn ($query) => $query->whereHas('sortieCaisse', fn ($sortie) => $sortie->where('etat_besoin_id', $request->integer('etat_besoin_id'))))
 
         ->when($request->filled('journal_type_id'), function ($query) use ($request) {
             $query->where('journal_type_id', $request->journal_type_id);
@@ -58,9 +67,10 @@ class JournalController extends Controller
 
         })
 
-        ->orderBy('date','desc')
+        ->orderByDesc('date')
+        ->orderByDesc('id')
 
-        ->paginate(20)
+        ->paginate(10)
         ->withQueryString();
 
     $journalTypesTresorerie = JournalType::with('compte')
@@ -70,7 +80,6 @@ class JournalController extends Controller
         ->orderBy('monnaie')
         ->orderBy('code')
         ->get();
-
 
     return view(
         'journaux.index',
@@ -214,6 +223,16 @@ public function tresorerie(Request $request)
             $lignes->sum('entree_usd') - $lignes->sum('sortie_usd');
     }
 
+    $page = LengthAwarePaginator::resolveCurrentPage('page');
+    $tresorerie = new LengthAwarePaginator(
+        $tresorerie->forPage($page, 15)->values(),
+        $tresorerie->count(),
+        15,
+        $page,
+        ['path' => $request->url(), 'pageName' => 'page']
+    );
+    $tresorerie->appends($request->query());
+
     return view(
         'journaux.tresorerie',
         compact('tresorerie', 'totaux', 'dateDebut', 'dateFin')
@@ -275,6 +294,16 @@ public function releve(Request $request)
         'solde_cdf' => $soldeCdf,
         'solde_usd' => $soldeUsd,
     ];
+
+    $page = LengthAwarePaginator::resolveCurrentPage('page');
+    $journaux = new LengthAwarePaginator(
+        $journaux->forPage($page, 20)->values(),
+        $journaux->count(),
+        20,
+        $page,
+        ['path' => $request->url(), 'pageName' => 'page']
+    );
+    $journaux->appends($request->query());
 
     return view(
         'journaux.releve',
@@ -381,9 +410,11 @@ private function formulaireCreation(?string $natureJournal, string $view)
 
         'monnaie'=>'required|in:CDF,USD',
 
-        'mode_paiement'=>'required|in:especes,banque,mobile_money',
+        'mode_paiement'=>'required|in:espèces,banque,mobile_money',
 
         'piece_justificatif'=>'nullable|file',
+
+        'regroupement_quotidien'=>'nullable|boolean',
 
     ]);
 
@@ -605,8 +636,9 @@ private function formulaireCreation(?string $natureJournal, string $view)
         };
         $bonEntree = null;
         $bonSortie = null;
+        $traitementCloture = $request->boolean('regroupement_quotidien');
 
-        if (in_array($typeOperation, $typesEntree, true)) {
+        if (! $traitementCloture && in_array($typeOperation, $typesEntree, true)) {
             $bonEntree = EntreeCaisse::create([
                 'user_id' => Auth::id(),
                 'numero' => 'BEC-'.now()->format('ymdHis').'-'.strtoupper(str()->random(6)),
@@ -629,7 +661,7 @@ private function formulaireCreation(?string $natureJournal, string $view)
             ]);
         }
 
-        if (in_array($typeOperation, $typesSortie, true)) {
+        if (! $traitementCloture && in_array($typeOperation, $typesSortie, true)) {
             $bonSortie = SortieCaisse::create([
                 'user_id' => Auth::id(),
                 'numero' => 'BSC-'.now()->format('ymdHis').'-'.strtoupper(str()->random(6)),
@@ -687,7 +719,7 @@ private function formulaireCreation(?string $natureJournal, string $view)
 
             // IMPORTANT : uniquement trésorerie
 
-            'liste_des_comptes_id'=>$compteTresorerie->id,
+            'liste_des_comptes_id'=>$traitementCloture ? $compteOperation->id : $compteTresorerie->id,
 
             'entree_caisse_id'=>$bonEntree?->id,
 
@@ -720,9 +752,9 @@ private function formulaireCreation(?string $natureJournal, string $view)
 
             'monnaie'=>$request->monnaie,
             'mode_paiement'=>$request->mode_paiement,
-            'montant_ht'=>$montantPrincipal,
-            'taux_tva'=>0,
-            'montant_tva'=>0,
+            'montant_ht'=>$montantHT,
+            'taux_tva'=>$tauxTVA,
+            'montant_tva'=>$montantTVA,
             'montant_ttc'=>$montantPrincipal,
 
             'entrees_cdf'=>$entreesCdf,
@@ -733,13 +765,15 @@ private function formulaireCreation(?string $natureJournal, string $view)
             'sorties_usd'=>$sortiesUsd,
 
 
-            'statut'=>'Validé',
+            'statut'=>$traitementCloture ? 'En attente' : 'Validé',
+
+            'statut_regroupement'=>$traitementCloture ? 'non_regroupe' : 'regroupe',
 
 
-            'date_validation'=>now(),
+            'date_validation'=>$traitementCloture ? null : now(),
 
 
-            'valide_par'=>Auth::id(),
+            'valide_par'=>$traitementCloture ? null : Auth::id(),
 
 
         ]);
@@ -756,7 +790,7 @@ private function formulaireCreation(?string $natureJournal, string $view)
         */
 
 
-        if(in_array($request->type, ['recette', 'vente'], true)){
+        if (! $traitementCloture && in_array($request->type, ['recette', 'vente'], true)){
 
 
             // DEBIT CAISSE/BANQUE
@@ -841,7 +875,7 @@ private function formulaireCreation(?string $natureJournal, string $view)
 
 
 
-        if(in_array($request->type, ['depense', 'achat'], true)){
+        if (! $traitementCloture && in_array($request->type, ['depense', 'achat'], true)){
 
 
             // DEBIT CHARGE
@@ -953,7 +987,7 @@ private function formulaireCreation(?string $natureJournal, string $view)
         {
 
 
-            "espece" =>
+            "espèces" =>
                 ListeDesComptes::where(
                     'compte',
                     'like',
@@ -983,18 +1017,30 @@ private function formulaireCreation(?string $natureJournal, string $view)
 
 
     }
-public function show($id)
+public function show($id, FinancialDocumentService $documents)
 {
     // Journal avec ses relations
     $journal = Journaux::with([
         'user',
         'journalType.compte',
-        'entreeCaisse'
+        'entreeCaisse', 'sortieCaisse.etatBesoin', 'ecritures', 'brcs', 'clotureJournaliere'
     ])->findOrFail($id);
+    $suppressionDependencies = $documents->dependencies($journal);
+    $documentLinks = collect([
+        $journal->clotureJournaliere ? ['label' => 'Voir la clôture '.$journal->clotureJournaliere->numero_cloture, 'url' => route('parametres.clotures.show', $journal->clotureJournaliere), 'icon' => 'calendar2-check'] : null,
+        $journal->sortieCaisse?->etatBesoin ? ['label' => "Voir l’État de besoin", 'url' => route('etat-besoins.show', $journal->sortieCaisse->etatBesoin), 'icon' => 'file-earmark-text'] : null,
+        $journal->entreeCaisse ? ['label' => "Voir le Bon d’entrée", 'url' => route('entree-caisses.show', $journal->entreeCaisse), 'icon' => 'box-arrow-in-down'] : null,
+        $journal->brcs->isNotEmpty() ? ['label' => $journal->brcs->count() > 1 ? 'Voir les BRC' : 'Voir le BRC', 'url' => $journal->brcs->count() === 1 ? route('brc.show', $journal->brcs->first()) : route('brc.index', ['journal_id' => $journal->id]), 'icon' => 'file-earmark-check'] : null,
+    ])->filter()->values();
 
 
     // Dernier taux de change
     $tauxActuel = TauxDeChange::latest()->first();
+
+    $piecePath = $journal->piece_justificatif;
+    $pieceExiste = filled($piecePath) && Storage::disk('public')->exists($piecePath);
+    $pieceUrl = $pieceExiste ? route('journaux.piece', $journal) : null;
+    $pieceMime = $pieceExiste ? (Storage::disk('public')->mimeType($piecePath) ?: '') : '';
 
 
     // Lignes de l'entrée de caisse
@@ -1047,6 +1093,8 @@ public function show($id)
         ->where('est_tresorerie', true)
         ->get();
 
+    $comptes = ListeDesComptes::orderBy('designation')->get();
+
 
     return view('Journaux.show', compact(
         'journal',
@@ -1057,8 +1105,33 @@ public function show($id)
         'totalSortieCDF',
         'totalEntreeUSD',
         'totalSortieUSD',
-        'journalTypes'
+        'journalTypes',
+        'comptes'
+        ,'piecePath'
+        ,'pieceExiste'
+        ,'pieceUrl'
+        ,'pieceMime'
+        ,'suppressionDependencies'
+        ,'documentLinks'
     ));
+}
+
+public function pieceJustificative(Request $request, Journaux $journal)
+{
+    Gate::authorize('manageJournaux');
+
+    $path = $journal->piece_justificatif;
+    abort_unless(filled($path) && Storage::disk('public')->exists($path), 404, 'Pièce justificative introuvable.');
+
+    $nom = basename($path);
+    if ($request->boolean('download')) {
+        return Storage::disk('public')->download($path, $nom);
+    }
+
+    return response()->file(Storage::disk('public')->path($path), [
+        'Content-Type' => Storage::disk('public')->mimeType($path) ?: 'application/octet-stream',
+        'Content-Disposition' => 'inline; filename="'.$nom.'"',
+    ]);
 }
 
 public function edit($id)
@@ -1096,39 +1169,30 @@ public function update(Request $request, $id)
         ->with('success', 'Journal modifié avec succès.');
 }
 
-public function destroy($id)
+public function destroy(DeleteFinancialDocumentRequest $request, $id, FinancialDocumentService $documents)
 {
-    DB::transaction(function () use ($id) {
-        $journal = Journaux::lockForUpdate()->findOrFail($id);
-        Gate::authorize('delete', $journal);
+    $journal = Journaux::findOrFail($id);
+    $documents->delete($journal, $request->validated('motif'), $request->validated('strategie'), $request);
 
-        if ($journal->ecritures()->exists()) {
-            throw ValidationException::withMessages([
-                'dependance' => 'Suppression impossible : des écritures comptables sont liées à ce Journal.',
-            ]);
-        }
-
-        $piece = $journal->piece_justificatif;
-        $journal->delete();
-
-        if ($piece) {
-            Storage::disk('public')->delete($piece);
-        }
-    });
-
-    return redirect()->route('journaux.index')->with('success', 'Journal supprimé avec succès.');
+    return redirect()->route('journaux.index')->with('success', 'Journal placé dans la corbeille.');
 }
 public function rejeter(Request $request, $id)
 {
     $journal = Journaux::findOrFail($id);
+    Gate::authorize('rejeter', $journal);
 
-    $journal->update([
+    $donnees = [
         'statut' => 'Rejeté',
-        'journal_type_id' => $request->journal_type_id,
-        'mode_paiement' => $request->mode_paiement,
         'date_validation' => Carbon::now(),
         'valide_par' => Auth::id(),
-    ]);
+    ];
+    if ($request->filled('journal_type_id')) {
+        $donnees['journal_type_id'] = $request->journal_type_id;
+    }
+    if ($request->filled('mode_paiement')) {
+        $donnees['mode_paiement'] = $request->mode_paiement;
+    }
+    $journal->update($donnees);
 
     return redirect()
         ->route('journaux.show', $journal->id)
@@ -1138,11 +1202,16 @@ public function valider(Request $request, $id, WorkflowComptableService $workflo
 {
     $validated = $request->validate([
         'journal_type_id' => ['required', 'integer', 'exists:journal_types,id'],
+        'liste_des_comptes_id' => ['required', 'integer', 'exists:liste_des_comptes,id'],
     ]);
 
     $journal = Journaux::findOrFail($id);
     Gate::authorize('valider', $journal);
-    $workflow->validerJournal($journal, (int) $validated['journal_type_id']);
+    $workflow->validerJournal(
+        $journal,
+        (int) $validated['journal_type_id'],
+        (int) $validated['liste_des_comptes_id']
+    );
 
     return redirect()
         ->back()
