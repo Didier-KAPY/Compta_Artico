@@ -1,0 +1,10 @@
+@extends('layouts.app')
+@section('title', 'Sauvegardes')
+@section('content')
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between mb-4"><div><span class="text-primary small fw-bold text-uppercase">Sécurité des données</span><h2>Sauvegardes MySQL</h2></div><a href="{{ route('parametres.parametre') }}" class="btn btn-outline-secondary">Retour</a></div>
+    @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
+    <div class="card border-0 shadow-sm mb-4"><div class="card-body d-flex justify-content-between align-items-center"><div><h5>Nouvelle sauvegarde</h5><small class="text-muted">Copie transactionnelle complète de la base.</small></div><form method="POST" action="{{ route('parametres.sauvegardes.store') }}">@csrf<button class="btn btn-primary" data-loading-text="Sauvegarde..."><i class="bi bi-database-add me-1"></i>Créer</button></form></div></div>
+    <div class="card border-0 shadow-sm"><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Fichier</th><th>Taille</th><th>Actions</th></tr></thead><tbody>@forelse($fichiers as $f)<tr><td>{{ basename($f) }}</td><td>{{ number_format(Storage::disk('local')->size($f)/1024,1,',',' ') }} Ko</td><td class="d-flex gap-2"><a class="btn btn-sm btn-outline-primary" href="{{ route('parametres.sauvegardes.download',basename($f)) }}" data-no-loading>Télécharger</a><form method="POST" action="{{ route('parametres.sauvegardes.restore') }}" data-confirm="Cette restauration remplacera les données actuelles. Continuer ?">@csrf<input type="hidden" name="fichier" value="{{ basename($f) }}"><input type="hidden" name="confirmation" value="1"><input type="password" name="password" class="form-control form-control-sm d-inline-block" style="width:170px" placeholder="Votre mot de passe" required><button class="btn btn-sm btn-danger">Restaurer</button></form></td></tr>@empty<tr><td colspan="3" class="text-center text-muted py-4">Aucune sauvegarde.</td></tr>@endforelse</tbody></table></div></div>
+</div>
+@endsection

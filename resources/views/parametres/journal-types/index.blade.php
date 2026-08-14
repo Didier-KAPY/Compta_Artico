@@ -364,7 +364,7 @@
 
                                     <button type="submit"
                                             class="btn btn-danger btn-sm"
-                                            onclick="return confirm('Supprimer ce journal ?')">
+                                            data-confirm="Supprimer ce journal ?">
 
 
                                         <i class="bi bi-trash"></i>

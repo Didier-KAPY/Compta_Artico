@@ -362,7 +362,7 @@
                     @method('PATCH')
                     <button type="submit" class="btn btn-warning"
                             @disabled($journalValide)
-                            onclick="return confirm('Voulez-vous remettre ce bon d’entrée en attente ?')">
+                            data-confirm="Voulez-vous remettre ce bon d’entrée en attente ?">
                         <i class="bi bi-arrow-counterclockwise me-1"></i>
                         Remettre en attente
                     </button>

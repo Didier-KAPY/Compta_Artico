@@ -62,4 +62,5 @@ class SortieCaisse extends Model
     {
         return $this->belongsTo(ClotureJournaliere::class);
     }
+    public function realisationBudgetaire(){ return $this->hasOne(RealisationBudgetaire::class); }
 }

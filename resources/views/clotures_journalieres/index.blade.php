@@ -3,7 +3,7 @@
 @section('content')
 <div class="container-fluid py-4">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
-        <div><span class="text-primary text-uppercase small fw-bold">Contrôle comptable</span><h2 class="mb-0">Dashboard des clôtures journalières</h2></div>
+        <div><span class="text-primary text-uppercase small fw-bold">Contrôle comptable</span><h2 class="mb-0">Tableau de bord des clôtures journalières</h2></div>
         <a href="{{ route('parametres.parametre') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Paramètres</a>
     </div>
     @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif

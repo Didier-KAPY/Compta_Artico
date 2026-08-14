@@ -1,0 +1,1 @@
+<form method="POST" action="{{ route('parametres.rh.destroy',[$type,$id]) }}" data-confirm="Supprimer cet enregistrement ?">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger" title="Supprimer"><i class="bi bi-trash"></i></button></form>

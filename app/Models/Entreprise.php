@@ -14,6 +14,7 @@ class Entreprise extends Model
 
     // Champs assignables en masse
     protected $fillable = [
+        'user_id',
         'nom_entreprise',
         'slogan',
         'adresse',
@@ -22,6 +23,7 @@ class Entreprise extends Model
         'telephone',
         'logo',
         'cachet',
+        'monnaie_budgetaire',
     ];
 
     /**

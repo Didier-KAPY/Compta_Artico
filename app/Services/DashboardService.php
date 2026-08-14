@@ -11,6 +11,7 @@ use App\Models\JournalType;
 use App\Models\ListeDesComptes;
 use App\Models\SortieCaisse;
 use App\Models\TauxDeChange;
+use App\Models\ClotureJournaliere;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
@@ -134,6 +135,12 @@ class DashboardService
                 'cash_out' => SortieCaisse::where('statut', 'En attente')->count(),
                 'entries' => EcritureComptable::where('statut', 'En attente')->count(),
                 'journals' => Journaux::where('statut', 'En attente')->count(),
+            ];
+            $data['accounting_alerts'] = [
+                'journaux_sans_piece' => Journaux::whereNull('piece_justificatif')->count(),
+                'journaux_non_regroupes' => Journaux::where('statut_regroupement', 'non_regroupe')->count(),
+                'jours_ouverts' => Journaux::where('statut_regroupement', 'non_regroupe')->distinct('date')->count('date'),
+                'derniere_cloture' => ClotureJournaliere::latest('date_comptable')->value('date_comptable'),
             ];
         }
 

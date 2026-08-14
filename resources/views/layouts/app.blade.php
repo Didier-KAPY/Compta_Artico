@@ -399,13 +399,58 @@
     </style>
 
     <link href="{{ asset('assets/css/app-theme.css') }}" rel="stylesheet">
+    <style>
+        .app-action-loading {
+            pointer-events: none !important;
+            cursor: wait !important;
+            opacity: .78;
+        }
+        .app-action-loading .spinner-border { vertical-align: -.125em; }
+        #appLoadingOverlay {
+            position: fixed;
+            inset: 0;
+            z-index: 19980;
+            display: none;
+            cursor: wait;
+            background: transparent;
+        }
+        #appLoadingOverlay.show { display: block; }
+        #appConfirmationModal { z-index: 20000; }
+        body:has(#appConfirmationModal.show) .modal-backdrop { z-index: 19990; }
+    </style>
 </head>
 
 <body>
 @include('layouts.topbar')
-@include('layouts.sidebar')
+@hasSection('module-sidebar')
+    @yield('module-sidebar')
+@else
+    @include('layouts.sidebar')
+@endif
 <div class="content">
+    @if(session('warning'))
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            {{ session('warning') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fermer"></button>
+        </div>
+    @endif
     @yield('content')
+</div>
+<div id="appLoadingOverlay" aria-hidden="true"></div>
+<div class="modal fade" id="appConfirmationModal" tabindex="-1" aria-labelledby="appConfirmationTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title" id="appConfirmationTitle"><i class="bi bi-question-circle text-warning me-2"></i>Confirmation</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+            </div>
+            <div class="modal-body"><p id="appConfirmationMessage" class="mb-0"></p></div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-primary" id="appConfirmationAccept"><i class="bi bi-check-lg me-1"></i>Confirmer</button>
+            </div>
+        </div>
+    </div>
 </div>
 <!-- ================= SCRIPTS ================= -->
 <!-- JQuery -->
@@ -417,6 +462,81 @@
 <!-- Scripts propres aux pages -->
 @stack('scripts')
 @yield('scripts')
+<script>
+    (function ($) {
+        const accountAndJournalSelector = [
+            'select[name="liste_des_comptes_id"]',
+            'select[name$="[liste_des_comptes_id]"]',
+            'select[name="compte_id"]',
+            'select[name$="[compte_id]"]',
+            'select[name="journal_id"]',
+            'select[name$="[journal_id]"]',
+            'select[name="journal_type_id"]',
+            'select[name$="[journal_type_id]"]',
+            'select.compte-search',
+            'select.journal-search'
+        ].join(',');
+
+        function searchablePlaceholder(select) {
+            const name = select.name || '';
+            const isJournal = name.includes('journal') || select.classList.contains('journal-search');
+
+            return isJournal ? 'Rechercher un journal' : 'Rechercher un compte';
+        }
+
+        function enableAccountAndJournalSearch(root) {
+            const candidates = [];
+
+            if (root instanceof Element && root.matches(accountAndJournalSelector)) {
+                candidates.push(root);
+            }
+
+            if (root.querySelectorAll) {
+                candidates.push(...root.querySelectorAll(accountAndJournalSelector));
+            }
+
+            candidates.forEach(function (select) {
+                const field = $(select);
+
+                if (field.hasClass('select2-hidden-accessible') || select.dataset.noSearch !== undefined) {
+                    return;
+                }
+
+                const modal = field.closest('.modal');
+                const options = {
+                    width: '100%',
+                    placeholder: searchablePlaceholder(select),
+                    allowClear: !select.required,
+                    minimumResultsForSearch: 0,
+                    language: {
+                        noResults: function () { return 'Aucun résultat trouvé'; },
+                        searching: function () { return 'Recherche…'; }
+                    }
+                };
+
+                if (modal.length) {
+                    options.dropdownParent = modal;
+                }
+
+                field.select2(options);
+            });
+        }
+
+        $(function () {
+            enableAccountAndJournalSearch(document);
+
+            new MutationObserver(function (mutations) {
+                mutations.forEach(function (mutation) {
+                    mutation.addedNodes.forEach(function (node) {
+                        if (node.nodeType === Node.ELEMENT_NODE) {
+                            enableAccountAndJournalSearch(node);
+                        }
+                    });
+                });
+            }).observe(document.body, { childList: true, subtree: true });
+        });
+    })(jQuery);
+</script>
 <script>
     document.addEventListener('DOMContentLoaded', function () {
     const sidebar = document.getElementById('sidebar');
@@ -464,6 +584,135 @@
             }
         });
     });
+    });
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const modalElement = document.getElementById('appConfirmationModal');
+        const messageElement = document.getElementById('appConfirmationMessage');
+        const acceptButton = document.getElementById('appConfirmationAccept');
+        const cancelButton = modalElement.querySelector('[data-bs-dismiss="modal"]:not(.btn-close)');
+        const overlay = document.getElementById('appLoadingOverlay');
+        const confirmationModal = bootstrap.Modal.getOrCreateInstance(modalElement);
+        let pendingAction = null;
+
+        const askConfirmation = (message, action) => {
+            pendingAction = action;
+            cancelButton.classList.remove('d-none');
+            acceptButton.innerHTML = '<i class="bi bi-check-lg me-1"></i>Confirmer';
+            messageElement.textContent = message;
+            confirmationModal.show();
+        };
+        window.appNotify = (message) => {
+            pendingAction = null;
+            cancelButton.classList.add('d-none');
+            acceptButton.textContent = 'OK';
+            messageElement.textContent = message;
+            confirmationModal.show();
+        };
+
+        acceptButton.addEventListener('click', function () {
+            const action = pendingAction;
+            pendingAction = null;
+            if (action) {
+                modalElement.addEventListener('hidden.bs.modal', action, { once: true });
+            }
+            confirmationModal.hide();
+        });
+        modalElement.addEventListener('hidden.bs.modal', () => { pendingAction = null; });
+
+        document.addEventListener('click', function (event) {
+            const trigger = event.target.closest('[data-confirm]');
+            if (!trigger || trigger.closest('form')) return;
+            if (trigger.dataset.confirmedClick === 'true') {
+                delete trigger.dataset.confirmedClick;
+                return;
+            }
+            event.preventDefault();
+            askConfirmation(trigger.dataset.confirm, () => {
+                if (trigger.matches('a[href]')) window.location.assign(trigger.href);
+                else {
+                    trigger.dataset.confirmedClick = 'true';
+                    trigger.click();
+                }
+            });
+        });
+
+        document.addEventListener('click', function (event) {
+            if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+            const link = event.target.closest('a.btn[href]');
+            if (!link || link.target === '_blank' || link.hasAttribute('download') || link.dataset.bsToggle || link.dataset.noLoading !== undefined) return;
+            const href = link.getAttribute('href');
+            if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
+
+            link.dataset.originalHtml = link.innerHTML;
+            link.classList.add('app-action-loading');
+            link.setAttribute('aria-disabled', 'true');
+            link.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Chargement...';
+
+            const isDownload = /\/(pdf|excel)(\/|\?|$)|\/exports\//i.test(href);
+            if (isDownload) {
+                window.setTimeout(() => {
+                    if (!link.dataset.originalHtml) return;
+                    link.innerHTML = link.dataset.originalHtml;
+                    delete link.dataset.originalHtml;
+                    link.classList.remove('app-action-loading');
+                    link.removeAttribute('aria-disabled');
+                }, 2500);
+            } else {
+                overlay.classList.add('show');
+            }
+        });
+
+        document.addEventListener('submit', function (event) {
+            const form = event.target;
+            if (!(form instanceof HTMLFormElement) || form.dataset.noLoading !== undefined) return;
+            const submitter = event.submitter || form.querySelector('button[type="submit"], input[type="submit"], button:not([type])');
+            const confirmation = submitter?.dataset.confirm || form.dataset.confirm;
+
+            if (confirmation && form.dataset.confirmed !== 'true') {
+                event.preventDefault();
+                askConfirmation(confirmation, () => {
+                    form.dataset.confirmed = 'true';
+                    form.requestSubmit(submitter || undefined);
+                });
+                return;
+            }
+
+            delete form.dataset.confirmed;
+            if (form.dataset.submitting === 'true') {
+                event.preventDefault();
+                return;
+            }
+
+            form.dataset.submitting = 'true';
+            const loadingText = submitter?.dataset.loadingText || form.dataset.loadingText || 'Traitement...';
+            if (submitter) {
+                submitter.dataset.originalHtml = submitter.innerHTML;
+                submitter.classList.add('app-action-loading');
+                submitter.setAttribute('aria-disabled', 'true');
+                submitter.innerHTML = `<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>${loadingText}`;
+            }
+            overlay.classList.add('show');
+        }, true);
+
+        window.addEventListener('pageshow', function () {
+            overlay.classList.remove('show');
+            document.querySelectorAll('form[data-submitting="true"]').forEach(form => {
+                delete form.dataset.submitting;
+                form.querySelectorAll('[data-original-html]').forEach(button => {
+                    button.innerHTML = button.dataset.originalHtml;
+                    delete button.dataset.originalHtml;
+                    button.classList.remove('app-action-loading');
+                    button.removeAttribute('aria-disabled');
+                });
+            });
+            document.querySelectorAll('a[data-original-html]').forEach(link => {
+                link.innerHTML = link.dataset.originalHtml;
+                delete link.dataset.originalHtml;
+                link.classList.remove('app-action-loading');
+                link.removeAttribute('aria-disabled');
+            });
+        });
     });
 </script>
 </body>

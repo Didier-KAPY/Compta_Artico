@@ -8,6 +8,7 @@ use App\Models\ParametrageComptable;
 use App\Models\Entreprise;
 use App\Models\ListeDesComptes;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use App\Models\JournalType;
 use App\Models\Departement;
 use App\Models\Fonction;
@@ -16,6 +17,7 @@ use App\Models\Role;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class ParametreController extends Controller
 {
@@ -233,8 +235,9 @@ public function editCompte($id)
 
 public function updateCompte(Request $request, $id)
 {
+    $request->merge(['compte' => trim((string) $request->input('compte'))]);
     $request->validate([
-        'compte'=>'required',
+        'compte' => ['required', 'string', 'max:20', Rule::unique('liste_des_comptes', 'compte')->ignore($id)],
         'designation'=>'required',
         'nature'=>'required',
 
@@ -272,10 +275,11 @@ public function createCompte()
 }
 public function storeCompte(Request $request)
 {
-    $request->validate([
-        'compte' => 'required',
-        'designation' => 'required',
-        'nature' => 'required',
+    $request->merge(['compte' => trim((string) $request->input('compte'))]);
+    $validated = $request->validate([
+        'compte' => ['required', 'string', 'max:20', 'unique:liste_des_comptes,compte'],
+        'designation' => 'required|string|max:255',
+        'nature' => 'required|in:Actif,Passif,Charge,Produit',
     ]);
 
     $observation = null;
@@ -288,13 +292,30 @@ public function storeCompte(Request $request)
         $observation = 'Gestion';
     }
 
-    ListeDesComptes::create([
-        'user_id' => Auth::id(),
-        'compte' => $request->compte,
-        'designation' => $request->designation,
-        'nature' => $request->nature,
-        'observation' => $observation,
-    ]);
+    DB::transaction(function () use ($validated, $observation): void {
+        $compte = ListeDesComptes::create([
+            'user_id' => Auth::id(),
+            'compte' => $validated['compte'],
+            'designation' => $validated['designation'],
+            'nature' => $validated['nature'],
+            'observation' => $observation,
+        ]);
+
+        JournalType::create([
+            'user_id' => Auth::id(),
+            'code' => Str::of($compte->designation)
+                ->ascii()
+                ->upper()
+                ->replaceMatches('/[^A-Z0-9]/', '')
+                ->substr(0, 3)
+                ->toString(),
+            'libelle' => $compte->designation,
+            'liste_des_comptes_id' => $compte->id,
+            'nature' => 'od',
+            'monnaie' => 'CDF',
+            'est_tresorerie' => false,
+        ]);
+    });
 
     return redirect()
         ->route('parametres.comptes')

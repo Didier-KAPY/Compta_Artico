@@ -27,7 +27,7 @@
                     @forelse($departements as $departement)<tr>
                         <td><input form="departement-{{ $departement->id }}" name="designation" value="{{ $departement->designation }}" class="form-control form-control-sm" required></td>
                         <td>{{ $departement->users_count }}</td><td>{{ $departement->etat_besoins_count }}</td>
-                        <td class="text-nowrap"><form id="departement-{{ $departement->id }}" method="POST" action="{{ route('parametres.departements.update', $departement) }}" class="d-inline">@csrf @method('PUT')<button class="btn btn-sm btn-primary"><i class="bi bi-check"></i></button></form> <form method="POST" action="{{ route('parametres.departements.destroy', $departement) }}" class="d-inline">@csrf @method('DELETE')<button class="btn btn-sm btn-danger" onclick="return confirm('Supprimer ce département ?')"><i class="bi bi-trash"></i></button></form></td>
+                        <td class="text-nowrap"><form id="departement-{{ $departement->id }}" method="POST" action="{{ route('parametres.departements.update', $departement) }}" class="d-inline">@csrf @method('PUT')<button class="btn btn-sm btn-primary"><i class="bi bi-check"></i></button></form> <form method="POST" action="{{ route('parametres.departements.destroy', $departement) }}" class="d-inline">@csrf @method('DELETE')<button class="btn btn-sm btn-danger" data-confirm="Supprimer ce département ?"><i class="bi bi-trash"></i></button></form></td>
                     </tr>@empty<tr><td colspan="4" class="text-center text-muted">Aucun département.</td></tr>@endforelse
                 </tbody></table></div>{{ $departements->withQueryString()->links() }}
             </div></div>
@@ -41,7 +41,7 @@
                 <div class="table-responsive"><table class="table table-hover mb-0"><thead><tr><th>Désignation</th><th>Utilisateurs</th><th></th></tr></thead><tbody>
                     @forelse($fonctions as $fonction)<tr>
                         <td><input form="fonction-{{ $fonction->id }}" name="designation" value="{{ $fonction->designation }}" class="form-control form-control-sm" required></td><td>{{ $fonction->users_count }}</td>
-                        <td class="text-nowrap"><form id="fonction-{{ $fonction->id }}" method="POST" action="{{ route('parametres.fonctions.update', $fonction) }}" class="d-inline">@csrf @method('PUT')<button class="btn btn-sm btn-primary"><i class="bi bi-check"></i></button></form> <form method="POST" action="{{ route('parametres.fonctions.destroy', $fonction) }}" class="d-inline">@csrf @method('DELETE')<button class="btn btn-sm btn-danger" onclick="return confirm('Supprimer cette fonction ?')"><i class="bi bi-trash"></i></button></form></td>
+                        <td class="text-nowrap"><form id="fonction-{{ $fonction->id }}" method="POST" action="{{ route('parametres.fonctions.update', $fonction) }}" class="d-inline">@csrf @method('PUT')<button class="btn btn-sm btn-primary"><i class="bi bi-check"></i></button></form> <form method="POST" action="{{ route('parametres.fonctions.destroy', $fonction) }}" class="d-inline">@csrf @method('DELETE')<button class="btn btn-sm btn-danger" data-confirm="Supprimer cette fonction ?"><i class="bi bi-trash"></i></button></form></td>
                     </tr>@empty<tr><td colspan="3" class="text-center text-muted">Aucune fonction.</td></tr>@endforelse
                 </tbody></table></div>{{ $fonctions->withQueryString()->links() }}
             </div></div>

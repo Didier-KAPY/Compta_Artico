@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Historique des périodes comptables</title>
+<style>
+@page{size:A4 landscape;margin:14mm}*{box-sizing:border-box}body{margin:0;color:#172033;font-family:DejaVu Sans,Arial,sans-serif;font-size:11px}.actions{max-width:1100px;margin:0 auto 18px;display:flex;justify-content:flex-end;gap:8px}.actions a,.actions button{padding:9px 14px;border:0;border-radius:5px;color:#fff;background:#1d4ed8;text-decoration:none;cursor:pointer}.actions a:first-child{background:#475569}.actions a:nth-child(2){background:#b91c1c}.sheet{max-width:1100px;margin:auto;padding:14mm;background:#fff}.pdf-mode .sheet{max-width:none;padding:0}.header{text-align:center;border-bottom:3px solid #176b4d;padding-bottom:10px;margin-bottom:16px}.logo{display:block;max-width:70px;max-height:70px;margin:0 auto 6px}.company{font-size:19px;font-weight:bold;color:#176b4d;text-transform:uppercase}.contact{color:#64748b}.title{text-align:center;text-transform:uppercase;font-size:18px;margin:16px 0 3px}.subtitle{text-align:center;color:#64748b;margin-bottom:16px}.lines{width:100%;border-collapse:collapse}.lines th{padding:8px;color:#fff;background:#18324f;border:1px solid #18324f;text-align:left}.lines td{padding:7px;border:1px solid #cbd5e1;vertical-align:top}.lines tbody tr:nth-child(even) td{background:#f8fafc}.center{text-align:center}.status{font-weight:bold}.closed{color:#b91c1c}.open{color:#a16207}.footer{margin-top:18px;padding-top:8px;border-top:1px solid #d8dee8;color:#64748b;text-align:center;font-size:9px}@media screen{body{padding:16px;background:#e5e7eb}.sheet{box-shadow:0 4px 20px rgba(15,23,42,.18)}}@media print{body{background:#fff}.actions{display:none}.sheet{max-width:none;margin:0;padding:0;box-shadow:none}}
+</style>
+</head>
+<body class="{{ $pdfMode ? 'pdf-mode' : '' }}">
+@unless($pdfMode)<div class="actions"><a href="{{ route('parametres.periodes.index') }}">Retour</a><a href="{{ route('parametres.periodes.pdf') }}">Télécharger PDF</a><button type="button" onclick="window.print()">Imprimer</button></div>@endunless
+<div class="sheet">
+<div class="header">@if($logoData)<img class="logo" src="{{ $logoData }}" alt="Logo">@endif<div class="company">{{ $entreprise?->nom_entreprise ?? 'Entreprise' }}</div><div class="contact">{{ $entreprise?->adresse }} @if($entreprise?->telephone) — Tél. {{ $entreprise->telephone }} @endif</div></div>
+<div class="title">Historique des périodes comptables</div><div class="subtitle">Clôtures mensuelles et annuelles</div>
+<table class="lines"><thead><tr><th>Type</th><th>Début</th><th>Fin</th><th>Statut</th><th>Fermée par</th><th>Fermée le</th><th>Réouverte par / motif</th></tr></thead><tbody>
+@forelse($periodes as $periode)<tr><td>{{ ucfirst($periode->type) }}</td><td>{{ $periode->date_debut->format('d/m/Y') }}</td><td>{{ $periode->date_fin->format('d/m/Y') }}</td><td class="status {{ $periode->statut === 'fermee' ? 'closed' : 'open' }}">{{ ucfirst($periode->statut) }}</td><td>{{ trim(($periode->fermeur?->prenom ?? '').' '.($periode->fermeur?->nom ?? '')) ?: '—' }}</td><td>{{ $periode->fermee_le?->format('d/m/Y H:i') ?? '—' }}</td><td>@if($periode->reouverte_le){{ trim(($periode->reouvreur?->prenom ?? '').' '.($periode->reouvreur?->nom ?? '')) ?: '—' }}<br>{{ $periode->reouverte_le->format('d/m/Y H:i') }}@if($periode->motif_reouverture)<br><em>{{ $periode->motif_reouverture }}</em>@endif @else — @endif</td></tr>@empty<tr><td colspan="7" class="center">Aucune période comptable enregistrée.</td></tr>@endforelse
+</tbody></table><div class="footer">Document généré le {{ now()->format('d/m/Y à H:i') }} — {{ $periodes->count() }} période(s)</div>
+</div></body></html>

@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use App\Services\WorkflowComptableService;
+use App\Services\BudgetService;
+use App\Models\LigneBudgetaire;
 use Carbon\Carbon;
 use Barryvdh\DomPDF\Facade\Pdf;
 use App\Models\Entreprise;
@@ -112,7 +114,11 @@ class EtatBesoinController extends Controller
     public function create()
     {
         $departements = Departement::orderBy('designation')->get();
-        return view('etat_besoins.create', compact('departements'));
+        $lignesBudgetaires = LigneBudgetaire::with(['budget','compte','rubriqueBudgetaire'])
+            ->where('statut','Active')->whereHas('budget', fn($q)=>$q->where('statut','Validé'))
+            ->whereHas('rubriqueBudgetaire', fn($q)=>$q->where('nature','DEPENSE')->where('actif',true))
+            ->orderBy('rubrique')->get();
+        return view('etat_besoins.create', compact('departements','lignesBudgetaires'));
     }
 
     /**
@@ -123,10 +129,34 @@ class EtatBesoinController extends Controller
     $request->validate([
         'date' => 'required|date',
         'departement_id' => 'required|exists:departements,id',
+        'ligne_budgetaire_id' => 'nullable|exists:lignes_budgetaires,id',
         'demandeur' => 'required|string|max:255',
         'motif' => 'required|string',
         'monnaie' => 'required|in:CDF,USD',
     ]);
+    $budgetsDepensesActifs = LigneBudgetaire::where('statut', 'Active')
+        ->whereHas('budget', fn ($q) => $q->where('statut', 'Validé'))
+        ->whereHas('rubriqueBudgetaire', fn ($q) => $q->where('nature', 'DEPENSE')->where('actif', true));
+
+    if (config('features.budget') && ! $request->filled('ligne_budgetaire_id') && $budgetsDepensesActifs->exists()) {
+        throw ValidationException::withMessages(['ligne_budgetaire_id' => 'Sélectionnez le compte à mouvementer.']);
+    }
+
+    if (config('features.budget') && $request->filled('ligne_budgetaire_id')) {
+        $ligneBudgetaire = LigneBudgetaire::with(['rubriqueBudgetaire', 'budget'])->findOrFail($request->ligne_budgetaire_id);
+        $dateBesoin = Carbon::parse($request->date);
+        if ($ligneBudgetaire->statut !== 'Active'
+            || $ligneBudgetaire->budget?->statut !== 'Validé'
+            || $ligneBudgetaire->rubriqueBudgetaire?->nature !== 'DEPENSE'
+            || ! $ligneBudgetaire->rubriqueBudgetaire?->actif
+            || $ligneBudgetaire->liste_des_comptes_id !== $ligneBudgetaire->rubriqueBudgetaire?->liste_des_comptes_id) {
+            throw ValidationException::withMessages(['ligne_budgetaire_id' => 'Le compte sélectionné ne correspond pas à une ligne budgétaire de dépense active.']);
+        }
+        if (($ligneBudgetaire->date_debut && $dateBesoin->lt($ligneBudgetaire->date_debut))
+            || ($ligneBudgetaire->date_fin && $dateBesoin->gt($ligneBudgetaire->date_fin))) {
+            throw ValidationException::withMessages(['ligne_budgetaire_id' => "La date de l’État de besoin est en dehors de la période budgétaire du compte sélectionné."]);
+        }
+    }
 
     DB::beginTransaction();
 
@@ -138,6 +168,7 @@ class EtatBesoinController extends Controller
         $etat = EtatBesoin::create([
             'user_id' => auth()->id(),
             'departement_id' => $departement->id,
+            'ligne_budgetaire_id' => $request->ligne_budgetaire_id,
             'numero' => $numbers->next('EB', $request->date),
             'date' => $request->date,
             'service' => $departement->designation,
@@ -234,7 +265,21 @@ class EtatBesoinController extends Controller
         $this->verifierBonSortieNonValide($etat);
 
         $departements = Departement::orderBy('designation')->get();
-        return view('etat_besoins.edit', compact('etat', 'departements'));
+        $lignesBudgetaires = LigneBudgetaire::with(['budget', 'compte', 'rubriqueBudgetaire'])
+            ->where(function ($query) use ($etat) {
+                $query->where(function ($active) {
+                    $active->where('statut', 'Active')
+                        ->whereHas('budget', fn ($budget) => $budget->where('statut', 'Validé'))
+                        ->whereHas('rubriqueBudgetaire', fn ($rubrique) => $rubrique->where('nature', 'DEPENSE')->where('actif', true));
+                });
+                if ($etat->ligne_budgetaire_id) {
+                    $query->orWhere('id', $etat->ligne_budgetaire_id);
+                }
+            })
+            ->orderBy('rubrique')
+            ->get();
+
+        return view('etat_besoins.edit', compact('etat', 'departements', 'lignesBudgetaires'));
     }
 
     public function update(Request $request, string $id)
@@ -242,6 +287,14 @@ class EtatBesoinController extends Controller
         $request->validate([
             'departement_id' => 'required|exists:departements,id',
             'demandeur' => 'required|string|max:255',
+            'monnaie' => 'required|in:CDF,USD',
+            'ligne_budgetaire_id' => 'nullable|exists:lignes_budgetaires,id',
+            'designation' => 'required|array|min:1',
+            'designation.*' => 'required|string|max:255',
+            'quantite' => 'required|array|min:1',
+            'quantite.*' => 'required|integer|min:1',
+            'prix_unitaire' => 'required|array|min:1',
+            'prix_unitaire.*' => 'required|numeric|min:0.01',
         ]);
 
         $etat = $this->etatAccessible($id);
@@ -249,14 +302,59 @@ class EtatBesoinController extends Controller
         $this->verifierBonSortieNonValide($etat);
         $departement = Departement::findOrFail($request->departement_id);
 
-        $etat->update([
-            'departement_id' => $departement->id,
-            'service' => $departement->designation,
-            'demandeur' => $request->demandeur,
-        ]);
+        $montantEstime = collect($request->designation)->keys()->sum(
+            fn ($index) => (int) $request->quantite[$index] * (float) $request->prix_unitaire[$index]
+        );
+
+        $budgetChange = config('features.budget') && (round($montantEstime, 2) !== round((float) $etat->montant_estime, 2)
+            || (int) $request->ligne_budgetaire_id !== (int) $etat->ligne_budgetaire_id
+            || $request->monnaie !== $etat->monnaie);
+        if ($budgetChange && $etat->engagementBudgetaire()->exists()) {
+            throw ValidationException::withMessages([
+                'montant_estime' => 'Le montant ou la rubrique ne peut plus être modifié car cet état possède déjà un engagement budgétaire.',
+            ]);
+        }
+
+        if (config('features.budget') && $request->filled('ligne_budgetaire_id') && (int) $request->ligne_budgetaire_id !== (int) $etat->ligne_budgetaire_id) {
+            $ligne = LigneBudgetaire::with(['budget', 'rubriqueBudgetaire'])->findOrFail($request->ligne_budgetaire_id);
+            if ($ligne->statut !== 'Active'
+                || $ligne->budget?->statut !== 'Validé'
+                || $ligne->rubriqueBudgetaire?->nature !== 'DEPENSE'
+                || ! $ligne->rubriqueBudgetaire?->actif) {
+                throw ValidationException::withMessages(['ligne_budgetaire_id' => 'La rubrique sélectionnée doit être une rubrique de dépense active.']);
+            }
+            if (($ligne->date_debut && $etat->date->lt($ligne->date_debut))
+                || ($ligne->date_fin && $etat->date->gt($ligne->date_fin))) {
+                throw ValidationException::withMessages(['ligne_budgetaire_id' => "La date de l’État de besoin est en dehors de la période de cette rubrique."]);
+            }
+        }
+
+        DB::transaction(function () use ($etat, $departement, $request, $montantEstime) {
+            $etat->update([
+                'departement_id' => $departement->id,
+                'service' => $departement->designation,
+                'demandeur' => $request->demandeur,
+                'monnaie' => $request->monnaie,
+                'montant_estime' => $montantEstime,
+                'ligne_budgetaire_id' => $request->ligne_budgetaire_id,
+            ]);
+
+            $etat->lignes()->delete();
+            foreach ($request->designation as $index => $designation) {
+                $quantite = (int) $request->quantite[$index];
+                $prixUnitaire = (float) $request->prix_unitaire[$index];
+                $etat->lignes()->create([
+                    'designation' => $designation,
+                    'quantite' => $quantite,
+                    'prix_unitaire' => $prixUnitaire,
+                    'montant' => $quantite * $prixUnitaire,
+                ]);
+            }
+        });
 
         $etat->sortieCaisses()->update([
             'beneficiaire' => $etat->demandeur,
+            'monnaie' => $etat->monnaie,
         ]);
 
         return redirect()
@@ -267,9 +365,10 @@ class EtatBesoinController extends Controller
     /**
      * DELETE
      */
-    public function destroy(DeleteFinancialDocumentRequest $request, $id, FinancialDocumentService $documents)
+    public function destroy(DeleteFinancialDocumentRequest $request, $id, FinancialDocumentService $documents, BudgetService $budgets)
     {
         $etat = $this->etatAccessible($id);
+        $budgets->libererEtat($etat, 'Désengagement avant suppression logique de l’État de besoin.');
         $documents->delete($etat, $request->validated('motif'), $request->validated('strategie'), $request);
 
         return redirect()
@@ -277,7 +376,7 @@ class EtatBesoinController extends Controller
             ->with('success', 'État de besoin placé dans la corbeille avec sa traçabilité complète.');
     }
 
-public function valider(Request $request, $id, FinancialDocumentService $documents, DocumentNumberService $numbers)
+public function valider(Request $request, $id, FinancialDocumentService $documents, DocumentNumberService $numbers, BudgetService $budgets)
 {
     $etatAutorisation = $this->etatAccessible($id);
     Gate::authorize('valider', $etatAutorisation);
@@ -305,6 +404,7 @@ public function valider(Request $request, $id, FinancialDocumentService $documen
         */
         if ($request->action == 'attente') {
             $this->verifierBonSortieNonValide($etat);
+            $budgets->libererEtat($etat, 'Désengagement lors de la remise en attente de l’État de besoin.');
 
             $etat->update([
                 'observation' => $request->observation,
@@ -328,6 +428,8 @@ public function valider(Request $request, $id, FinancialDocumentService $documen
         |--------------------------------------------------------------------------
         */
         elseif ($request->action == 'valider') {
+
+            $budgets->engagerEtat($etat);
 
             $etat->update([
                 'observation' => $request->observation,
@@ -369,6 +471,7 @@ public function valider(Request $request, $id, FinancialDocumentService $documen
         */
         else {
             $this->verifierBonSortieNonValide($etat);
+            $budgets->libererEtat($etat, 'Désengagement lors du rejet de l’État de besoin.');
 
             $etat->update([
                 'observation' => $request->observation,
@@ -400,10 +503,11 @@ public function valider(Request $request, $id, FinancialDocumentService $documen
     }
 }
 
-public function reouvrir(Request $request, $id, WorkflowComptableService $workflow, FinancialDocumentService $documents)
+public function reouvrir(Request $request, $id, WorkflowComptableService $workflow, FinancialDocumentService $documents, BudgetService $budgets)
 {
     $etat = $this->etatAccessible($id);
     Gate::authorize('reouvrir', $etat);
+    $budgets->libererEtat($etat, 'Désengagement lors de la réouverture de l’État de besoin.');
     $workflow->reouvrirEtatBesoin($etat);
     $etat->sortieCaisses()->where('statut', '!=', 'Validé')->get()->each(
         fn (SortieCaisse $sortie) => $documents->delete(

@@ -12,6 +12,42 @@
         <form method="POST" action="{{ $carteService ? route('parametres.cartes-service.update', $carteService) : route('parametres.cartes-service.store') }}">
             @csrf @if($carteService) @method('PUT') @endif
             <div class="row g-4">
+                <div class="col-12">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="border rounded-3 p-3 h-100 bg-light">
+                                <div class="small fw-semibold text-muted mb-2">Logo de l’entreprise</div>
+                                @if($entreprise?->logo)
+                                    <img src="{{ asset('storage/'.$entreprise->logo) }}" alt="Logo de l’entreprise" style="width:110px;height:80px;object-fit:contain">
+                                @else
+                                    <div class="text-warning small"><i class="bi bi-exclamation-triangle me-1"></i>Aucun logo configuré.</div>
+                                @endif
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="border rounded-3 p-3 h-100 bg-light">
+                                <div class="small fw-semibold text-muted mb-2">Signature du Gérant</div>
+                                @if($gerant?->signature)
+                                    <img src="{{ asset('storage/'.$gerant->signature) }}" alt="Signature du Gérant" style="width:180px;height:80px;object-fit:contain">
+                                    <div class="small text-muted mt-2">{{ trim($gerant->prenom.' '.$gerant->nom) }}</div>
+                                @else
+                                    <div class="text-warning small"><i class="bi bi-exclamation-triangle me-1"></i>Aucune signature de Gérant configurée.</div>
+                                @endif
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="border rounded-3 p-3 h-100 bg-light">
+                                <div class="small fw-semibold text-muted mb-2">Cachet de l’entreprise</div>
+                                @if($entreprise?->cachet)
+                                    <img src="{{ asset('storage/'.$entreprise->cachet) }}" alt="Cachet de l’entreprise" class="bg-white border rounded p-2" style="width:140px;height:80px;object-fit:contain">
+                                @else
+                                    <div class="text-warning small"><i class="bi bi-exclamation-triangle me-1"></i>Aucun cachet configuré.</div>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-text mt-2">Ces éléments sont repris automatiquement sur la carte de service.</div>
+                </div>
                 <div class="col-12"><label class="form-label fw-semibold">Agent *</label><select name="user_id" class="form-select @error('user_id') is-invalid @enderror" required><option value="">Choisir l’agent</option>@foreach($agents as $agent)<option value="{{ $agent->id }}" @selected(old('user_id', $carteService?->user_id)==$agent->id)>{{ $agent->nom }} {{ $agent->prenom }} — {{ $agent->departement?->designation ?? 'Sans département' }} / {{ $agent->fonction?->designation ?? 'Sans fonction' }}</option>@endforeach</select>@error('user_id')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
                 <div class="col-md-6"><label class="form-label fw-semibold">Postnom</label><input name="postnom" value="{{ old('postnom', $carteService?->postnom) }}" class="form-control @error('postnom') is-invalid @enderror">@error('postnom')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
                 <div class="col-md-6"><label class="form-label fw-semibold">Sexe</label><select name="sexe" class="form-select @error('sexe') is-invalid @enderror"><option value="">Choisir</option><option @selected(old('sexe', $carteService?->sexe)==='Masculin')>Masculin</option><option @selected(old('sexe', $carteService?->sexe)==='Féminin')>Féminin</option></select>@error('sexe')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>

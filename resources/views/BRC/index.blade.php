@@ -33,7 +33,7 @@
                                 <a class="btn btn-outline-danger btn-sm" href="{{ route('brc.pdf', $brc) }}" title="Télécharger le bon en PDF"><i class="bi bi-file-earmark-pdf"></i></a>
                                 <a class="btn btn-outline-success btn-sm" href="{{ route('brc.excel', $brc) }}" title="Télécharger le bon en Excel"><i class="bi bi-file-earmark-excel"></i></a>
                                 @if($brc->statut === 'En attente' && auth()->user()->hasRole(['Super Admin', 'Comptable']))
-                                    <form method="POST" action="{{ route('brc.valider', $brc) }}" onsubmit="return confirm('Valider ce BRC et générer ses écritures ?')">
+                                    <form method="POST" action="{{ route('brc.valider', $brc) }}" data-confirm="Valider ce BRC et générer ses écritures ?">
                                         @csrf
                                         <button class="btn btn-success btn-sm"><i class="bi bi-check-circle me-1"></i>Valider</button>
                                     </form>

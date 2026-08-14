@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use App\Services\WorkflowComptableService;
+use App\Services\BudgetService;
 use App\Models\Journaux;
 use Carbon\Carbon;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -244,7 +245,7 @@ public function telechargerPdf($id)
             ->with('success', 'Bon de sortie placé dans la corbeille.');
     }
 
-public function valider(Request $request, $id, FinancialDocumentService $documents, DocumentNumberService $numbers)
+public function valider(Request $request, $id, FinancialDocumentService $documents, DocumentNumberService $numbers, BudgetService $budgets)
 {
     
 
@@ -275,6 +276,10 @@ public function valider(Request $request, $id, FinancialDocumentService $documen
         */
 
         if($sortie->statut === 'Validé') {
+
+            if (config('features.budget') && $sortie->realisationBudgetaire()->exists()) {
+                throw ValidationException::withMessages(['budget' => 'Ce Bon possède déjà une réalisation budgétaire. Une contrepassation budgétaire est requise avant sa réouverture.']);
+            }
 
 
             $journal = Journaux::where(
@@ -353,6 +358,8 @@ public function valider(Request $request, $id, FinancialDocumentService $documen
             'valide_par'=>auth()->id(),
 
         ]);
+
+        $budgets->realiserSortie($sortie);
 
         if ($sortie->origine === 'cloture') {
             DB::commit();
@@ -462,6 +469,9 @@ public function rejeter(Request $request, $id, FinancialDocumentService $documen
     try {
         DB::transaction(function () use ($id, $request, $documents) {
             $sortie = SortieCaisse::lockForUpdate()->findOrFail($id);
+            if (config('features.budget') && $sortie->realisationBudgetaire()->exists()) {
+                throw ValidationException::withMessages(['budget' => 'Ce Bon possède une réalisation budgétaire. Une contrepassation est requise avant son rejet.']);
+            }
             $journauxQuery = $this->journauxDuBon($sortie);
             $journaux = (clone $journauxQuery)->lockForUpdate()->get();
 
@@ -489,6 +499,9 @@ public function attente(Request $request, $id, FinancialDocumentService $documen
     try {
         DB::transaction(function () use ($id, $request, $documents) {
             $sortie = SortieCaisse::lockForUpdate()->findOrFail($id);
+            if (config('features.budget') && $sortie->realisationBudgetaire()->exists()) {
+                throw ValidationException::withMessages(['budget' => 'Ce Bon possède une réalisation budgétaire. Une contrepassation est requise avant sa remise en attente.']);
+            }
             $journauxQuery = $this->journauxDuBon($sortie);
             $journaux = (clone $journauxQuery)->lockForUpdate()->get();
 

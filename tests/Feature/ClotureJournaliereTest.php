@@ -43,6 +43,9 @@ class ClotureJournaliereTest extends TestCase
         $this->assertSame('cloture', EntreeCaisse::first()->origine);
         $this->assertSame('cloture', SortieCaisse::first()->origine);
         $this->assertSame('cloture', BRC::first()->origine);
+        $this->assertSame('Validé', EntreeCaisse::first()->statut);
+        $this->assertSame('Validé', SortieCaisse::first()->statut);
+        $this->assertSame('Validé', BRC::first()->statut);
 
         $this->actingAs($user)->get(route('parametres.clotures.show', $cloture))
             ->assertOk()->assertSee(EntreeCaisse::first()->numero)->assertSee(SortieCaisse::first()->numero)->assertSee(BRC::first()->reference);
@@ -75,6 +78,58 @@ class ClotureJournaliereTest extends TestCase
     {
         [$user] = $this->contexte('Comptable');
         $this->actingAs($user)->get(route('parametres.clotures.index'))->assertForbidden();
+    }
+
+    public function test_super_admin_peut_reouvrir_une_journee_pour_regularisation(): void
+    {
+        [$user, $types, $compte] = $this->contexte();
+        $journal = $this->journal($user, $types['caisse'], $compte, 'REGUL-1', 'recette', 'CDF', 100);
+
+        $this->actingAs($user)->post(route('parametres.clotures.store'), ['date' => '2026-08-05'])->assertRedirect();
+        $cloture = \App\Models\ClotureJournaliere::firstOrFail();
+        $journal->update(['statut' => 'Validé']);
+
+        $this->actingAs($user)->post(route('parametres.clotures.reouvrir', $cloture), [
+            'motif' => 'Régularisation d’une opération omise.',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $cloture->refresh();
+        $this->assertSame('reouverte', $cloture->statut);
+        $this->assertSame('Régularisation d’une opération omise.', $cloture->motif_reouverture);
+    }
+
+    public function test_suppression_definitive_detache_un_journal_de_sa_cloture_et_conserve_la_trace(): void
+    {
+        [$user, $types, $compte] = $this->contexte();
+        $journal = $this->journal($user, $types['caisse'], $compte, 'CLOT-FORCE', 'recette', 'CDF', 100);
+        $cloture = ClotureJournaliere::create([
+            'numero_cloture' => 'CL-TEST-FORCE',
+            'date_comptable' => '2026-08-05',
+            'statut' => 'cloturee',
+        ]);
+        $cloture->rattachements()->create([
+            'journal_id' => $journal->id,
+            'categorie_document' => 'RECETTE',
+            'type_tresorerie' => 'caisse',
+            'regroupe_le' => now(),
+        ]);
+        $journal->forceFill(['motif_suppression'=>'Correction définitive contrôlée.','supprime_par'=>$user->id])->save();
+        $journal->delete();
+
+        $this->actingAs($user)->delete(route('corbeille.force-delete', ['journaux', $journal->id]), [
+            'motif' => 'Suppression définitive du journal rattaché.',
+            'confirmation_comptable' => '1',
+            'phrase_confirmation' => 'SUPPRIMER DÉFINITIVEMENT',
+        ])->assertRedirect(route('corbeille.index'))->assertSessionHasNoErrors();
+
+        $this->assertDatabaseMissing('journaux', ['id'=>$journal->id]);
+        $this->assertDatabaseMissing('cloture_journaliere_journaux', ['journal_id'=>$journal->id]);
+        $this->assertDatabaseHas('audit_logs', [
+            'model_type'=>Journaux::class,
+            'model_id'=>$journal->id,
+            'action'=>'suppression_definitive',
+        ]);
+        $this->assertDatabaseHas('clotures_journalieres', ['id'=>$cloture->id]);
     }
 
     private function contexte(string $roleName = 'Super Admin'): array

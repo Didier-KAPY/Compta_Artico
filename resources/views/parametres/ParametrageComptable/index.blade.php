@@ -299,7 +299,7 @@ action="{{route('parametres.comptables.destroy',$param->id)}}">
 
 
 <button class="btn btn-sm btn-danger"
-onclick="return confirm('Supprimer ce paramètre ?')">
+data-confirm="Supprimer ce paramètre ?">
 
 
 <i class="bi bi-trash"></i>

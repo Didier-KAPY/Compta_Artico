@@ -8,6 +8,10 @@ use App\Models\EntreeCaisse;
 use App\Models\EtatBesoin;
 use App\Models\Journaux;
 use App\Models\SortieCaisse;
+use App\Models\ClotureJournaliereJournal;
+use App\Models\ClotureJournaliere;
+use App\Models\EngagementBudgetaire;
+use App\Models\RealisationBudgetaire;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -84,15 +88,22 @@ class FinancialDocumentService
                 ]);
             }
 
-            $before = $document->attributesToArray();
-            $this->audit->record('suppression_definitive', $document, $this->reference($document), $motif, $before, null, [], $request, 'individuelle');
-            if ($document instanceof BRC) {
-                $document->journaux()->detach();
-                $document->lignes()->delete();
-            } elseif ($document instanceof EtatBesoin || $document instanceof EntreeCaisse) {
-                $document->lignes()->delete();
+            $this->forceDeleteOne($document, $motif, $request, 'individuelle');
+        });
+    }
+
+    public function emptyTrash(array $modelClasses, string $motif, Request $request): int
+    {
+        return DB::transaction(function () use ($modelClasses, $motif, $request) {
+            $documents = collect($modelClasses)
+                ->flatMap(fn (string $class) => $class::onlyTrashed()->lockForUpdate()->get())
+                ->sortBy(fn (Model $document) => $this->deletionOrder($document));
+
+            foreach ($documents as $document) {
+                $this->forceDeleteOne($document, $motif, $request, 'vidage de la corbeille');
             }
-            $document->forceDelete();
+
+            return $documents->count();
         });
     }
 
@@ -224,6 +235,98 @@ class FinancialDocumentService
         $this->audit->record($action, $document, $this->reference($document), $motif, $before, $document->attributesToArray(), $dependances, $request, $strategie === 'cascade' ? 'cascade contrôlée' : 'individuelle');
     }
 
+    private function forceDeleteOne(Model $document, string $motif, Request $request, string $strategie): void
+    {
+        $before = $document->attributesToArray();
+        $rattachementsCloture = $this->closureAttachments($document);
+        $rattachementsBudget = $this->budgetAttachments($document);
+        $this->audit->record('suppression_definitive', $document, $this->reference($document), $motif, $before, null, array_merge($rattachementsCloture, $rattachementsBudget), $request, $strategie);
+
+        if ($rattachementsCloture !== []) {
+            $this->closureAttachmentQuery($document)->delete();
+        }
+        $this->deleteBudgetAttachments($document);
+
+        if ($document instanceof BRC) {
+            $document->journaux()->detach();
+            $document->lignes()->delete();
+        } elseif ($document instanceof EtatBesoin || $document instanceof EntreeCaisse) {
+            $document->lignes()->delete();
+        }
+        $document->forceDelete();
+    }
+
+    private function budgetAttachments(Model $document): array
+    {
+        if ($document instanceof SortieCaisse) {
+            return RealisationBudgetaire::with('engagement')->where('sortie_caisse_id', $document->getKey())->get()
+                ->map(fn (RealisationBudgetaire $realisation) => [
+                    'type' => 'Réalisation budgétaire archivée',
+                    'model' => RealisationBudgetaire::class,
+                    'id' => $realisation->getKey(),
+                    'reference' => $this->reference($document),
+                    'statut' => $realisation->statut,
+                    'rattachement' => $realisation->attributesToArray(),
+                    'engagement' => $realisation->engagement?->attributesToArray(),
+                ])->all();
+        }
+
+        if ($document instanceof EtatBesoin) {
+            return EngagementBudgetaire::where('etat_besoin_id', $document->getKey())->get()
+                ->map(fn (EngagementBudgetaire $engagement) => [
+                    'type' => 'Engagement budgétaire archivé',
+                    'model' => EngagementBudgetaire::class,
+                    'id' => $engagement->getKey(),
+                    'reference' => $this->reference($document),
+                    'statut' => $engagement->statut,
+                    'rattachement' => $engagement->attributesToArray(),
+                ])->all();
+        }
+
+        return [];
+    }
+
+    private function deleteBudgetAttachments(Model $document): void
+    {
+        if ($document instanceof SortieCaisse) {
+            RealisationBudgetaire::where('sortie_caisse_id', $document->getKey())->delete();
+        } elseif ($document instanceof EtatBesoin) {
+            $engagements = EngagementBudgetaire::where('etat_besoin_id', $document->getKey());
+            if ((clone $engagements)->whereHas('realisations')->exists()) {
+                throw ValidationException::withMessages([
+                    'budget' => 'Suppression définitive impossible : supprimez d’abord les bons de sortie et leurs réalisations budgétaires liés.',
+                ]);
+            }
+            $engagements->delete();
+        }
+    }
+
+    private function closureAttachments(Model $document): array
+    {
+        $query = $this->closureAttachmentQuery($document);
+        if (! $query) return [];
+
+        return $query->with('cloture')->get()->map(fn (ClotureJournaliereJournal $rattachement) => [
+            'type' => 'Clôture journalière',
+            'model' => ClotureJournaliere::class,
+            'id' => $rattachement->cloture_journaliere_id,
+            'reference' => $rattachement->cloture?->numero_cloture,
+            'statut' => $rattachement->cloture?->statut ?? '—',
+            'rattachement' => $rattachement->attributesToArray(),
+        ])->all();
+    }
+
+    private function closureAttachmentQuery(Model $document)
+    {
+        return match (true) {
+            $document instanceof Journaux => ClotureJournaliereJournal::where('journal_id', $document->getKey()),
+            $document instanceof EntreeCaisse => ClotureJournaliereJournal::where('entree_caisse_id', $document->getKey()),
+            $document instanceof SortieCaisse => ClotureJournaliereJournal::where('sortie_caisse_id', $document->getKey()),
+            $document instanceof BRC => ClotureJournaliereJournal::where('brc_id', $document->getKey()),
+            default => null,
+        };
+    }
+
     private function assertReferenceAvailable(Model $document): void
     {
         $column = $document instanceof Journaux ? 'reference' : (isset($document->numero) ? 'numero' : 'reference');
@@ -255,9 +358,10 @@ class FinancialDocumentService
     {
         return match (true) {
             $document instanceof EcritureComptable => 1,
-            $document instanceof Journaux => 2,
-            $document instanceof SortieCaisse, $document instanceof EntreeCaisse => 3,
-            default => 4,
+            $document instanceof BRC => 2,
+            $document instanceof Journaux => 3,
+            $document instanceof SortieCaisse, $document instanceof EntreeCaisse => 4,
+            default => 5,
         };
     }
 }

@@ -4,7 +4,10 @@
 <div class="container py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div><span class="text-uppercase text-muted small fw-bold">Traçabilité</span><h3 class="mb-0"><i class="bi bi-trash3 me-2"></i>Corbeille financière</h3></div>
-        <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Retour</a>
+        <div class="d-flex gap-2">
+            @if($trashCount > 0)<button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#modalViderCorbeille"><i class="bi bi-trash3-fill me-1"></i>Vider la corbeille</button>@endif
+            <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Retour</a>
+        </div>
     </div>
     @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
     @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
@@ -27,5 +30,22 @@
             <td><a href="{{ route('corbeille.show', [$item['module'],$item['id']]) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye me-1"></i>Voir</a></td>
         </tr>@empty<tr><td colspan="7" class="text-center text-muted py-5">La corbeille est vide.</td></tr>@endforelse</tbody>
     </table></div></div>
+
+    @if($trashCount > 0)
+    <div class="modal fade" id="modalViderCorbeille" tabindex="-1" aria-labelledby="titreViderCorbeille" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+            <form method="POST" action="{{ route('corbeille.empty') }}">@csrf @method('DELETE')
+                <div class="modal-header"><h5 class="modal-title" id="titreViderCorbeille"><i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>Vider la corbeille</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button></div>
+                <div class="modal-body">
+                    <div class="alert alert-danger">Cette action supprimera définitivement {{ $trashCount }} document{{ $trashCount > 1 ? 's' : '' }} de la corbeille et ne pourra pas être annulée.</div>
+                    <label class="form-label">Motif de la suppression définitive</label><textarea name="motif" minlength="10" maxlength="1000" required class="form-control mb-3"></textarea>
+                    <div class="form-check mb-3"><input class="form-check-input" type="checkbox" name="confirmation_comptable" value="1" id="confirmationVider" required><label class="form-check-label" for="confirmationVider">Je confirme la suppression définitive de tous ces documents.</label></div>
+                    <label class="form-label">Saisissez <strong>VIDER LA CORBEILLE</strong></label><input name="phrase_confirmation" class="form-control" autocomplete="off" required>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button><button class="btn btn-danger"><i class="bi bi-trash3-fill me-1"></i>Supprimer définitivement</button></div>
+            </form>
+        </div></div>
+    </div>
+    @endif
 </div>
 @endsection

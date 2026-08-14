@@ -58,6 +58,18 @@
 
                 </div>
 
+                @if(config('features.budget'))<div class="mb-3">
+                    <label class="form-label">Compte à mouvementer</label>
+                    <select name="ligne_budgetaire_id" class="form-select" @required($lignesBudgetaires->isNotEmpty())>
+                        <option value="">-- Sélectionner le compte --</option>
+                        @foreach($lignesBudgetaires as $ligne)
+                            <option value="{{ $ligne->id }}" @selected((string)old('ligne_budgetaire_id')===(string)$ligne->id)>
+                                {{ $ligne->compte?->compte }} — {{ $ligne->compte?->designation }} — disponible {{ number_format($ligne->disponible, 2, ',', ' ') }} {{ $ligne->budget->monnaie }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>@endif
+
                 <div class="mb-3">
                     <label class="form-label">Demandeur</label>
                     <input type="text" name="demandeur" class="form-control" value="{{ old('demandeur', trim(auth()->user()->prenom.' '.auth()->user()->nom)) }}" required>
@@ -233,7 +245,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 e.target.closest('tr').remove();
                 calculTotal();
             } else {
-                alert('Au moins une ligne est obligatoire.');
+                window.appNotify('Au moins une ligne est obligatoire.');
             }
 
         }

@@ -130,6 +130,79 @@ class FinancialDocumentLifecycleTest extends TestCase
             ->assertSee('suppression document valide');
     }
 
+    public function test_super_admin_can_empty_the_financial_audit_log(): void
+    {
+        [$user, $etat] = $this->context('Super Admin', 'EB-EMPTY-AUDIT');
+        $this->actingAs($user)->delete(route('etat-besoins.destroy', $etat), $this->payload());
+        $this->assertGreaterThan(0, AuditLog::count());
+
+        $this->actingAs($user)->delete(route('parametres.audit.empty'), [
+            'confirmation'=>'1',
+            'phrase_confirmation'=>"vider le journal d'audit",
+        ])->assertRedirect(route('parametres.audit.index'))->assertSessionHasNoErrors();
+
+        $this->assertDatabaseCount('audit_logs', 0);
+        $this->assertSoftDeleted($etat);
+    }
+
+    public function test_super_admin_can_empty_the_trash_with_strong_confirmation_and_audit(): void
+    {
+        [$user, $etat] = $this->context('Super Admin', 'EB-EMPTY');
+        $this->actingAs($user)->delete(route('etat-besoins.destroy', $etat), $this->payload());
+
+        $this->actingAs($user)->get(route('corbeille.index'))
+            ->assertOk()->assertSee('Vider la corbeille');
+
+        $this->actingAs($user)->delete(route('corbeille.empty'), [
+            'motif' => 'Nettoyage définitif contrôlé de la corbeille.',
+            'confirmation_comptable' => '1',
+            'phrase_confirmation' => 'VIDER LA CORBEILLE',
+        ])->assertRedirect(route('corbeille.index'));
+
+        $this->assertDatabaseMissing('etat_besoins', ['id' => $etat->id]);
+        $this->assertDatabaseHas('audit_logs', [
+            'model_type' => EtatBesoin::class,
+            'model_id' => $etat->id,
+            'action' => 'suppression_definitive',
+            'type_suppression' => 'vidage de la corbeille',
+        ]);
+    }
+
+    public function test_need_lines_amount_and_currency_can_be_updated_without_budget(): void
+    {
+        [$user, $etat] = $this->context('Super Admin', 'EB-EDIT-AMOUNT');
+
+        $this->actingAs($user)->get(route('etat-besoins.edit', $etat))
+            ->assertOk()
+            ->assertSee('Désignation')
+            ->assertSee('Quantité')
+            ->assertSee('Prix unitaire')
+            ->assertSee('Monnaie')
+            ->assertDontSee('Rubrique budgétaire');
+
+        $this->actingAs($user)->put(route('etat-besoins.update', $etat), [
+            'departement_id' => $etat->departement_id,
+            'demandeur' => 'Demandeur modifié',
+            'monnaie' => 'USD',
+            'ligne_budgetaire_id' => null,
+            'designation' => ['Fourniture de test'],
+            'quantite' => [2],
+            'prix_unitaire' => [137.75],
+        ])->assertRedirect(route('etat-besoins.show', $etat));
+
+        $etat->refresh();
+        $this->assertEquals(275.50, $etat->montant_estime);
+        $this->assertSame('Demandeur modifié', $etat->demandeur);
+        $this->assertSame('USD', $etat->monnaie);
+        $this->assertDatabaseHas('etat_besoin_lignes', [
+            'etat_besoin_id' => $etat->id,
+            'designation' => 'Fourniture de test',
+            'quantite' => 2,
+            'prix_unitaire' => 137.75,
+            'montant' => 275.50,
+        ]);
+    }
+
     private function context(string $roleName, string $numero, string $statut = 'En attente'): array
     {
         $role = Role::create(['designation' => $roleName]);

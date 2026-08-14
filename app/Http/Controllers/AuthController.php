@@ -7,6 +7,8 @@ use App\Http\Requests\AuthRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Validation\ValidationException;
 
 use App\Models\User;
 
@@ -28,6 +30,13 @@ class AuthController extends Controller
     public function handlelogin(AuthRequest $request)
     {
 
+        $throttleKey = mb_strtolower((string) $request->input('email')).'|'.$request->ip();
+        if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
+            throw ValidationException::withMessages([
+                'email' => 'Trop de tentatives. Réessayez dans '.RateLimiter::availableIn($throttleKey).' seconde(s).',
+            ]);
+        }
+
         $credentials = $request->only(
             'email',
             'password'
@@ -43,6 +52,8 @@ class AuthController extends Controller
         if (! $user || $user->statut !== 'Actif')
         {
 
+            RateLimiter::hit($throttleKey, 60);
+
             return back()
                 ->withInput()
                 ->with(
@@ -54,6 +65,7 @@ class AuthController extends Controller
 
         if(Auth::attempt($credentials))
         {
+            RateLimiter::clear($throttleKey);
             $request->session()
                 ->regenerate();
             $user = Auth::user()
@@ -74,6 +86,7 @@ class AuthController extends Controller
                 $user
                );
         }
+        RateLimiter::hit($throttleKey, 60);
         return back()
             ->withInput()
             ->with(

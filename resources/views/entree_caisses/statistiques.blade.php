@@ -6,7 +6,7 @@
 
     <!-- HEADER -->
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h4 class="mb-0">📊 Dashboard Entrées de Caisse</h4>
+        <h4 class="mb-0">📊 Tableau de bord des entrées de caisse</h4>
     </div>
 
     <!-- FILTRE AUTO -->

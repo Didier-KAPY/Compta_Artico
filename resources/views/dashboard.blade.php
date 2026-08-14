@@ -143,6 +143,16 @@
                 </div>
             </div>
         </div>
+        <div class="alert alert-warning border-0 shadow-sm mb-4">
+            <div class="d-flex align-items-start gap-3"><i class="bi bi-exclamation-triangle fs-4"></i><div class="w-100">
+                <strong>Alertes comptables</strong>
+                <div class="row g-2 mt-1 small">
+                    <div class="col-md-4">{{ $accounting_alerts['journaux_sans_piece'] }} journal(aux) sans pièce justificative</div>
+                    <div class="col-md-4">{{ $accounting_alerts['journaux_non_regroupes'] }} journal(aux) non regroupé(s)</div>
+                    <div class="col-md-4">{{ $accounting_alerts['jours_ouverts'] }} journée(s) encore ouverte(s)</div>
+                </div>
+            </div></div>
+        </div>
     @endif
 
     @if($sections['charts'])
@@ -170,8 +180,8 @@
                 @if($isAdmin || $isCash)<a href="{{ route('sortie-caisses.create') }}"><i class="bi bi-box-arrow-up"></i><span>Nouvelle sortie</span></a>@endif
                 @can('manageJournaux')<a href="{{ route('journaux.create') }}"><i class="bi bi-journal-plus"></i><span>Nouveau journal</span></a>@endcan
                 @if(in_array($roleName, ['super admin', 'admin', 'comptable'], true))<a href="{{ route('brc.create') }}"><i class="bi bi-file-earmark-plus"></i><span>Nouveau BRC</span></a>@endif
-                @if($isAdmin || $isAccounting)<a href="{{ route('ecritures.create') }}"><i class="bi bi-pencil-square"></i><span>Nouvelle écriture</span></a>@endif
-                @if($isAdmin || $isAccounting)<a href="{{ route('balance.index') }}"><i class="bi bi-bar-chart"></i><span>Balance</span></a><a href="{{ route('grandlivre.index') }}"><i class="bi bi-book"></i><span>Grand livre</span></a><a href="{{ route('comptabilite.etats-financiers.index') }}"><i class="bi bi-file-earmark-bar-graph"></i><span>États financiers</span></a>@endif
+                @if(config('features.accounting') && ($isAdmin || $isAccounting))<a href="{{ route('ecritures.create') }}"><i class="bi bi-pencil-square"></i><span>Nouvelle écriture</span></a>@endif
+                @if(config('features.accounting') && ($isAdmin || $isAccounting))<a href="{{ route('balance.index') }}"><i class="bi bi-bar-chart"></i><span>Balance</span></a><a href="{{ route('grandlivre.index') }}"><i class="bi bi-book"></i><span>Grand livre</span></a><a href="{{ route('comptabilite.etats-financiers.index') }}"><i class="bi bi-file-earmark-bar-graph"></i><span>États financiers</span></a>@endif
             </div>
         </div>
     @endif

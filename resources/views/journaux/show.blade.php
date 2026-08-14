@@ -516,7 +516,7 @@
                 <form method='POST' action='{{ route('journaux.reouvrir', $journal->id) }}' class='d-inline'>
                     @csrf
                     @method('PATCH')
-                    <button class='btn btn-warning' onclick="return confirm('Remettre ce journal en attente ?')">
+                    <button class='btn btn-warning' data-confirm="Remettre ce journal en attente ?">
                         <i class='bi bi-arrow-counterclockwise'></i> Remettre en attente
                     </button>
                 </form>
@@ -526,7 +526,7 @@
             @if($journal->statut !== 'Rejeté')
                 <form method="POST" action="{{ route('journaux.rejeter', $journal->id) }}" class="d-inline">
                     @csrf
-                    <button class="btn btn-danger" onclick="return confirm('Rejeter ce journal ?')">
+                    <button class="btn btn-danger" data-confirm="Rejeter ce journal ?">
                         <i class="bi bi-x-circle"></i> Rejeter
                     </button>
                 </form>

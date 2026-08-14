@@ -11,11 +11,13 @@ use App\Models\JournalType;
 use App\Models\Journaux;
 use App\Models\ListeDesComptes;
 use App\Models\TauxDeChange;
+use App\Models\BRC;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use App\Services\WorkflowComptableService;
+use App\Services\DocumentNumberService;
 use Barryvdh\DomPDF\Facade\Pdf;
 
 class EcritureComptableController extends Controller
@@ -482,7 +484,7 @@ private function construireBrc(Request $request): array
     /**
      * Enregistrement écriture/imputation
      */
-   public function store(Request $request)
+   public function store(Request $request, DocumentNumberService $numbers)
 {
 
     $request->validate([
@@ -507,7 +509,7 @@ private function construireBrc(Request $request): array
 
 
 
-    DB::transaction(function () use ($request) {
+    DB::transaction(function () use ($request, $numbers) {
 
 
         /*
@@ -562,7 +564,7 @@ private function construireBrc(Request $request): array
         */
 
 
-        $reference = 'OD-' . date('YmdHis');
+        $reference = $numbers->next('BRC', $request->date, $journalType->nature);
 
 
 
@@ -640,6 +642,8 @@ private function construireBrc(Request $request): array
 
 
         ]);
+
+        $journalIds = [$journal->id];
 
 
 
@@ -735,6 +739,8 @@ private function construireBrc(Request $request): array
                 'valide_par'=>auth()->id(),
             ]);
 
+            $journalIds[] = $journalContrepartie->id;
+
 
 
             EcritureComptable::create([
@@ -779,6 +785,32 @@ private function construireBrc(Request $request): array
 
         }
 
+        $brc = BRC::create([
+            'user_id' => auth()->id(),
+            'journal_type_id' => $journalType->id,
+            'journal_id' => $journal->id,
+            'reference' => $reference,
+            'date' => $request->date,
+            'monnaie' => $request->monnaie,
+            'sens' => $request->sens,
+            'total' => $total,
+            'statut' => 'Validé',
+            'valide_par' => auth()->id(),
+            'date_validation' => now(),
+            'origine' => 'imputation',
+            'genere_automatiquement_le' => now(),
+        ]);
+
+        foreach ($request->lignes as $ligne) {
+            $brc->lignes()->create([
+                'liste_des_comptes_id' => $ligne['compte_id'],
+                'libelle' => trim($ligne['libelle']),
+                'montant' => $ligne['montant'],
+            ]);
+        }
+
+        $brc->journaux()->sync($journalIds);
+
 
 
     });
@@ -795,7 +827,7 @@ private function construireBrc(Request $request): array
 
             'success',
 
-            'Écriture comptable enregistrée avec succès.'
+            'Écriture comptable et BRC enregistrés avec succès.'
 
         );
 

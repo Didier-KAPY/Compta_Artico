@@ -2,12 +2,23 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\EmptyFinancialAuditRequest;
 use App\Models\AuditLog;
 use App\Models\User;
 use Illuminate\Http\Request;
 
 class FinancialAuditController extends Controller
 {
+    public function empty(EmptyFinancialAuditRequest $request)
+    {
+        $count = AuditLog::query()->delete();
+
+        return redirect()->route('parametres.audit.index')->with(
+            'success',
+            $count.' trace'.($count > 1 ? 's ont été supprimées' : ' a été supprimée').' du journal d’audit.'
+        );
+    }
+
     public function index(Request $request)
     {
         $request->validate([

@@ -551,7 +551,7 @@ Type
 
 <strong>
 
-{{ $journal->designation ?? $journal->nom }}
+{{ $journal->libelle }}
 
 </strong>
 

@@ -8,7 +8,6 @@ use App\Services\AuditLogService;
 use App\Services\ClotureJournaliereService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 class ClotureJournaliereController extends Controller
 {
@@ -65,13 +64,7 @@ class ClotureJournaliereController extends Controller
     {
         $data = $request->validate(['motif' => ['required', 'string', 'min:10', 'max:1000']]);
         DB::transaction(function () use ($cloture, $data, $request, $audit) {
-            $locked = ClotureJournaliere::with(['journaux.ecritures', 'entrees', 'sorties', 'brcs'])
-                ->lockForUpdate()->findOrFail($cloture->id);
-            if ($locked->journaux->contains(fn ($j) => $j->statut === 'Validé' || $j->ecritures->contains('statut', 'Validé'))
-                || $locked->entrees->contains('statut', 'Validé') || $locked->sorties->contains('statut', 'Validé')
-                || $locked->brcs->contains('statut', 'Validé')) {
-                throw ValidationException::withMessages(['statut' => 'Réouverture impossible : la chaîne contient un document ou une écriture validée.']);
-            }
+            $locked = ClotureJournaliere::lockForUpdate()->findOrFail($cloture->id);
             $avant = $locked->attributesToArray();
             $locked->update(['statut' => 'reouverte', 'est_verifiee' => false, 'verifiee_par' => null,
                 'verifiee_le' => null, 'motif_reouverture' => $data['motif']]);

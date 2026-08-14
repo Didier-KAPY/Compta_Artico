@@ -183,7 +183,7 @@ class ClotureJournaliereService
         $bon = EntreeCaisse::create([
             'user_id' => Auth::id(), 'numero' => $this->numbers->next('BEC', $date, $type), 'date' => $date,
             'motif' => 'Regroupement quotidien '.$cloture->numero_cloture, 'type' => $this->libelleTresorerie($type),
-            'montant' => $total, 'monnaie' => $premier->monnaie, 'statut' => 'En attente',
+            'montant' => $total, 'monnaie' => $premier->monnaie, 'statut' => 'Validé',
             'origine' => 'cloture', 'cloture_journaliere_id' => $cloture->id, 'genere_automatiquement_le' => now(),
         ]);
         foreach ($journaux as $journal) {
@@ -200,7 +200,7 @@ class ClotureJournaliereService
             'user_id' => Auth::id(), 'numero' => $this->numbers->next('BSC', $date, $type), 'date' => $date,
             'beneficiaire' => 'Bénéficiaires multiples', 'motif' => 'Regroupement quotidien '.$cloture->numero_cloture,
             'type' => $this->libelleTresorerie($type), 'montant' => $total, 'monnaie' => $premier->monnaie,
-            'observation' => 'Généré automatiquement par la clôture.', 'statut' => 'En attente',
+            'observation' => 'Généré automatiquement par la clôture.', 'statut' => 'Validé',
             'origine' => 'cloture', 'cloture_journaliere_id' => $cloture->id, 'genere_automatiquement_le' => now(),
         ]);
         foreach ($journaux as $journal) {
@@ -216,7 +216,7 @@ class ClotureJournaliereService
         $brc = BRC::create([
             'user_id' => Auth::id(), 'journal_type_id' => $premier->journal_type_id,
             'reference' => $this->numbers->next('BRC', $date, 'od'), 'date' => $date,
-            'monnaie' => $premier->monnaie, 'sens' => 'debit', 'total' => $total, 'statut' => 'En attente',
+            'monnaie' => $premier->monnaie, 'sens' => 'debit', 'total' => $total, 'statut' => 'Validé',
             'origine' => 'cloture', 'cloture_journaliere_id' => $cloture->id, 'genere_automatiquement_le' => now(),
         ]);
         foreach ($journaux as $journal) {

@@ -89,7 +89,7 @@
                                     <form action="{{ route('parametres.comptes.destroy',$compte->id) }}"
                                         method="POST"
                                         class="d-inline"
-                                        onsubmit="return confirm('Voulez-vous supprimer ce compte ?')">
+                                        data-confirm="Voulez-vous supprimer ce compte ?">
 
                                         @csrf
                                         @method('DELETE')

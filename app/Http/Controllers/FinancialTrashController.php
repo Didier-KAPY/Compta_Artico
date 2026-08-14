@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ForceDeleteFinancialDocumentRequest;
+use App\Http\Requests\EmptyFinancialTrashRequest;
 use App\Http\Requests\RestoreFinancialDocumentRequest;
 use App\Models\AuditLog;
 use App\Models\BRC;
@@ -74,7 +75,13 @@ class FinancialTrashController extends Controller
             return $document;
         });
 
-        return view('corbeille.index', ['documents' => $documents, 'modules' => array_keys(self::MODELS)]);
+        $trashCount = collect(self::MODELS)->sum(fn (string $class) => $class::onlyTrashed()->count());
+
+        return view('corbeille.index', [
+            'documents' => $documents,
+            'modules' => array_keys(self::MODELS),
+            'trashCount' => $trashCount,
+        ]);
     }
 
     public function show(string $module, int $id)
@@ -96,6 +103,18 @@ class FinancialTrashController extends Controller
     {
         $service->forceDelete($this->trashed($module, $id), $request->validated('motif'), $request);
         return redirect()->route('corbeille.index')->with('success', 'Document supprimé définitivement. Le journal d’audit est conservé.');
+    }
+
+    public function empty(EmptyFinancialTrashRequest $request, FinancialDocumentService $service)
+    {
+        $count = $service->emptyTrash(array_values(self::MODELS), $request->validated('motif'), $request);
+
+        return redirect()->route('corbeille.index')->with(
+            'success',
+            $count === 0
+                ? 'La corbeille est déjà vide.'
+                : $count.' document'.($count > 1 ? 's ont été supprimés' : ' a été supprimé').' définitivement. Le journal d’audit est conservé.'
+        );
     }
 
     private function trashed(string $module, int $id): Model

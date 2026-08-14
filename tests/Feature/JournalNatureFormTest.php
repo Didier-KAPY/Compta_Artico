@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\EntreeCaisse;
 use App\Models\JournalType;
 use App\Models\Journaux;
 use App\Models\ListeDesComptes;
@@ -101,7 +102,10 @@ class JournalNatureFormTest extends TestCase
         $this->assertDatabaseHas('journaux', [
             'journal_type_id' => $types['banque_usd']->id,
             'monnaie' => 'USD',
+            'statut_regroupement' => 'regroupe',
         ]);
+        $this->assertDatabaseCount('entree_caisses', 1);
+        $this->assertSame(EntreeCaisse::firstOrFail()->id, Journaux::firstOrFail()->entree_caisse_id);
     }
 
     private function contexte(): array

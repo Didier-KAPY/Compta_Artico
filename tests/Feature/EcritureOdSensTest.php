@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\EcritureComptable;
+use App\Models\BRC;
 use App\Models\JournalType;
 use App\Models\Journaux;
 use App\Models\ListeDesComptes;
@@ -77,6 +78,33 @@ class EcritureOdSensTest extends TestCase
 
         $ecriture = EcritureComptable::where('liste_des_comptes_id', $compteJournal->id)->latest('id')->firstOrFail();
         $this->assertSame(22500.0, (float) $ecriture->debit_cdf);
+    }
+
+    public function test_imputation_cree_automatiquement_un_brc_valide_lie_aux_journaux(): void
+    {
+        [$user, $type, , $compteImputation] = $this->contexte('brc-auto');
+
+        $this->actingAs($user)->post(route('ecritures.store'), [
+            'date' => '2026-07-29',
+            'journal_type_id' => $type->id,
+            'monnaie' => 'CDF',
+            'sens' => 'debit',
+            'lignes' => [[
+                'compte_id' => $compteImputation->id,
+                'libelle' => 'Imputation avec BRC',
+                'montant' => 250,
+            ]],
+        ])->assertRedirect(route('ecritures.create'));
+
+        $brc = BRC::with(['lignes', 'journaux'])->firstOrFail();
+
+        $this->assertSame('Validé', $brc->statut);
+        $this->assertSame('imputation', $brc->origine);
+        $this->assertSame('BRC-20260729-000001', $brc->reference);
+        $this->assertSame(250.0, (float) $brc->total);
+        $this->assertCount(1, $brc->lignes);
+        $this->assertCount(2, $brc->journaux);
+        $this->assertTrue($brc->journaux->every(fn (Journaux $journal) => $journal->reference === $brc->reference));
     }
 
     private function contexte(string $suffixe, string $monnaie = 'CDF'): array

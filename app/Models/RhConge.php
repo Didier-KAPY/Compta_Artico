@@ -1,0 +1,4 @@
+<?php
+namespace App\Models;
+use Illuminate\Database\Eloquent\Model;
+class RhConge extends Model { protected $table='rh_conges'; protected $guarded=[]; protected $casts=['date_debut'=>'date','date_fin'=>'date','valide_le'=>'datetime']; public function employe(){return $this->belongsTo(User::class,'user_id');} public function validateur(){return $this->belongsTo(User::class,'valide_par');} }

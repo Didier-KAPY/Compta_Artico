@@ -285,7 +285,7 @@ class WorkflowComptableTest extends TestCase
         ]);
         $compte = ListeDesComptes::create([
             'user_id' => $user->id,
-            'compte' => '571100',
+            'compte' => sprintf('57%04d', $user->id),
             'designation' => 'Caisse test',
         ]);
         $type = JournalType::create([

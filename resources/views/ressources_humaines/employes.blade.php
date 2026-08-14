@@ -1,0 +1,6 @@
+@extends('layouts.app')
+@section('title','Employés')
+@section('module-sidebar') @include('ressources_humaines._sidebar') @endsection
+@section('content')
+<div class="container-fluid py-4"><div class="d-flex justify-content-between align-items-center mb-4"><div><h2 class="fw-bold mb-1">Employés</h2><p class="text-muted mb-0">Dossiers du personnel issus des utilisateurs.</p></div><a href="{{ route('parametres.utilisateurs') }}" class="btn btn-primary"><i class="bi bi-person-plus me-1"></i>Gérer les employés</a></div><div class="card border-0 shadow-sm"><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Employé</th><th>Département</th><th>Fonction</th><th>Contact</th><th>Statut</th></tr></thead><tbody>@forelse($employes as $e)<tr><td class="fw-semibold">{{ $e->nom }} {{ $e->prenom }}</td><td>{{ $e->departement?->designation ?? '—' }}</td><td>{{ $e->fonction?->designation ?? '—' }}</td><td>{{ $e->email }}<small class="d-block text-muted">{{ $e->telephone }}</small></td><td><span class="badge bg-{{ $e->statut==='Actif'?'success':'secondary' }}">{{ $e->statut }}</span></td></tr>@empty<tr><td colspan="5" class="text-center py-5 text-muted">Aucun employé.</td></tr>@endforelse</tbody></table></div></div><div class="mt-3">{{ $employes->links() }}</div></div>
+@endsection

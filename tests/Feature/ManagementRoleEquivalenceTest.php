@@ -61,6 +61,9 @@ class ManagementRoleEquivalenceTest extends TestCase
             $this->assertTrue(Gate::forUser($user)->allows('manageUsers'));
             $this->assertTrue(Gate::forUser($user)->allows('viewAccountingReports'));
             $this->assertTrue(Gate::forUser($user)->allows('manageAccountingConfiguration'));
+            $this->assertTrue(Gate::forUser($user)->allows('deleteEtatBesoin'));
+            $this->assertTrue(Gate::forUser($user)->allows('deleteFinancialDocument'));
+            $this->assertFalse(Gate::forUser($user)->allows('forceDeleteFinancialDocument'));
 
             foreach (['dashboard', 'etat-besoins.index', 'entree-caisses.index', 'sortie-caisses.index', 'ecritures.liste'] as $route) {
                 $this->actingAs($user)->get(route($route))->assertOk()->assertDontSee('Validé par');

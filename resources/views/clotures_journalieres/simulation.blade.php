@@ -18,7 +18,7 @@
         <form method="POST" action="{{ route('parametres.clotures.store') }}" class="row g-3">@csrf<input type="hidden" name="date" value="{{ $date }}">
             <div class="col-12"><label class="form-check"><input class="form-check-input" type="checkbox" name="complementaire" value="1" id="complementaire"><span class="form-check-label">Clôture complémentaire</span></label></div>
             <div class="col-md-8"><label class="form-label">Motif de la complémentaire</label><textarea name="motif" class="form-control" rows="2" placeholder="Obligatoire uniquement pour une clôture complémentaire"></textarea></div>
-            <div class="col-md-4 d-flex align-items-end"><button class="btn btn-danger w-100" onclick="return confirm('Confirmer la clôture de cette journée ?')"><i class="bi bi-lock me-1"></i>Lancer la clôture</button></div>
+            <div class="col-md-4 d-flex align-items-end"><button class="btn btn-danger w-100" data-confirm="Confirmer la clôture de cette journée ?"><i class="bi bi-lock me-1"></i>Lancer la clôture</button></div>
         </form>
     </div></div>@endif
 </div>

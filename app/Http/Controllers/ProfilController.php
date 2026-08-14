@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Models\Role;
 use App\Models\Departement;
 use App\Models\Fonction;
+use App\Models\Entreprise;
 
 
 class ProfilController extends Controller
@@ -22,8 +23,9 @@ class ProfilController extends Controller
     {
 
         $user = Auth::user()->load(['role', 'departement', 'fonction']);
+        $entreprise = Entreprise::first();
 
-        return view('profil.index', compact('user'));
+        return view('profil.index', compact('user', 'entreprise'));
 
     }
 
@@ -71,7 +73,11 @@ class ProfilController extends Controller
 
             'photo'=>'nullable|image|max:2048',
 
-            'signature'=>'nullable|image|max:2048',
+            'signature'=>'nullable|image|mimes:png|max:2048',
+
+            'logo'=>'nullable|image|mimes:png|max:2048',
+
+            'cachet'=>'nullable|image|max:2048',
 
             'telephone'=>'nullable|string|max:30',
 
@@ -113,6 +119,34 @@ class ProfilController extends Controller
             }
 
             $user->signature = $request->file('signature')->store('signatures', 'public');
+        }
+
+        if ($request->hasFile('cachet')) {
+            abort_unless($user->hasRole(['Super Admin', 'Admin', 'Gérant', 'Gerant', 'Directeur Général']), 403);
+
+            $entreprise = Entreprise::first();
+            if ($entreprise) {
+                if ($entreprise->cachet) {
+                    Storage::disk('public')->delete($entreprise->cachet);
+                }
+
+                $entreprise->cachet = $request->file('cachet')->store('cachets', 'public');
+                $entreprise->save();
+            }
+        }
+
+        if ($request->hasFile('logo')) {
+            abort_unless($user->hasRole(['Super Admin', 'Admin', 'Gérant', 'Gerant', 'Directeur Général']), 403);
+
+            $entreprise = Entreprise::first();
+            if ($entreprise) {
+                if ($entreprise->logo) {
+                    Storage::disk('public')->delete($entreprise->logo);
+                }
+
+                $entreprise->logo = $request->file('logo')->store('logos', 'public');
+                $entreprise->save();
+            }
         }
 
 
@@ -176,7 +210,7 @@ class ProfilController extends Controller
 
             'photo'=>'nullable|image|max:2048',
 
-            'signature'=>'nullable|image|max:2048',
+            'signature'=>'nullable|image|mimes:png|max:2048',
 
         ]);
 

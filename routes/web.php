@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BalanceController;
+use App\Http\Controllers\BudgetController;
 use App\Http\Controllers\BRCController;
 use App\Http\Controllers\CarteServiceController;
 use App\Http\Controllers\DashboardController;
@@ -13,11 +14,15 @@ use App\Http\Controllers\GrandLivreController;
 use App\Http\Controllers\FinancialTrashController;
 use App\Http\Controllers\FinancialAuditController;
 use App\Http\Controllers\JournalController;
+use App\Http\Controllers\ImportComptableController;
 use App\Http\Controllers\JournalControllerRecu;
 use App\Http\Controllers\ParametreController;
+use App\Http\Controllers\PeriodeComptableController;
 use App\Http\Controllers\ProfilController;
 use App\Http\Controllers\ReportExportController;
+use App\Http\Controllers\RessourceHumaineController;
 use App\Http\Controllers\SortieCaisseController;
+use App\Http\Controllers\SauvegardeController;
 use App\Http\Controllers\ClotureJournaliereController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
@@ -48,9 +53,31 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::get('/parametres', [ParametreController::class, 'parametre'])
         ->middleware('role:Super Admin,Admin,Directeur Général,Gérant,Gerant,DAF,Comptable,Directeur Technique')
         ->name('parametres.parametre');
+    Route::prefix('/parametres/ressources-humaines')->name('parametres.rh.')
+        ->middleware('role:Super Admin,Admin,Directeur Général,Gérant,Gerant,DAF')->group(function () {
+            Route::get('/', [RessourceHumaineController::class, 'index'])->name('index');
+            Route::get('/employes', [RessourceHumaineController::class, 'employes'])->name('employes');
+            Route::get('/contrats', [RessourceHumaineController::class, 'contrats'])->name('contrats');
+            Route::get('/presences', [RessourceHumaineController::class, 'presences'])->name('presences');
+            Route::get('/conges', [RessourceHumaineController::class, 'conges'])->name('conges');
+            Route::get('/paie', [RessourceHumaineController::class, 'paie'])->name('paie');
+            Route::get('/evaluations', [RessourceHumaineController::class, 'evaluations'])->name('evaluations');
+            Route::get('/rapports', [RessourceHumaineController::class, 'rapports'])->name('rapports');
+            Route::post('/contrats', [RessourceHumaineController::class, 'storeContrat'])->name('contrats.store');
+            Route::post('/presences', [RessourceHumaineController::class, 'storePresence'])->name('presences.store');
+            Route::post('/conges', [RessourceHumaineController::class, 'storeConge'])->name('conges.store');
+            Route::patch('/conges/{conge}/statut', [RessourceHumaineController::class, 'statutConge'])->name('conges.statut');
+            Route::post('/paie', [RessourceHumaineController::class, 'storePaie'])->name('paie.store');
+            Route::post('/evaluations', [RessourceHumaineController::class, 'storeEvaluation'])->name('evaluations.store');
+            Route::delete('/{type}/{id}', [RessourceHumaineController::class, 'destroy'])->whereIn('type',['contrats','presences','conges','paie','evaluations'])->name('destroy');
+            Route::get('/rapport/{format}', [RessourceHumaineController::class, 'report'])->whereIn('format',['print','pdf','excel'])->name('report');
+        });
     Route::get('/parametres/audit-comptable', [FinancialAuditController::class, 'index'])
         ->middleware('can:viewFinancialAudit')
         ->name('parametres.audit.index');
+    Route::delete('/parametres/audit-comptable', [FinancialAuditController::class, 'empty'])
+        ->middleware('can:viewFinancialAudit')
+        ->name('parametres.audit.empty');
     Route::prefix('/parametres/clotures-journalieres')->name('parametres.clotures.')
         ->middleware('role:Super Admin')->group(function () {
             Route::get('/', [ClotureJournaliereController::class, 'index'])->name('index');
@@ -59,6 +86,62 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
             Route::get('/{cloture}', [ClotureJournaliereController::class, 'show'])->name('show');
             Route::post('/{cloture}/verifier', [ClotureJournaliereController::class, 'verifier'])->name('verifier');
             Route::post('/{cloture}/reouvrir', [ClotureJournaliereController::class, 'reouvrir'])->name('reouvrir');
+        });
+    Route::prefix('/parametres/periodes-comptables')->name('parametres.periodes.')
+        ->middleware('role:Super Admin')->group(function () {
+            Route::get('/', [PeriodeComptableController::class, 'index'])->name('index');
+            Route::get('/imprimer', [PeriodeComptableController::class, 'imprimer'])->name('imprimer');
+            Route::get('/pdf', [PeriodeComptableController::class, 'telechargerPdf'])->name('pdf');
+            Route::post('/', [PeriodeComptableController::class, 'store'])->name('store');
+            Route::post('/{periode}/reouvrir', [PeriodeComptableController::class, 'reouvrir'])->name('reouvrir');
+        });
+    Route::prefix('/parametres/budgets')->name('parametres.budgets.')
+        ->middleware(['feature:budget', 'can:viewBudget'])->group(function () {
+            Route::get('/', [BudgetController::class, 'index'])->name('index');
+            Route::get('/budgets-annuels', [BudgetController::class, 'budgetsAnnuels'])->name('annuels');
+            Route::get('/lignes-budgetaires', [BudgetController::class, 'lignesBudgetaires'])->name('lignes');
+            Route::get('/rubriques-budgetaires', [BudgetController::class, 'rubriques'])->name('rubriques');
+            Route::post('/rubriques-budgetaires', [BudgetController::class, 'storeRubrique'])->middleware('can:manageBudgetLines')->name('rubriques.store');
+            Route::patch('/rubriques-budgetaires/{rubriqueBudgetaire}', [BudgetController::class, 'updateRubrique'])->middleware('can:manageBudgetLines')->name('rubriques.update');
+            Route::get('/engagements', [BudgetController::class, 'engagements'])->name('engagements');
+            Route::get('/recettes', [BudgetController::class, 'recettes'])->name('recettes');
+            Route::get('/depenses', [BudgetController::class, 'depenses'])->name('depenses');
+            Route::get('/realisations', [BudgetController::class, 'realisations'])->name('realisations');
+            Route::get('/execution-budgetaire', [BudgetController::class, 'execution'])->name('execution');
+            Route::get('/mouvements', [BudgetController::class, 'mouvements'])->name('mouvements');
+            Route::get('/etats-budgetaires', [BudgetController::class, 'etats'])->name('etats');
+            Route::get('/revisions-transferts', [BudgetController::class, 'revisionsTransferts'])->name('revisions-transferts');
+            Route::get('/rapports/{rapport}/{format}', [BudgetController::class, 'report'])
+                ->whereIn('rapport', ['budgets', 'lignes', 'execution'])
+                ->whereIn('format', ['print', 'pdf', 'excel'])
+                ->name('report');
+            Route::get('/{budget}/modifier', [BudgetController::class, 'edit'])->middleware('can:updateBudget')->name('edit');
+            Route::put('/{budget}', [BudgetController::class, 'update'])->middleware('can:updateBudget')->name('update');
+            Route::post('/exercices', [BudgetController::class, 'storeExercice'])->middleware('can:createBudget')->name('exercices.store');
+            Route::patch('/exercices/{budgetExercice}/statut', [BudgetController::class, 'statutExercice'])->middleware('can:validateBudget')->name('exercices.statut');
+            Route::post('/lignes', [BudgetController::class, 'storeLigne'])->middleware('can:manageBudgetLines')->name('lignes.store');
+            Route::get('/lignes/{ligneBudgetaire}/modifier', [BudgetController::class, 'editLigne'])->middleware('can:manageBudgetLines')->name('lignes.edit');
+            Route::put('/lignes/{ligneBudgetaire}', [BudgetController::class, 'updateLigne'])->middleware('can:manageBudgetLines')->name('lignes.update');
+            Route::delete('/lignes/{ligneBudgetaire}', [BudgetController::class, 'destroyLigne'])->middleware('can:manageBudgetLines')->name('lignes.destroy');
+            Route::patch('/lignes/{ligneBudgetaire}/valider', [BudgetController::class, 'validerLigne'])->middleware('can:validateBudget')->name('lignes.valider');
+            Route::post('/lignes/{ligneBudgetaire}/revision', [BudgetController::class, 'revision'])->middleware('can:reviseBudget')->name('lignes.revision');
+            Route::post('/lignes/{ligneBudgetaire}/mensualiser', [BudgetController::class, 'mensualiser'])->middleware('can:manageBudgetLines')->name('lignes.mensualiser');
+            Route::post('/transferts', [BudgetController::class, 'transfert'])->middleware('can:transferBudget')->name('transferts.store');
+            Route::post('/', [BudgetController::class, 'store'])->middleware('can:createBudget')->name('store');
+            Route::delete('/{budget}', [BudgetController::class, 'destroy'])->middleware('can:updateBudget')->name('destroy');
+        });
+    Route::prefix('/parametres/imports')->name('parametres.imports.')
+        ->middleware('role:Super Admin,DAF,Comptable')->group(function () {
+            Route::get('/', [ImportComptableController::class, 'index'])->name('index');
+            Route::post('/apercu', [ImportComptableController::class, 'preview'])->name('preview');
+            Route::post('/confirmer', [ImportComptableController::class, 'store'])->name('store');
+        });
+    Route::prefix('/parametres/sauvegardes')->name('parametres.sauvegardes.')
+        ->middleware('role:Super Admin')->group(function () {
+            Route::get('/', [SauvegardeController::class, 'index'])->name('index');
+            Route::post('/', [SauvegardeController::class, 'store'])->name('store');
+            Route::get('/{fichier}', [SauvegardeController::class, 'download'])->name('download');
+            Route::post('/restaurer/base', [SauvegardeController::class, 'restore'])->name('restore');
         });
 
     Route::prefix('/parametres/cartes-service')
@@ -174,7 +257,7 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         ->name('parametres.taux-change.store');
 });
 
-Route::middleware(['auth', 'force.password.change'])->group(function () {
+Route::middleware(['auth', 'force.password.change', 'accounting.open'])->group(function () {
     Route::get('/exports/{rapport}/{format}', function (Request $request, string $rapport, string $format) {
         $methodes = ['ecritures', 'journaux', 'entrees', 'sorties', 'etat-besoins', 'grand-livre', 'tresorerie', 'releve', 'balance', 'bilan', 'compte-resultat'];
         abort_unless(in_array($rapport, $methodes, true), 404);
@@ -190,6 +273,7 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
 
     Route::prefix('corbeille')->name('corbeille.')->middleware('can:viewFinancialTrash')->group(function () {
         Route::get('/', [FinancialTrashController::class, 'index'])->name('index');
+        Route::delete('/vider', [FinancialTrashController::class, 'empty'])->name('empty');
         Route::get('/{module}/{id}', [FinancialTrashController::class, 'show'])->name('show');
         Route::post('/{module}/{id}/restaurer', [FinancialTrashController::class, 'restore'])->name('restore');
         Route::delete('/{module}/{id}/definitivement', [FinancialTrashController::class, 'forceDelete'])->name('force-delete');
@@ -202,10 +286,10 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         ->middleware('can:viewEtatBesoinDetail')
         ->name('etat-besoins.pdf');
     Route::resource('etat-besoins', EtatBesoinController::class)
+        ->only(['index']);
+    Route::resource('etat-besoins', EtatBesoinController::class)
         ->only(['create', 'store'])
         ->middleware('can:createEtatBesoin');
-    Route::resource('etat-besoins', EtatBesoinController::class)
-        ->only(['index']);
     Route::resource('etat-besoins', EtatBesoinController::class)
         ->only(['show'])
         ->middleware('can:viewEtatBesoinDetail');
@@ -345,7 +429,7 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     });
 
     Route::get('/grand-livre', [GrandLivreController::class, 'index'])
-        ->middleware('role:Super Admin,Admin,Directeur Général,DAF,Comptable')
+        ->middleware(['feature:accounting', 'role:Super Admin,Admin,Directeur Général,DAF,Comptable'])
         ->name('grandlivre.index');
     Route::get('/brc', [BRCController::class, 'index'])
         ->middleware('role:Super Admin,Admin,Directeur Général,DAF,Comptable')
@@ -371,12 +455,13 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::delete('/brc/{brc}', [BRCController::class, 'destroy'])
         ->middleware('can:deleteFinancialDocument')->name('brc.destroy');
     Route::get('/balance', [BalanceController::class, 'index'])
-        ->middleware('role:Super Admin,Admin,Directeur Général,DAF,Comptable')
+        ->middleware(['feature:accounting', 'role:Super Admin,Admin,Directeur Général,DAF,Comptable'])
         ->name('balance.index');
 
     Route::prefix('comptabilite/etats-financiers')
         ->name('comptabilite.etats-financiers.')
         ->middleware([
+            'feature:accounting',
             'role:Super Admin,Admin,Directeur Général,DAF,Comptable',
             'can:viewAccountingReports',
         ])
@@ -389,33 +474,33 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         });
 
     Route::get('/ecritures', [EcritureComptableController::class, 'liste'])
-        ->middleware('role:Super Admin,Admin,Directeur Général,DAF,Comptable')
+        ->middleware(['feature:accounting', 'role:Super Admin,Admin,Directeur Général,DAF,Comptable'])
         ->name('ecritures.liste');
     Route::get('/ecritures/{id}', [EcritureComptableController::class, 'show'])
-        ->middleware('role:Super Admin,Admin,Directeur Général,DAF,Comptable')
+        ->middleware(['feature:accounting', 'role:Super Admin,Admin,Directeur Général,DAF,Comptable'])
         ->name('ecritures.show');
     Route::post('/ecritures/{id}/valider', [EcritureComptableController::class, 'valider'])
-        ->middleware('role:Super Admin,Comptable')
+        ->middleware(['feature:accounting', 'role:Super Admin,Comptable'])
         ->name('ecritures.valider');
     Route::get('/ecritures/{id}/piece-justificative', [EcritureComptableController::class, 'pieceJustificative'])
-        ->middleware('role:Super Admin,Admin,Directeur Général,DAF,Comptable')
+        ->middleware(['feature:accounting', 'role:Super Admin,Admin,Directeur Général,DAF,Comptable'])
         ->name('ecritures.piece');
     Route::patch('/ecritures/{id}/reouvrir', [EcritureComptableController::class, 'reouvrir'])
-        ->middleware('role:Super Admin')
+        ->middleware(['feature:accounting', 'role:Super Admin'])
         ->name('ecritures.reouvrir');
     Route::get('/ecritures/{id}/modifier', [EcritureComptableController::class, 'edit'])
-        ->middleware('role:Super Admin,Comptable')
+        ->middleware(['feature:accounting', 'role:Super Admin,Comptable'])
         ->name('ecritures.edit');
     Route::put('/ecritures/{id}', [EcritureComptableController::class, 'update'])
-        ->middleware('role:Super Admin,Comptable')
+        ->middleware(['feature:accounting', 'role:Super Admin,Comptable'])
         ->name('ecritures.update');
     Route::delete('/ecritures/{id}', [EcritureComptableController::class, 'destroy'])
-        ->middleware('can:deleteFinancialDocument')
+        ->middleware(['feature:accounting', 'can:deleteFinancialDocument'])
         ->name('ecritures.destroy');
     Route::get('/imputation-comptes', [EcritureComptableController::class, 'create'])
-        ->middleware('role:Super Admin,Admin,Comptable,Caissier,Caissière,Trésorier,Trésorière')
+        ->middleware(['feature:accounting', 'role:Super Admin,Admin,Comptable,Caissier,Caissière,Trésorier,Trésorière'])
         ->name('ecritures.create');
     Route::post('/imputation-comptes', [EcritureComptableController::class, 'store'])
-        ->middleware('role:Super Admin,Admin,Comptable,Caissier,Caissière,Trésorier,Trésorière')
+        ->middleware(['feature:accounting', 'role:Super Admin,Admin,Comptable,Caissier,Caissière,Trésorier,Trésorière'])
         ->name('ecritures.store');
 });

@@ -14,7 +14,9 @@ class TauxDeChange extends Model
     protected $fillable = [
         'user_id',
         'taux_de_change',
+        'entreprise_id', 'devise_source', 'devise_cible', 'date_taux',
     ];
+    protected $casts = ['date_taux' => 'date', 'taux_de_change' => 'decimal:2'];
 
     /**
      * Relation : appartient à un utilisateur

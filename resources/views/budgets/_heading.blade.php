@@ -1,0 +1,1 @@
+<section class="budget-hero mb-4"><div><span class="text-uppercase small fw-bold opacity-75">{{ $eyebrow }}</span><h2 class="mt-2 mb-2">{{ $heading }}</h2><p class="mb-0 opacity-75">{{ $description }}</p></div><div class="budget-hero-icon"><i class="bi bi-{{ $icon }}"></i></div></section>

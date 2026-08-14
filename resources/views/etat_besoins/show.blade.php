@@ -199,6 +199,14 @@
 
             <hr>
 
+            @if($etat->ligneBudgetaire)
+                <div class="alert alert-info border-0">
+                    <strong><i class="bi bi-wallet2 me-1"></i> Ligne budgétaire :</strong>
+                    {{ $etat->ligneBudgetaire->code }} — {{ $etat->ligneBudgetaire->rubrique }}
+                    <span class="float-md-end">Disponible : {{ number_format($etat->ligneBudgetaire->disponible, 2, ',', ' ') }} {{ $etat->ligneBudgetaire->budget->monnaie }}</span>
+                </div>
+            @endif
+
 
 
 

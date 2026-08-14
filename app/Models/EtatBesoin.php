@@ -11,6 +11,7 @@ class EtatBesoin extends Model
     protected $fillable = [
         'user_id',
         'departement_id',
+        'ligne_budgetaire_id',
         'numero',
         'date',
         'service',
@@ -60,4 +61,6 @@ class EtatBesoin extends Model
     {
         return $this->hasMany(SortieCaisse::class, 'etat_besoin_id');
     }
+    public function ligneBudgetaire(){ return $this->belongsTo(LigneBudgetaire::class); }
+    public function engagementBudgetaire(){ return $this->hasOne(EngagementBudgetaire::class); }
 }

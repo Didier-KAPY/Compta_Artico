@@ -15,6 +15,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'force.password.change' => \App\Http\Middleware\ForcePasswordChange::class,
             'check.entreprise.active' => \App\Http\Middleware\CheckEntrepriseActive::class,
             'role' => \App\Http\Middleware\RoleMiddleware::class,
+            'accounting.open' => \App\Http\Middleware\EnsureAccountingDateIsOpen::class,
+            'feature' => \App\Http\Middleware\EnsureFeatureIsEnabled::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -798,7 +798,7 @@ Ce bon a déjà été traité.
 
 <form method="POST" action="{{ route('sortie-caisses.rejeter',$sortie->id) }}">
 @csrf
-<button type="submit" class="btn btn-danger" onclick="return confirm('Rejeter ce bon de sortie ?')">
+<button type="submit" class="btn btn-danger" data-confirm="Rejeter ce bon de sortie ?">
 <i class="bi bi-x-circle me-1"></i>Rejeter
 </button>
 </form>

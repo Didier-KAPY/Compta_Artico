@@ -95,24 +95,33 @@ class CarteServiceController extends Controller
     private function formData(?CarteService $carteService = null): array
     {
         $agents = User::with(['departement', 'fonction'])->orderBy('nom')->orderBy('prenom')->get();
-        $gerant = User::with('role')->get()->first(fn (User $user) => in_array(
-            mb_strtolower(trim((string) $user->role?->designation)),
-            ['gérant', 'gerant'],
-            true
-        ));
+        $gerant = $this->gerant();
+        $entreprise = Entreprise::first();
         $signataire = $gerant ? trim($gerant->prenom.' '.$gerant->nom) : '';
 
-        return compact('agents', 'carteService', 'signataire');
+        return compact('agents', 'carteService', 'signataire', 'gerant', 'entreprise');
     }
 
     private function cardData(CarteService $carteService): array
     {
         $carteService->load(['user.departement', 'user.fonction']);
         $entreprise = Entreprise::first();
+        $gerant = $this->gerant();
         $logoData = $this->imageData($entreprise?->logo);
         $photoData = $this->imageData($carteService->user?->photo);
+        $signatureData = $this->imageData($gerant?->signature);
+        $cachetData = $this->imageData($entreprise?->cachet);
 
-        return compact('carteService', 'entreprise', 'logoData', 'photoData');
+        return compact('carteService', 'entreprise', 'logoData', 'photoData', 'signatureData', 'cachetData');
+    }
+
+    private function gerant(): ?User
+    {
+        return User::with('role')->get()->first(fn (User $user) => in_array(
+            mb_strtolower(trim((string) $user->role?->designation)),
+            ['gérant', 'gerant'],
+            true
+        ));
     }
 
     private function imageData(?string $path): ?string

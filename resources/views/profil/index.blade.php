@@ -58,7 +58,18 @@
                         <div class="col-md-6"><label class="form-label fw-semibold">Département</label><input class="form-control bg-light" value="{{ $user->departement?->designation ?? 'Non affecté' }}" readonly></div>
                         <div class="col-md-6"><label class="form-label fw-semibold">Fonction</label><input class="form-control bg-light" value="{{ $user->fonction?->designation ?? 'Non affectée' }}" readonly></div>
                         <div class="col-12"><label class="form-label fw-semibold">Nouvelle photo</label><input type="file" name="photo" accept="image/*" class="form-control @error('photo') is-invalid @enderror">@error('photo')<div class="invalid-feedback">{{ $message }}</div>@enderror<div class="form-text">JPG, PNG ou WEBP — taille maximale de 2 Mo.</div></div>
-                        <div class="col-12"><label class="form-label fw-semibold">Signature</label>@if($user->signature)<div class="mb-2"><img src="{{ asset('storage/'.$user->signature) }}" alt="Signature de {{ $user->prenom }}" style="max-width:220px;max-height:90px;object-fit:contain" class="border rounded bg-white p-2"></div>@endif<input type="file" name="signature" accept="image/*" class="form-control @error('signature') is-invalid @enderror">@error('signature')<div class="invalid-feedback">{{ $message }}</div>@enderror<div class="form-text">Image de la signature, 2 Mo maximum.</div></div>
+                        <div class="col-12"><label class="form-label fw-semibold">Signature</label>@if($user->signature)<div class="mb-2"><img src="{{ asset('storage/'.$user->signature) }}" alt="Signature de {{ $user->prenom }}" style="max-width:220px;max-height:90px;object-fit:contain"></div>@endif<input type="file" name="signature" accept="image/png" class="form-control @error('signature') is-invalid @enderror">@error('signature')<div class="invalid-feedback">{{ $message }}</div>@enderror<div class="form-text">PNG avec fond transparent, 2 Mo maximum.</div></div>
+                        @if($user->hasRole(['Super Admin', 'Admin', 'Gérant', 'Gerant', 'Directeur Général']))
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">Logo de l’entreprise</label>
+                                @if($entreprise?->logo)
+                                    <div class="mb-2"><img src="{{ asset('storage/'.$entreprise->logo) }}" alt="Logo de l’entreprise" style="max-width:180px;max-height:120px;object-fit:contain"></div>
+                                @endif
+                                <input type="file" name="logo" accept="image/png" class="form-control @error('logo') is-invalid @enderror" @disabled(!$entreprise)>
+                                @error('logo')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                <div class="form-text">{{ $entreprise ? 'Ce logo sera repris automatiquement sur les cartes de service. PNG avec fond transparent, 2 Mo maximum.' : 'Veuillez d’abord renseigner l’entreprise dans les paramètres.' }}</div>
+                            </div>
+                        @endif
                     </div>
                 </div></div>
 

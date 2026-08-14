@@ -1,0 +1,6 @@
+@extends('layouts.app')
+@section('title','Mouvements budgétaires')
+@section('module-sidebar') @include('budgets._sidebar') @endsection
+@section('content') @include('budgets._styles')
+<div class="container-fluid py-3 budget-dashboard">@include('budgets._heading',['eyebrow'=>'Traçabilité','heading'=>'Mouvements budgétaires','description'=>'Historique permanent des engagements, réalisations, révisions et transferts.','icon'=>'arrow-left-right'])
+<section class="card border-0 shadow-sm"><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Date</th><th>Type</th><th>Ligne</th><th>Référence</th><th class="text-end">Montant</th><th>Motif</th></tr></thead><tbody>@forelse($mouvementsBudgetaires as $m)<tr><td>{{ $m->date_mouvement?->format('d/m/Y H:i') }}</td><td><span class="badge bg-light text-dark">{{ str_replace('_',' ',$m->type) }}</span></td><td>{{ $m->ligne?->code }} — {{ $m->ligne?->rubrique }}</td><td>{{ $m->reference_document ?? '—' }}</td><td class="text-end fw-semibold">{{ number_format($m->montant,2,',',' ') }} {{ $m->monnaie }}</td><td>{{ $m->motif ?? '—' }}</td></tr>@empty<tr><td colspan="6" class="text-center text-muted py-5">Aucun mouvement budgétaire.</td></tr>@endforelse</tbody></table></div></section></div>@endsection

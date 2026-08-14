@@ -158,13 +158,6 @@
                                 <label class="form-label">Montant TVA</label>
                                 <input type="text" id="montant_tva" class="form-control calculated-field" readonly>
                             </div>
-                            <div class="col-12">
-                                <div class="form-check border rounded p-3 ps-5 bg-light">
-                                    <input class="form-check-input" type="checkbox" name="regroupement_quotidien" value="1" id="regroupement_quotidien" {{ old('regroupement_quotidien') ? 'checked' : '' }}>
-                                    <label class="form-check-label fw-semibold" for="regroupement_quotidien">Regrouper à la clôture journalière</label>
-                                    <div class="form-text">Le journal restera en attente, sans bon ni écriture, jusqu’à la clôture de la journée.</div>
-                                </div>
-                            </div>
                         </div>
                     </section>
 

@@ -16,7 +16,7 @@
            class="nav-link {{ request()->routeIs('dashboard') ? 'active-menu' : '' }}">
 
             <i class="bi bi-speedometer2 me-2"></i>
-            Dashboard
+            Tableau de bord
 
         </a>
     </li>
@@ -27,7 +27,7 @@
     @include('layouts.partials.entree-caisses')
     @include('layouts.partials.brc')
     @include('layouts.partials.journaux')
-    @include('layouts.partials.comptabilite')
+    @if(config('features.accounting')) @include('layouts.partials.comptabilite') @endif
 
 
 @endif
@@ -79,7 +79,7 @@
         <a href="{{ route('dashboard') }}"
            class="nav-link {{ request()->routeIs('dashboard') ? 'active-menu' : '' }}">
             <i class="bi bi-speedometer2 me-2"></i>
-            Dashboard
+            Tableau de bord
         </a>
     </li>
 
@@ -88,7 +88,7 @@
     @include('layouts.partials.entree-caisses')
     @include('layouts.partials.brc')
     @include('layouts.partials.journaux')
-    @include('layouts.partials.comptabilite')
+    @if(config('features.accounting')) @include('layouts.partials.comptabilite') @endif
 
 @endif
 

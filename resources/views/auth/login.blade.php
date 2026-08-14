@@ -260,6 +260,18 @@
         .submit-button:hover { background: var(--primary-dark); transform: translateY(-1px); box-shadow: 0 13px 28px rgba(23,107,77,.25); }
         .submit-button:active { transform: translateY(0); }
         .submit-button:focus-visible { outline: 3px solid rgba(23,107,77,.25); outline-offset: 3px; }
+        .submit-button.is-loading { cursor: wait; opacity: .85; pointer-events: none; }
+
+        .login-spinner {
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255,255,255,.45);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: login-spin .7s linear infinite;
+        }
+
+        @keyframes login-spin { to { transform: rotate(360deg); } }
 
         .support {
             margin: 1.75rem 0 0;
@@ -341,7 +353,7 @@
                 </div>
             @endif
 
-            <form method="POST" action="{{ route('handlelogin') }}">
+            <form id="login-form" method="POST" action="{{ route('handlelogin') }}">
                 @csrf
 
                 <div class="field">
@@ -388,7 +400,7 @@
                     @enderror
                 </div>
 
-                <button type="submit" class="submit-button">
+                <button id="login-submit" type="submit" class="submit-button">
                     <span>Se connecter</span>
                     <i class="bi bi-arrow-right" aria-hidden="true"></i>
                 </button>
@@ -409,6 +421,23 @@
         toggleButton.setAttribute('aria-pressed', String(shouldShow));
         toggleButton.setAttribute('aria-label', shouldShow ? 'Masquer le mot de passe' : 'Afficher le mot de passe');
         toggleButton.querySelector('i').className = shouldShow ? 'bi bi-eye-slash' : 'bi bi-eye';
+    });
+
+    const loginForm = document.getElementById('login-form');
+    const loginSubmit = document.getElementById('login-submit');
+
+    loginForm?.addEventListener('submit', () => {
+        loginSubmit.disabled = true;
+        loginSubmit.classList.add('is-loading');
+        loginSubmit.setAttribute('aria-busy', 'true');
+        loginSubmit.innerHTML = '<span class="login-spinner" aria-hidden="true"></span><span>Connexion...</span>';
+    });
+
+    window.addEventListener('pageshow', () => {
+        loginSubmit.disabled = false;
+        loginSubmit.classList.remove('is-loading');
+        loginSubmit.removeAttribute('aria-busy');
+        loginSubmit.innerHTML = '<span>Se connecter</span><i class="bi bi-arrow-right" aria-hidden="true"></i>';
     });
 </script>
 </body>

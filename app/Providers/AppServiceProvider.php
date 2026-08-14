@@ -62,12 +62,22 @@ class AppServiceProvider extends ServiceProvider
             'Super Admin', 'DAF', 'Comptable',
         ]));
 
-        Gate::define('deleteEtatBesoin', fn (User $user): bool => $user->hasRole('Super Admin'));
-        Gate::define('deleteFinancialDocument', fn (User $user): bool => $user->isSuperAdmin());
+        Gate::define('deleteEtatBesoin', fn (User $user): bool => $user->isSuperAdmin() || $user->isManagement());
+        Gate::define('deleteFinancialDocument', fn (User $user): bool => $user->isSuperAdmin() || $user->isManagement());
         Gate::define('restoreFinancialDocument', fn (User $user): bool => $user->isSuperAdmin());
         Gate::define('forceDeleteFinancialDocument', fn (User $user): bool => $user->isSuperAdmin());
         Gate::define('viewFinancialTrash', fn (User $user): bool => $user->isSuperAdmin());
         Gate::define('viewFinancialAudit', fn (User $user): bool => $user->isSuperAdmin());
+        Gate::define('viewBudget', fn (User $user): bool => $user->hasRole(['Super Admin','Admin','Directeur Général','Gérant','Gerant','DAF','Comptable']));
+        Gate::define('createBudget', fn (User $user): bool => $user->hasRole(['Super Admin','DAF']));
+        Gate::define('updateBudget', fn (User $user): bool => $user->hasRole(['Super Admin','DAF']));
+        Gate::define('validateBudget', fn (User $user): bool => $user->isSuperAdmin());
+        Gate::define('manageBudgetLines', fn (User $user): bool => $user->hasRole(['Super Admin','DAF']));
+        Gate::define('viewBudgetExecution', fn (User $user): bool => $user->hasRole(['Super Admin','Admin','Directeur Général','Gérant','Gerant','DAF','Comptable']));
+        Gate::define('reviseBudget', fn (User $user): bool => $user->hasRole(['Super Admin','DAF']));
+        Gate::define('transferBudget', fn (User $user): bool => $user->hasRole(['Super Admin','DAF']));
+        Gate::define('closeBudget', fn (User $user): bool => $user->isSuperAdmin());
+        Gate::define('reopenBudget', fn (User $user): bool => $user->isSuperAdmin());
 
         Gate::define('viewEtatBesoinDetail', fn (User $user): bool => ! $user->hasRole([
             'Chef de Service', 'Chef de Département', 'Directeur Technique',
