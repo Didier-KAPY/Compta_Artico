@@ -92,7 +92,7 @@
             @if($photoData)<img class="sc-photo" src="{{ $photoData }}" alt="Photo">@else<span class="sc-photo-placeholder">{{ $initiales ?: '—' }}</span>@endif
             <div class="sc-name" style="font-size:{{ $tailleNom }};line-height:{{ $ligneNom }}">{{ $nomCarte }}</div>
             <div class="sc-role">{{ $agent?->fonction?->designation ?? 'Fonction non renseignée' }}</div>
-            <div class="sc-dept">{{ $agent?->departement?->designation ?? 'Département non renseigné' }}</div>
+            <div class="sc-dept">{{ $agent?->departement?->designation ?? 'Direction non renseignée' }}</div>
             <div class="sc-info">
                 <div><b>Sexe :</b> {{ $carteService->sexe ?: '—' }}</div>
                 <div><b>Adresse :</b> {{ $adresseCarte ?: '—' }}</div>

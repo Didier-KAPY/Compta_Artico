@@ -117,14 +117,14 @@
                             </div>
 
                             <div class="col-md-2">
-                                <input type="number" name="lignes[{{ $index }}][quantite]"
+                                <input type="text" inputmode="decimal" name="lignes[{{ $index }}][quantite]"
                                        class="form-control qte"
                                        value="{{ $ligne->quantite }}"
                                        placeholder="Qté">
                             </div>
 
                             <div class="col-md-3">
-                                <input type="number" name="lignes[{{ $index }}][prix_unitaire]"
+                                <input type="text" inputmode="decimal" name="lignes[{{ $index }}][prix_unitaire]"
                                        class="form-control prix"
                                        value="{{ $ligne->prix_unitaire }}"
                                        placeholder="Prix">
@@ -212,8 +212,8 @@ function calculerTotal() {
 
     document.querySelectorAll('.ligne').forEach(function(row){
 
-        let q = parseFloat(row.querySelector('.qte')?.value || 0);
-        let p = parseFloat(row.querySelector('.prix')?.value || 0);
+        let q = parseFloat((row.querySelector('.qte')?.value || '0').replace(',', '.'));
+        let p = parseFloat((row.querySelector('.prix')?.value || '0').replace(',', '.'));
 
         let m = q * p;
 
@@ -246,11 +246,11 @@ document.getElementById('add-line').addEventListener('click', function () {
             </div>
 
             <div class="col-md-2">
-                <input type="number" name="lignes[${index}][quantite]" class="form-control qte" placeholder="Qté">
+                <input type="text" inputmode="decimal" name="lignes[${index}][quantite]" class="form-control qte" placeholder="Qté">
             </div>
 
             <div class="col-md-3">
-                <input type="number" name="lignes[${index}][prix_unitaire]" class="form-control prix" placeholder="Prix">
+                <input type="text" inputmode="decimal" name="lignes[${index}][prix_unitaire]" class="form-control prix" placeholder="Prix">
             </div>
 
             <div class="col-md-2">

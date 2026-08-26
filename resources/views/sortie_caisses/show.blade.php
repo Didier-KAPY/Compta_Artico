@@ -183,7 +183,7 @@ Numéro :
 </strong>
 
 
-{{ $sortie->numero }}
+{{ $sortie->numero ?: 'Non attribué' }}
 
 
 </div>
@@ -916,7 +916,7 @@ Numéro :
 </strong>
 
 
-{{ $sortie->numero }}
+{{ $sortie->numero ?: 'Non attribué' }}
 
 
 <br>
@@ -959,6 +959,18 @@ Bénéficiaire :
 
 
 
+
+<div class="mb-3">
+<label for="type_bon_validation" class="form-label fw-bold">Nature du bon <span class="text-danger">*</span></label>
+<select id="type_bon_validation" name="type_bon" class="form-select @error('type_bon') is-invalid @enderror" required>
+<option value="">Choisir la nature du bon</option>
+<option value="BSC" @selected(old('type_bon', $sortie->type_bon) === 'BSC')>BSC — Bon de sortie caisse</option>
+<option value="BSB" @selected(old('type_bon', $sortie->type_bon) === 'BSB')>BSB — Bon de sortie bancaire</option>
+<option value="BSM" @selected(old('type_bon', $sortie->type_bon) === 'BSM')>BSM — Bon de sortie Mobile Money</option>
+</select>
+@error('type_bon')<div class="invalid-feedback">{{ $message }}</div>@enderror
+<div class="form-text">La nature choisie déterminera le préfixe du numéro de référence.</div>
+</div>
 
 <div class="mb-3">
 

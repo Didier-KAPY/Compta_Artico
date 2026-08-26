@@ -48,12 +48,16 @@ class DepartementEtatBesoinTest extends TestCase
         $this->actingAs($userA)->post(route('etat-besoins.store'), [
             'date' => now()->toDateString(), 'departement_id' => $departementB->id,
             'demandeur' => 'Agent test', 'motif' => 'Besoin test', 'monnaie' => 'CDF',
-            'designation' => ['Fourniture'], 'quantite' => [2], 'prix_unitaire' => [50],
+            'designation' => ['Fourniture'], 'quantite' => ['1,5'], 'prix_unitaire' => ['2 000,50'],
         ])->assertRedirect(route('etat-besoins.create'));
 
         $this->assertDatabaseHas('etat_besoins', [
             'user_id' => $userA->id, 'departement_id' => $departementB->id,
-            'service' => $departementB->designation, 'montant_estime' => 100,
+            'service' => $departementB->designation, 'montant_estime' => 3000.75,
+        ]);
+        $this->assertDatabaseHas('etat_besoin_lignes', [
+            'designation' => 'Fourniture', 'quantite' => 1.5,
+            'prix_unitaire' => 2000.50, 'montant' => 3000.75,
         ]);
     }
 
@@ -61,7 +65,14 @@ class DepartementEtatBesoinTest extends TestCase
     {
         [$user, , $admin, $departement] = $this->contexte();
 
-        $this->actingAs($admin)->get(route('parametres.departements'))->assertOk()->assertSee('Départements');
+        $this->actingAs($admin)->get(route('parametres.departements'))
+            ->assertOk()
+            ->assertSee('Directions')
+            ->assertSee('Modifier');
+        $this->actingAs($admin)->put(route('parametres.departements.update', $departement), [
+            'designation' => 'Département modifié',
+        ])->assertRedirect();
+        $this->assertSame('Département modifié', $departement->fresh()->designation);
         $this->actingAs($admin)->post(route('parametres.departements.store'), [
             'designation' => 'Logistique',
         ])->assertRedirect();

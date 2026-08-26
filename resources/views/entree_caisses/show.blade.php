@@ -64,9 +64,9 @@
 
 
                 <div class="col-md-3">
-                    <strong>Type</strong>
+                    <strong>Type de bon</strong>
                     <br>
-                    {{ $entree->type }}
+                    {{ $entree->type_bon ?? str($entree->numero)->before('-') }}
                 </div>
 
 
@@ -223,6 +223,13 @@
         </h5>
 
     </div>
+    @if($entree->appliquer_tva)
+        <div class="alert alert-light border text-end">
+            Montant HT : <strong>{{ number_format($entree->montant_ht, 2, ',', ' ') }} {{ $entree->monnaie }}</strong>
+            · TVA ({{ number_format($entree->taux_tva, 2, ',', ' ') }} %) :
+            <strong>{{ number_format($entree->montant_tva, 2, ',', ' ') }} {{ $entree->monnaie }}</strong>
+        </div>
+    @endif
 @can('manageEntreeCaisse')
 @if($entree->statut == 'En attente')
 

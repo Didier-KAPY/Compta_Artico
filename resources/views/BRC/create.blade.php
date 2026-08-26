@@ -12,12 +12,18 @@
         <div class="alert alert-light border py-2">
             @if($taux)1 USD = <strong>{{ number_format($taux->taux_de_change, 2, ',', ' ') }} CDF</strong>@else<span class="text-warning">Aucun taux de change configuré pour les USD.</span>@endif
         </div>
-        <form method="POST" action="{{ route('brc.store') }}">@csrf
+        <form method="POST" action="{{ route('brc.store') }}" enctype="multipart/form-data">@csrf
             <div class="row g-2 mb-3">
                 <div class="col-md-2"><label class="small fw-bold">Date *</label><input type="date" name="date" class="form-control form-control-sm" value="{{ old('date', now()->toDateString()) }}" required></div>
                 <div class="col-md-4"><label class="small fw-bold">Journal *</label><select name="journal_type_id" class="form-select form-select-sm journal-search" required><option value="">Choisir</option>@foreach($journaux as $journal)<option value="{{ $journal->id }}" @selected((string)old('journal_type_id') === (string)$journal->id)>{{ $journal->code }} — {{ $journal->compte?->compte }} - {{ $journal->compte?->designation }}</option>@endforeach</select></div>
                 <div class="col-md-2"><label class="small fw-bold">Monnaie *</label><select name="monnaie" id="monnaie" class="form-select form-select-sm"><option value="CDF" @selected(old('monnaie', 'CDF') === 'CDF')>CDF</option><option value="USD" @selected(old('monnaie') === 'USD')>USD</option></select></div>
                 <div class="col-md-4"><label class="small fw-bold">Sens du compte du journal *</label><select name="sens" class="form-select form-select-sm"><option value="debit" @selected(old('sens') === 'debit')>Débit</option><option value="credit" @selected(old('sens') === 'credit')>Crédit</option></select><small class="text-muted">Les imputations prennent le sens opposé.</small></div>
+            </div>
+            <div class="mb-3">
+                <label for="piece_justificative" class="small fw-bold">Pièce justificative</label>
+                <input type="file" name="piece_justificative" id="piece_justificative" class="form-control form-control-sm @error('piece_justificative') is-invalid @enderror" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png">
+                <small class="text-muted">Formats acceptés : PDF, JPG, JPEG ou PNG - 5 Mo maximum.</small>
+                @error('piece_justificative')<div class="invalid-feedback">{{ $message }}</div>@enderror
             </div>
             <div class="d-flex justify-content-between mb-2"><h6><i class="bi bi-calculator me-1"></i>Lignes d’imputation</h6><button type="button" id="ajouterLigne" class="btn btn-primary btn-sm"><i class="bi bi-plus"></i> Ajouter une ligne</button></div>
             <div class="table-responsive"><table class="table table-sm table-bordered" id="tableLignes">

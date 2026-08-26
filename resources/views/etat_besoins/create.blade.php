@@ -114,7 +114,8 @@
                             </td>
 
                             <td>
-                                <input type="number"
+                                <input type="text"
+                                       inputmode="decimal"
                                        name="quantite[]"
                                        class="form-control qty"
                                        value="1"
@@ -123,7 +124,8 @@
                             </td>
 
                             <td>
-                                <input type="number"
+                                <input type="text"
+                                       inputmode="decimal"
                                        name="prix_unitaire[]"
                                        class="form-control price"
                                        value="0"
@@ -133,7 +135,7 @@
                             </td>
 
                             <td>
-                                <input type="number"
+                                <input type="text"
                                        class="form-control total"
                                        readonly
                                        value="0">
@@ -199,7 +201,8 @@ document.addEventListener('DOMContentLoaded', function () {
             </td>
 
             <td>
-                <input type="number"
+                <input type="text"
+                       inputmode="decimal"
                        name="quantite[]"
                        class="form-control qty"
                        value="1"
@@ -208,7 +211,8 @@ document.addEventListener('DOMContentLoaded', function () {
             </td>
 
             <td>
-                <input type="number"
+                <input type="text"
+                       inputmode="decimal"
                        name="prix_unitaire[]"
                        class="form-control price"
                        value="0"
@@ -218,7 +222,7 @@ document.addEventListener('DOMContentLoaded', function () {
             </td>
 
             <td>
-                <input type="number"
+                <input type="text"
                        class="form-control total"
                        readonly
                        value="0">
@@ -270,17 +274,29 @@ document.addEventListener('DOMContentLoaded', function () {
 
         tbody.querySelectorAll('tr').forEach(row => {
 
-            const qty = parseFloat(row.querySelector('.qty')?.value) || 0;
-            const price = parseFloat(row.querySelector('.price')?.value) || 0;
-
+            const nombre = value => {
+                const normalise = String(value ?? '')
+                    .replace(/[\s\u00A0]/g, '')
+                    .replace(',', '.');
+                const resultat = Number.parseFloat(normalise);
+                return Number.isFinite(resultat) ? resultat : 0;
+            };
+            const formatMontant = value => value.toLocaleString('fr-FR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+            const qty = nombre(row.querySelector('.qty')?.value);
+            const price = nombre(row.querySelector('.price')?.value);
             const lineTotal = qty * price;
 
-            row.querySelector('.total').value = lineTotal.toFixed(2);
-
+            row.querySelector('.total').value = formatMontant(lineTotal);
             total += lineTotal;
         });
 
-        totalGeneral.innerText = total.toFixed(2);
+        totalGeneral.innerText = total.toLocaleString('fr-FR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
     }
 
     calculTotal();

@@ -14,7 +14,7 @@ class BRC extends Model
 
     protected $fillable = [
         'user_id', 'journal_type_id', 'journal_id', 'reference', 'date',
-        'monnaie', 'sens', 'total', 'statut', 'valide_par', 'date_validation',
+        'monnaie', 'sens', 'total', 'piece_justificative', 'statut', 'valide_par', 'date_validation',
         'motif_suppression', 'supprime_par', 'restaure_par', 'restaure_le',
         'origine', 'cloture_journaliere_id', 'genere_automatiquement_le',
     ];

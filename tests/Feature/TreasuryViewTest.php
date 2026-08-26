@@ -68,6 +68,56 @@ class TreasuryViewTest extends TestCase
             ->assertOk()->assertSee('SOLDE D’OUVERTURE')->assertSee('100,00')->assertSee('130,00');
     }
 
+    public function test_statement_displays_the_tva_account_instead_of_the_treasury_account(): void
+    {
+        $role = Role::create(['designation' => 'Admin']);
+        $user = User::create([
+            'nom' => 'Test', 'prenom' => 'TVA', 'email' => 'statement-tva@test.local',
+            'password' => bcrypt('password'), 'role_id' => $role->id,
+            'password_default' => 0, 'statut' => 'Actif',
+        ]);
+        $treasuryAccount = ListeDesComptes::create([
+            'user_id' => $user->id, 'compte' => '571100',
+            'designation' => 'Caisse principale', 'nature' => 'Actif',
+        ]);
+        $tvaAccount = ListeDesComptes::create([
+            'user_id' => $user->id, 'compte' => '443100',
+            'designation' => 'TVA facturée', 'nature' => 'Passif',
+        ]);
+        $type = JournalType::create([
+            'user_id' => $user->id, 'code' => 'CAI', 'libelle' => 'Caisse',
+            'liste_des_comptes_id' => $treasuryAccount->id, 'nature' => 'caisse',
+            'monnaie' => 'CDF', 'est_tresorerie' => true,
+        ]);
+        Journaux::create([
+            'user_id' => $user->id, 'journal_type_id' => $type->id,
+            'liste_des_comptes_id' => $tvaAccount->id,
+            'reference' => 'BEC-TVA-001', 'date' => '2026-07-02',
+            'description' => 'TVA', 'statut' => 'Validé',
+            'entrees_cdf' => 16, 'sorties_cdf' => 0,
+        ]);
+
+        $this->actingAs($user)->get(route('journaux.releve', [
+            'date_debut' => '2026-07-01',
+            'date_fin' => '2026-07-31',
+            'journal_type_id' => $type->id,
+        ]))
+            ->assertOk()
+            ->assertSee('BEC-TVA-001')
+            ->assertSee('<td>443100</td>', false)
+            ->assertDontSee('<td>571100</td>', false);
+    }
+    public function test_statement_uses_the_correct_tva_label_for_entries_and_outputs(): void
+    {
+        $entryTva = new Journaux(['description' => 'TVA']);
+        $entryTva->forceFill(['entree_caisse_id' => 10]);
+
+        $outputTva = new Journaux(['description' => 'TVA']);
+        $outputTva->forceFill(['sortie_caisse_id' => 20]);
+
+        $this->assertSame('TVA_FACTUREE', $entryTva->libelle_releve);
+        $this->assertSame('TVA_RECUPERABLE', $outputTva->libelle_releve);
+    }
     private function journal(
         User $user,
         JournalType $type,

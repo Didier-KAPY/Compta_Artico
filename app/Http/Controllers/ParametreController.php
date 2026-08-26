@@ -48,7 +48,7 @@ class ParametreController extends Controller
             'designation' => 'required|string|max:150|unique:departements,designation',
         ]);
         Departement::create($data);
-        return back()->with('success', 'Département ajouté avec succès.');
+        return back()->with('success', 'Direction ajoutée avec succès.');
     }
 
     public function updateDepartement(Request $request, Departement $departement)
@@ -57,7 +57,7 @@ class ParametreController extends Controller
             'designation' => 'required|string|max:150|unique:departements,designation,'.$departement->id,
         ]);
         $departement->update($data);
-        return back()->with('success', 'Département mis à jour.');
+        return back()->with('success', 'Direction mise à jour.');
     }
 
     public function storeFonction(Request $request)
@@ -90,10 +90,10 @@ class ParametreController extends Controller
     public function destroyDepartement(Departement $departement)
     {
         if ($departement->users()->exists() || $departement->etatBesoins()->exists()) {
-            return back()->with('error', 'Ce département est utilisé et ne peut pas être supprimé.');
+            return back()->with('error', 'Cette direction est utilisée et ne peut pas être supprimée.');
         }
         $departement->delete();
-        return back()->with('success', 'Département supprimé.');
+        return back()->with('success', 'Direction supprimée.');
     }
 
     public function affecterDepartement(Request $request, User $user)
@@ -339,19 +339,17 @@ public function createTauxChange()
 public function storeTauxChange(Request $request)
 {
     $request->validate([
-        'taux_de_change' => 'required|numeric|min:0',
+        'taux_de_change' => 'required|numeric|gt:0',
     ]);
 
-    $taux = TauxDeChange::latest()->first();
-
-    if ($taux) {
-        $taux->update(['taux_de_change' => $request->taux_de_change]);
-    } else {
-        TauxDeChange::create([
-            'user_id' => Auth::id(),
-            'taux_de_change' => $request->taux_de_change,
-        ]);
-    }
+    TauxDeChange::create([
+        'user_id' => Auth::id(),
+        'entreprise_id' => Entreprise::first()?->id,
+        'devise_source' => 'USD',
+        'devise_cible' => 'CDF',
+        'taux_de_change' => $request->taux_de_change,
+        'date_taux' => today(),
+    ]);
 
     return back()->with(
         'success',

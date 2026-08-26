@@ -26,8 +26,8 @@ class DocumentNumberServiceTest extends TestCase
         $service = app(DocumentNumberService::class);
 
         $this->assertSame('BSC-26080001', $service->next('BSC', '2026-08-05', 'Caisse', 1));
-        $this->assertSame('BSC-B-26080001', $service->next('BSC', '2026-08-05', 'Banque', 1));
-        $this->assertSame('BSC-M-26080001', $service->next('BSC', '2026-08-05', 'Mobile Money', 1));
+        $this->assertSame('BSB-26080001', $service->next('BSC', '2026-08-05', 'Banque', 1));
+        $this->assertSame('BSM-26080001', $service->next('BSC', '2026-08-05', 'Mobile Money', 1));
         $this->assertSame('BSC-26080001', $service->next('BSC', '2026-08-05', 'Caisse', 2));
     }
 

@@ -9,13 +9,13 @@
         <div>
             <h4 class="mb-0">
                 <i class="bi bi-journal-bookmark me-2"></i>
-                Détail du Journal Comptable
+                {{ $showTitre ?? 'Détail du Journal Comptable' }}
             </h4>
-            <small class="text-muted">Consultation de l'écriture comptable</small>
+            <small class="text-muted">{{ $showDescription ?? "Consultation de l'écriture comptable" }}</small>
         </div>
         <div class="d-flex gap-2">
             @can('deleteFinancialDocument')<button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#modalSuppressionDocument"><i class="bi bi-trash me-1"></i>Supprimer</button>@endcan
-            <a href="{{ route('journaux.index') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Retour</a>
+            <a href="{{ route($showRetourRoute ?? 'journaux.index') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Retour</a>
         </div>
     </div>
 
@@ -199,7 +199,7 @@
 
     <!-- MOUVEMENTS (CORRIGÉ ALIGNEMENT) -->
     <div class="card shadow-sm mb-3">
-        <div class="card-header"><strong>Mouvements Comptables</strong></div>
+        <div class="card-header"><strong>Mouvements</strong></div>
 
         <div class="card-body">
             <div class="row text-center g-3">
@@ -248,7 +248,7 @@
         <i class="bi bi-shield-check fs-4 me-2"></i>
 
         <h5 class="mb-0">
-            Traitement du journal comptable
+            Traitement du journal
         </h5>
 
     </div>
@@ -335,6 +335,15 @@
 
                 <!-- BODY -->
                 <div class="modal-body">
+                    @if($errors->any())
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                @foreach($errors->all() as $error)
+                                    <li>{{ $error }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
 
 
 
@@ -367,85 +376,55 @@
 
 
                     </div>
-
-
-
-
-
-
-                    <!-- TYPE JOURNAL -->
-
-                    <div class="mb-3">
-
-
-                        <label class="form-label fw-bold">
-
-                            Type de journal
-
-                            <span class="text-danger">*</span>
-
-                        </label>
-
-
-
-
-                        <select name="journal_type_id"
-
-                                class="form-select"
-
-                                required>
-
-
-
-                            <option value="">
-
-                                -- Choisir --
-
-                            </option>
-
-
-
-
-                            @foreach($journalTypes as $journalType)
-
-
-                                <option value="{{ $journalType->id }}"
-
-                                {{ old('journal_type_id', $journal->journal_type_id) == $journalType->id ? 'selected' : '' }}>
-                                {{ $journalType->libelle }}
-
-
-                                </option>
-
-
-
-                            @endforeach
-
-
-
-                        </select>
-
-
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-12">
+                            <label for="nom_partenaire" class="form-label fw-bold">{{ mb_strtolower(trim((string) $journal->type)) === 'depense' ? 'Bénéficiaire' : 'Nom du client / partenaire' }}</label>
+                            <input type="text"
+                                   name="nom_partenaire"
+                                   id="nom_partenaire"
+                                   value="{{ old('nom_partenaire', $journal->nom_partenaire) }}"
+                                   class="form-control @error('nom_partenaire') is-invalid @enderror"
+                                   maxlength="255">
+                            @error('nom_partenaire')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="col-md-6">
+                            <label for="telephone_partenaire" class="form-label fw-bold">Téléphone</label>
+                            <input type="tel"
+                                   name="telephone_partenaire"
+                                   id="telephone_partenaire"
+                                   value="{{ old('telephone_partenaire', $journal->telephone_partenaire) }}"
+                                   class="form-control @error('telephone_partenaire') is-invalid @enderror"
+                                   maxlength="50">
+                            @error('telephone_partenaire')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+                        @if(mb_strtolower(trim((string) $journal->type)) !== 'depense')
+                        <div class="col-md-6">
+                            <label for="adresse_partenaire" class="form-label fw-bold">Adresse</label>
+                            <input type="text"
+                                   name="adresse_partenaire"
+                                   id="adresse_partenaire"
+                                   value="{{ old('adresse_partenaire', $journal->adresse_partenaire) }}"
+                                   class="form-control @error('adresse_partenaire') is-invalid @enderror"
+                                   maxlength="255">
+                            @error('adresse_partenaire')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+                        @endif
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-bold">
-                            Libellé
-                            <span class="text-danger">*</span>
-                        </label>
-                        <select name="liste_des_comptes_id"
-                                id="liste_des_comptes_id_modal"
-                                class="form-select searchable-account"
-                                required>
-                            <option value="">-- Rechercher un libellé --</option>
-                            @foreach($comptes as $compte)
-                                <option value="{{ $compte->id }}"
-                                    {{ old('liste_des_comptes_id', $journal->liste_des_comptes_id) == $compte->id ? 'selected' : '' }}>
-                                    {{ $compte->designation }}
-                                </option>
-                            @endforeach
-                        </select>
+                        <label for="observation_traitement" class="form-label fw-bold">Observation</label>
+                        <textarea name="observation"
+                                  id="observation_traitement"
+                                  class="form-control @error('observation') is-invalid @enderror"
+                                  rows="3"
+                                  maxlength="2000"
+                                  placeholder="Obligatoire en cas de rejet">{{ old('observation', $journal->observation) }}</textarea>
+                        @error('observation')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                        <small class="text-muted">L’observation est obligatoire uniquement en cas de rejet.</small>
                     </div>
+
 
                 </div>
                 <!-- FOOTER -->
@@ -459,7 +438,6 @@
                     @can('rejeter', $journal)
                         <button type="submit"
                                 formaction="{{ route('journaux.rejeter',$journal->id) }}"
-                                formnovalidate
                                 class="btn btn-danger">
                             <i class="bi bi-x-circle"></i>
                             Rejeter
@@ -506,7 +484,12 @@
                 {{ $journal->statut }}
             </strong>
         </p>
-        <a href="{{ route('journaux.index') }}"
+        @if($journal->statut === 'Validé' && $journal->ecritures->contains('statut', 'En attente'))
+            <a href="{{ route('comptabilite.imputation-compte', ['journal_id' => $journal->id]) }}"
+               class="btn btn-success">
+                <i class="bi bi-diagram-3 me-1"></i>Imputer dans les comptes
+            </a>
+        @endif        <a href="{{ route($showRetourRoute ?? 'journaux.index') }}"
            class="btn btn-secondary">
             <i class="bi bi-arrow-left"></i>
             Retour
@@ -524,8 +507,16 @@
         @endcan
         @can('rejeter', $journal)
             @if($journal->statut !== 'Rejeté')
-                <form method="POST" action="{{ route('journaux.rejeter', $journal->id) }}" class="d-inline">
+                <form method="POST" action="{{ route('journaux.rejeter', $journal->id) }}" class="d-inline-block text-start">
                     @csrf
+                    <label for="observation_rejet_{{ $journal->id }}" class="visually-hidden">Observation</label>
+                    <textarea name="observation"
+                              id="observation_rejet_{{ $journal->id }}"
+                              class="form-control mb-2"
+                              rows="2"
+                              maxlength="2000"
+                              placeholder="Observation obligatoire en cas de rejet"
+                              required>{{ old('observation') }}</textarea>
                     <button class="btn btn-danger" data-confirm="Rejeter ce journal ?">
                         <i class="bi bi-x-circle"></i> Rejeter
                     </button>
@@ -537,20 +528,12 @@
 @endif
 @endsection
 
+@if($errors->any() && $journal->statut === 'En attente')
 @push('scripts')
 <script>
-$(function () {
-    const modal = $('#modalTraitementJournal');
-    $('#liste_des_comptes_id_modal').select2({
-        width: '100%',
-        dropdownParent: modal,
-        placeholder: 'Rechercher un libellé',
-        allowClear: true,
-        language: {
-            noResults: function () { return 'Aucun libellé trouvé'; },
-            searching: function () { return 'Recherche…'; }
-        }
-    });
+document.addEventListener('DOMContentLoaded', function () {
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('modalTraitementJournal')).show();
 });
 </script>
 @endpush
+@endif

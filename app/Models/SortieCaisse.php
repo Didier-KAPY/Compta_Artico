@@ -11,11 +11,16 @@ class SortieCaisse extends Model
     protected $fillable = [
         'user_id',
         'numero',
+        'type_bon',
         'date',
         'etat_besoin_id',
         'beneficiaire',
         'motif',
         'montant',
+        'appliquer_tva',
+        'taux_tva',
+        'montant_ht',
+        'montant_tva',
         'monnaie',
         'statut',
         'type', 
@@ -26,7 +31,7 @@ class SortieCaisse extends Model
         'origine', 'cloture_journaliere_id', 'genere_automatiquement_le',
     ];
 
-    protected $casts = ['date' => 'date', 'date_validation' => 'datetime', 'restaure_le' => 'datetime', 'genere_automatiquement_le' => 'datetime'];
+    protected $casts = ['date' => 'date', 'appliquer_tva' => 'boolean', 'taux_tva' => 'decimal:2', 'montant_ht' => 'decimal:2', 'montant_tva' => 'decimal:2', 'date_validation' => 'datetime', 'restaure_le' => 'datetime', 'genere_automatiquement_le' => 'datetime'];
 
         public function etatBesoin()
     {

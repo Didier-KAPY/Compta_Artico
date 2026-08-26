@@ -8,6 +8,7 @@ use App\Models\EtatBesoin;
 use App\Models\EntreeCaisse;
 use App\Models\SortieCaisse;
 use App\Models\JournalType;
+use App\Models\ParametrageComptable;
 use App\Models\TauxDeChange;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +18,112 @@ use Illuminate\Validation\ValidationException;
 class WorkflowComptableService
 {
     public function __construct(private AuditLogService $audit) {}
+
+    public function validerJournalAvecTva(Journaux $journal, ?int $journalTypeId = null, ?int $compteId = null): Journaux
+    {
+        return DB::transaction(function () use ($journal, $journalTypeId, $compteId) {
+            $selection = Journaux::lockForUpdate()->findOrFail($journal->id);
+            $principal = $selection;
+
+            if (mb_strtolower(trim((string) $selection->description)) === 'tva') {
+                $principal = Journaux::query()
+                    ->when(
+                        $selection->entree_caisse_id,
+                        fn ($query) => $query->where('entree_caisse_id', $selection->entree_caisse_id)->where('type', 'recette')
+                    )
+                    ->when(
+                        $selection->sortie_caisse_id,
+                        fn ($query) => $query->where('sortie_caisse_id', $selection->sortie_caisse_id)->where('type', 'depense')
+                    )
+                    ->lockForUpdate()
+                    ->first() ?? $selection;
+            }
+
+            if ($principal->is($selection) && mb_strtolower(trim((string) $principal->description)) === 'tva') {
+                $this->fail('La ligne principale du Bon est introuvable.');
+            }
+
+            if ($principal->statut === 'En attente') {
+                $principal = $this->validerJournal($principal, $journalTypeId, $compteId);
+            } elseif ($principal->statut !== 'Validé') {
+                $this->fail('Le journal principal a déjà été traité.');
+            }
+
+            if ($principal->entree_caisse_id || $principal->sortie_caisse_id) {
+                $journauxTva = Journaux::query()
+                    ->when($principal->entree_caisse_id, fn ($query) => $query->where('entree_caisse_id', $principal->entree_caisse_id))
+                    ->when($principal->sortie_caisse_id, fn ($query) => $query->where('sortie_caisse_id', $principal->sortie_caisse_id))
+                    ->whereRaw('LOWER(TRIM(description)) = ?', ['tva'])
+                    ->where('statut', 'En attente')
+                    ->lockForUpdate()
+                    ->get();
+
+                foreach ($journauxTva as $journalTva) {
+                    $typeId = $journalTypeId ?? $principal->journal_type_id;
+                    $compteTvaId = (int) $journalTva->liste_des_comptes_id;
+                    $compteTresorerieId = (int) JournalType::whereKey($typeId)->value('liste_des_comptes_id');
+
+                    // Compatibilité avec les journaux générés avant que le compte
+                    // TVA soit enregistré séparément du compte de trésorerie.
+                    if ($compteTvaId === $compteTresorerieId) {
+                        $codes = $principal->entree_caisse_id
+                            ? ['TVA_FACTUREE', 'TVA_DUE']
+                            : ['TVA_RECUPERABLE'];
+                        $compteTvaId = (int) ParametrageComptable::query()
+                            ->whereIn('code', $codes)
+                            ->orderByRaw(
+                                'CASE code '.collect($codes)->map(
+                                    fn ($code, $index) => "WHEN '{$code}' THEN {$index}"
+                                )->implode(' ').' ELSE 99 END'
+                            )
+                            ->value('liste_des_comptes_id');
+                    }
+
+                    if (! $compteTvaId || $compteTvaId === $compteTresorerieId) {
+                        $this->fail('Aucun compte TVA adapté n’est configuré dans les paramétrages comptables.');
+                    }
+
+                    $this->validerJournal($journalTva, $typeId, $compteTvaId);
+
+                    $ecritureTresorerie = $principal->ecritures()
+                        ->lockForUpdate()
+                        ->first();
+
+                    if (! $ecritureTresorerie) {
+                        $this->fail('L’écriture de trésorerie du journal principal est introuvable.');
+                    }
+
+                    $montantTvaCdf = max(
+                        (float) $journalTva->entrees_cdf,
+                        (float) $journalTva->sorties_cdf
+                    );
+                    $montantTvaUsd = max(
+                        (float) $journalTva->entrees_usd,
+                        (float) $journalTva->sorties_usd
+                    );
+
+                    if ($montantTvaUsd > 0) {
+                        $taux = (float) (TauxDeChange::latest()->value('taux_de_change') ?? 0);
+                        if ($taux <= 0) {
+                            $this->fail('Un taux de change valide est requis pour intégrer la TVA en CDF.');
+                        }
+                        $montantTvaCdf += $montantTvaUsd * $taux;
+                    }
+
+                    $ecritureTresorerie->update([
+                        'debit_cdf' => (float) $ecritureTresorerie->debit_cdf > 0
+                            ? (float) $ecritureTresorerie->debit_cdf + $montantTvaCdf
+                            : 0,
+                        'credit_cdf' => (float) $ecritureTresorerie->credit_cdf > 0
+                            ? (float) $ecritureTresorerie->credit_cdf + $montantTvaCdf
+                            : 0,
+                    ]);
+                }
+            }
+
+            return $principal->refresh();
+        });
+    }
 
     public function validerJournal(Journaux $journal, ?int $journalTypeId = null, ?int $compteId = null): Journaux
     {
@@ -51,11 +158,15 @@ class WorkflowComptableService
                 $type = JournalType::find($journalTypeId ?? $locked->journal_type_id);
                 $compteTresorerieId = $type?->liste_des_comptes_id;
                 $compteOperationId = $compteId ?? $locked->liste_des_comptes_id;
+                $estTva = mb_strtolower(trim((string) $locked->description)) === 'tva';
+                $contrepartieDifferee = ! $brcCloture
+                    && ! $estTva
+                    && ($locked->entree_caisse_id || $locked->sortie_caisse_id);
 
-                if (! $compteTresorerieId || ! $compteOperationId) {
+                if (! $compteTresorerieId || (! $contrepartieDifferee && ! $compteOperationId)) {
                     $this->fail('Le type de journal et le libellé doivent être associés à des comptes.');
                 }
-                if ((int) $compteTresorerieId === (int) $compteOperationId) {
+                if (! $contrepartieDifferee && (int) $compteTresorerieId === (int) $compteOperationId) {
                     $this->fail('Le libellé doit être différent du compte de trésorerie.');
                 }
 
@@ -101,16 +212,27 @@ class WorkflowComptableService
                     'date_validation' => null,
                 ];
 
-                EcritureComptable::create($commun + [
-                    'liste_des_comptes_id' => $estEntree ? $compteTresorerieId : $compteOperationId,
-                    'debit_cdf' => $montant,
-                    'credit_cdf' => 0,
-                ]);
-                EcritureComptable::create($commun + [
-                    'liste_des_comptes_id' => $estEntree ? $compteOperationId : $compteTresorerieId,
-                    'debit_cdf' => 0,
-                    'credit_cdf' => $montant,
-                ]);
+                if ($contrepartieDifferee) {
+                    EcritureComptable::create($commun + [
+                        'liste_des_comptes_id' => $compteTresorerieId,
+                        'debit_cdf' => $estEntree ? $montant : 0,
+                        'credit_cdf' => $estEntree ? 0 : $montant,
+                    ]);
+                } elseif ($estTva && ($locked->entree_caisse_id || $locked->sortie_caisse_id)) {
+                    // La TVA est fusionnée dans la ligne de trésorerie du journal
+                    // principal. Aucune écriture TVA séparée n’est créée.
+                } else {
+                    EcritureComptable::create($commun + [
+                        'liste_des_comptes_id' => $estEntree ? $compteTresorerieId : $compteOperationId,
+                        'debit_cdf' => $montant,
+                        'credit_cdf' => 0,
+                    ]);
+                    EcritureComptable::create($commun + [
+                        'liste_des_comptes_id' => $estEntree ? $compteOperationId : $compteTresorerieId,
+                        'debit_cdf' => 0,
+                        'credit_cdf' => $montant,
+                    ]);
+                }
             }
             return $locked->refresh();
         });

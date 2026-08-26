@@ -149,9 +149,9 @@ class ReportExportController extends Controller
         $this->autoriser($request, ['Super Admin','Admin','Directeur Général','DAF','Comptable','Caissier','Caissière','Trésorier','Trésorière']); [$debut,$fin]=$this->periode($request);
         $base=Journaux::query()->where('statut','Validé')->whereHas('journalType',fn($q)=>$q->where('est_tresorerie',true))->when($request->filled('journal_type_id'),fn($q)=>$q->where('journal_type_id',$request->integer('journal_type_id')));
         $ouv=(clone $base)->whereDate('date','<',$debut)->selectRaw('COALESCE(SUM(entrees_cdf),0)-COALESCE(SUM(sorties_cdf),0) cdf, COALESCE(SUM(entrees_usd),0)-COALESCE(SUM(sorties_usd),0) usd')->first();
-        $records=(clone $base)->with('journalType.compte')->whereBetween('date',[$debut,$fin])->orderBy('date')->orderBy('id')->get(); $cdf=(float)$ouv->cdf; $usd=(float)$ouv->usd;
+        $records=(clone $base)->with(['journalType.compte','compte'])->whereBetween('date',[$debut,$fin])->orderBy('date')->orderBy('id')->get(); $cdf=(float)$ouv->cdf; $usd=(float)$ouv->usd;
         $headers=['Date','Référence','Journal','Compte','Libellé','Entrée CDF','Sortie CDF','Solde CDF','Entrée USD','Sortie USD','Solde USD']; $rows=collect([[$this->date($debut),'SOLDE D’OUVERTURE','','','','','',$this->montant($cdf),'','',$this->montant($usd)]]);
-        foreach($records as $i){$cdf+=(float)$i->entrees_cdf-(float)$i->sorties_cdf;$usd+=(float)$i->entrees_usd-(float)$i->sorties_usd;$rows->push([$this->date($i->date),$i->reference,$i->journalType?->code??'-',$i->journalType?->compte?->compte??'-',$i->description,$this->montant($i->entrees_cdf),$this->montant($i->sorties_cdf),$this->montant($cdf),$this->montant($i->entrees_usd),$this->montant($i->sorties_usd),$this->montant($usd)]);}
+        foreach($records as $i){$cdf+=(float)$i->entrees_cdf-(float)$i->sorties_cdf;$usd+=(float)$i->entrees_usd-(float)$i->sorties_usd;$rows->push([$this->date($i->date),$i->reference,$i->journalType?->code??'-',$i->compte?->compte??$i->journalType?->compte?->compte??'-',$i->libelle_releve,$this->montant($i->entrees_cdf),$this->montant($i->sorties_cdf),$this->montant($cdf),$this->montant($i->entrees_usd),$this->montant($i->sorties_usd),$this->montant($usd)]);}
         return $this->telecharger($format,'Relevé de trésorerie','releve-tresorerie',$headers,$rows,$request,'landscape');
     }
 

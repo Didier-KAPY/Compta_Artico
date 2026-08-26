@@ -16,16 +16,60 @@ class JournalNatureFormTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_chaque_formulaire_affiche_uniquement_les_comptes_de_sa_nature(): void
+    public function test_chaque_page_affiche_les_journaux_en_attente_et_valides_de_sa_nature(): void
     {
         [$user, $types] = $this->contexte();
 
         foreach (['caisse' => 'caisse', 'banque' => 'banque', 'mobile' => 'mobile_money'] as $route => $nature) {
-            $response = $this->actingAs($user)->get(route('journaux.create.'.$route));
-            $response->assertOk()->assertDontSee('Journal *')
-                ->assertSee('type="hidden" name="journal_type_id"', false)
-                ->assertViewHas('journalTypes', fn ($journaux) => $journaux->isNotEmpty() && $journaux->every(fn ($journal) => $journal->nature === $nature));
+            Journaux::create([
+                'user_id' => $user->id,
+                'journal_type_id' => $types[$route]->id,
+                'liste_des_comptes_id' => $types[$route]->liste_des_comptes_id,
+                'reference' => 'ATTENTE-'.strtoupper($route),
+                'date' => now(),
+                'description' => 'Journal '.$nature,
+                'monnaie' => 'CDF',
+                'montant_ttc' => 116,
+                'montant_ht' => 100,
+                'taux_tva' => 16,
+                'montant_tva' => 16,
+                'statut' => 'En attente',
+            ]);            Journaux::create([
+                'user_id' => $user->id,
+                'journal_type_id' => $types[$route]->id,
+                'liste_des_comptes_id' => $types[$route]->liste_des_comptes_id,
+                'reference' => 'VALIDE-'.strtoupper($route),
+                'date' => now(),
+                'description' => 'Journal validé '.$nature,
+                'monnaie' => 'CDF',
+                'montant_ttc' => 50,
+                'montant_ht' => 50,
+                'statut' => 'Validé',
+                'valide_par' => $user->id,
+            ]);
         }
+
+        foreach (['caisse', 'banque', 'mobile'] as $route) {
+            $response = $this->actingAs($user)->get(route('journaux.create.'.$route));
+            $response->assertOk()
+                ->assertSee('Liste des journaux')
+                ->assertSee('Total TTC')
+                ->assertSee('Total HT')
+                ->assertSee('Total TVA')
+                ->assertSee('ATTENTE-'.strtoupper($route))
+                ->assertSee('VALIDE-'.strtoupper($route))
+                ->assertViewHas('totaux', fn ($totaux) =>
+                    (float) $totaux['ht'] === 150.0
+                    && (float) $totaux['tva'] === 16.0
+                    && (float) $totaux['ttc'] === 116.0
+                )
+                ->assertViewHas('journaux', fn ($journaux) => $journaux->count() === 2
+                    && $journaux->pluck('reference')->contains('ATTENTE-'.strtoupper($route))
+                    && $journaux->pluck('reference')->contains('VALIDE-'.strtoupper($route)));
+        }
+
+        $this->actingAs($user)->get(route('journaux.create'))
+            ->assertRedirect(route('journaux.index'));
     }
 
     public function test_index_filtre_par_journal_de_tresorerie(): void
@@ -37,7 +81,10 @@ class JournalNatureFormTest extends TestCase
 
         $response = $this->actingAs($user)->get(route('journaux.index', ['journal_type_id' => $types['banque']->id]));
         $response->assertOk()->assertSee('Journal / compte de trésorerie')->assertSee('521100')
-            ->assertSee('REF-BANQUE')->assertDontSee('REF-CAISSE');
+            ->assertSee('REF-BANQUE')
+            ->assertViewHas('journaux', fn ($journaux) => $journaux->every(
+                fn ($journal) => $journal->journal_type_id === $types['banque']->id
+            ));
     }
 
     public function test_index_affiche_le_journal_le_plus_recent_en_premier(): void

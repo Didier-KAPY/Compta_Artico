@@ -11,10 +11,18 @@ class EntreeCaisse extends Model
     protected $fillable = [
         'user_id',
         'numero',
+        'type_bon',
         'date',
         'motif',
+        'nom_partenaire',
+        'telephone_partenaire',
+        'adresse_partenaire',
         'type',
         'montant',
+        'appliquer_tva',
+        'taux_tva',
+        'montant_ht',
+        'montant_tva',
         'monnaie',
         'statut',
         'observation',
@@ -24,7 +32,7 @@ class EntreeCaisse extends Model
         'origine', 'cloture_journaliere_id', 'genere_automatiquement_le',
     ];
 
-    protected $casts = ['date' => 'date', 'date_validation' => 'datetime', 'restaure_le' => 'datetime', 'genere_automatiquement_le' => 'datetime'];
+    protected $casts = ['date' => 'date', 'appliquer_tva' => 'boolean', 'taux_tva' => 'decimal:2', 'montant_ht' => 'decimal:2', 'montant_tva' => 'decimal:2', 'date_validation' => 'datetime', 'restaure_le' => 'datetime', 'genere_automatiquement_le' => 'datetime'];
 
     /**
      * Utilisateur créateur

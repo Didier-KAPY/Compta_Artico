@@ -24,7 +24,7 @@
         </div>
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
-                <thead class="table-light"><tr><th>Numéro</th><th>Agent</th><th>Département / fonction</th><th>Délivrée le</th><th class="text-end">Actions</th></tr></thead>
+                <thead class="table-light"><tr><th>Numéro</th><th>Agent</th><th>Direction / fonction</th><th>Délivrée le</th><th class="text-end">Actions</th></tr></thead>
                 <tbody>
                 @forelse($cartes as $carte)
                     <tr>

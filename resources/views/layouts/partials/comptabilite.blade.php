@@ -3,6 +3,7 @@
     @php
         $isActive = request()->routeIs([
             'ecritures.*',
+            'comptabilite.imputation-compte*',
             'grandlivre.*',
             'balance.*',
             'comptabilite.etats-financiers.*'
@@ -28,6 +29,10 @@
 
     <!-- SOUS MENU -->
     <ul class="submenu list-unstyled ps-3 mt-2 {{ $isActive ? 'show' : '' }}">
+
+
+
+
 
 
         <!-- ECRITURES COMPTABLES -->

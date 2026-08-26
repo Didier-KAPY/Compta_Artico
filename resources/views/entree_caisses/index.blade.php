@@ -120,10 +120,22 @@
                                 {{ \Carbon\Carbon::parse($entree->date)->format('d/m/Y') }}
                             </td>
 
-                            <td>{{ $entree->motif }}</td>
+                            <td>
+                                {{ $entree->motif }}
+                                @if($entree->appliquer_tva && (float) $entree->montant_tva > 0)
+                                    <span class="badge bg-primary-subtle text-primary ms-1">HT</span>
+                                @endif
+                            </td>
 
                             <td class="text-end fw-bold">
-                                {{ number_format($entree->montant, 2) }}
+                                {{ number_format(
+                                    $entree->appliquer_tva && (float) $entree->montant_tva > 0
+                                        ? $entree->montant_ht
+                                        : $entree->montant,
+                                    2,
+                                    ',',
+                                    ' '
+                                ) }}
                             </td>
 
                             <td>
@@ -189,6 +201,48 @@
                             </td>
 
                         </tr>
+
+                        @if($entree->appliquer_tva && (float) $entree->montant_tva > 0)
+                        <tr class="table-primary">
+
+                            <td><strong>{{ $entree->numero }}</strong></td>
+                            @if($isSuperAdmin)
+                                <td>{{ trim(($entree->validateur?->prenom ?? '').' '.($entree->validateur?->nom ?? '')) ?: 'Non validé' }}</td>
+                            @endif
+
+                            <td>{{ \Carbon\Carbon::parse($entree->date)->format('d/m/Y') }}</td>
+
+                            <td>
+                                TVA
+                                <span class="badge bg-primary ms-1">{{ number_format($entree->taux_tva, 2, ',', ' ') }} %</span>
+                            </td>
+
+                            <td class="text-end fw-bold text-primary">
+                                {{ number_format($entree->montant_tva, 2, ',', ' ') }}
+                            </td>
+
+                            <td><span class="badge bg-secondary">{{ $entree->monnaie }}</span></td>
+
+                            <td>
+                                @if($entree->statut == 'Validé')
+                                    <span class="badge bg-success">Validé</span>
+                                @elseif($entree->statut == 'Rejeté')
+                                    <span class="badge bg-danger">Rejeté</span>
+                                @else
+                                    <span class="badge bg-warning text-dark">En attente</span>
+                                @endif
+                            </td>
+
+                            <td class="text-center">
+                                <a class="btn btn-sm btn-outline-primary"
+                                   href="{{ route('entree-caisses.show', $entree->id) }}"
+                                   title="Les deux lignes appartiennent au même bon et se valident ensemble">
+                                    <i class="bi bi-link-45deg me-1"></i>Même bon
+                                </a>
+                            </td>
+
+                        </tr>
+                        @endif
 
                         @empty
 

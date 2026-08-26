@@ -4,8 +4,8 @@
 <div class="container-fluid mt-4">
     <div class="card shadow-sm border-0">
         <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-            <strong><i class="bi bi-file-earmark-text me-2"></i>Bons de régularisation comptable</strong>
-            @if(auth()->user()->hasRole(['Super Admin', 'Admin', 'Comptable']))
+            <strong><i class="bi bi-file-earmark-text me-2"></i>BRC</strong>
+            @if(auth()->user()->hasRole(['Super Admin', 'Admin', 'Comptable', 'Chargé des finances']))
                 <a href="{{ route('brc.create') }}" class="btn btn-primary btn-sm"><i class="bi bi-plus-circle me-1"></i>Nouveau BRC</a>
             @endif
         </div>
@@ -15,16 +15,21 @@
             <div class="table-responsive">
                 <table class="table table-bordered table-hover align-middle">
                     <thead class="table-light">
-                        <tr><th>Date</th><th>Référence</th><th>Journal</th><th>Monnaie</th><th>Sens</th><th class="text-end">Montant</th><th>Statut</th><th>Validé par</th><th>Actions</th></tr>
+                        <tr><th>Date</th><th>Référence</th><th>Compte débit</th><th>Compte crédit</th><th>Libellé</th><th>Monnaie</th><th class="text-end">Montant</th><th>Statut</th><th>Validé par</th><th>Actions</th></tr>
                     </thead>
                     <tbody>
                     @forelse($brcs as $brc)
                         <tr>
                             <td>{{ $brc->date->format('d/m/Y') }}</td>
                             <td class="fw-semibold">{{ $brc->reference }}</td>
-                            <td>{{ $brc->journalType?->code }} — {{ $brc->journalType?->libelle }}</td>
+                            @php
+                                $compteJournal = trim(($brc->journalType?->compte?->compte ?? '—').' — '.($brc->journalType?->compte?->designation ?? ''));
+                                $comptesImputation = $brc->lignes->map(fn($ligne) => trim(($ligne->compte?->compte ?? '—').' — '.($ligne->compte?->designation ?? '')))->unique()->implode(' / ');
+                            @endphp
+                            <td>{{ $brc->sens === 'debit' ? $compteJournal : ($comptesImputation ?: '—') }}</td>
+                            <td>{{ $brc->sens === 'credit' ? $compteJournal : ($comptesImputation ?: '—') }}</td>
+                            <td>{{ $brc->lignes->pluck('libelle')->filter()->unique()->implode(' / ') ?: '—' }}</td>
                             <td>{{ $brc->monnaie }}</td>
-                            <td>{{ $brc->sens === 'debit' ? 'Débit' : 'Crédit' }}</td>
                             <td class="text-end">{{ number_format($brc->total, 2, ',', ' ') }}</td>
                             <td><span class="badge {{ $brc->statut === 'Validé' ? 'bg-success' : 'bg-warning text-dark' }}">{{ $brc->statut }}</span></td>
                             <td>{{ trim(($brc->validateur?->prenom ?? '').' '.($brc->validateur?->nom ?? '')) ?: '—' }}</td>
@@ -45,7 +50,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="9" class="text-center text-muted py-4">Aucun BRC enregistré.</td></tr>
+                        <tr><td colspan="10" class="text-center text-muted py-4">Aucun BRC enregistré.</td></tr>
                     @endforelse
                     </tbody>
                 </table>

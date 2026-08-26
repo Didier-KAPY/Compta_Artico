@@ -19,6 +19,7 @@ use App\Models\SortieCaisse;
 use App\Policies\EtatBesoinPolicy;
 use App\Policies\EntreeCaissePolicy;
 use App\Policies\SortieCaissePolicy;
+use App\Services\ProfileNotificationService;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -103,8 +104,15 @@ class AppServiceProvider extends ServiceProvider
 
         Paginator::useBootstrap();
 
-        View::composer('*', function ($view) {
+        View::composer('layouts.topbar', function ($view): void {
+            $notifications = Auth::check()
+                ? app(ProfileNotificationService::class)->forUser(Auth::user()->loadMissing('role'))
+                : ['en_attente' => 0, 'valides' => 0, 'modules' => collect(), 'items' => collect()];
 
+            $view->with('notifications', $notifications);
+        });
+
+        View::composer('*', function ($view) {
             $user = Auth::user();
 
             // Entreprise récupérée séparément

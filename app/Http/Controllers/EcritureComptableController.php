@@ -34,13 +34,15 @@ public function liste(Request $request)
         'validateur'
     ]);
     $query->when($request->filled('journal_id'), fn ($q) => $q->where('journal_id', $request->integer('journal_id')));
+
     $query->when($request->filled('journal_ids'), function ($q) use ($request) {
         $ids = collect(explode(',', (string) $request->input('journal_ids')))->filter()->map(fn ($id) => (int) $id);
         $q->whereIn('journal_id', $ids);
     });
 
     // Si aucune date n'est saisie, afficher uniquement les écritures du jour
-    if (!$request->filled('date_debut') && !$request->filled('date_fin')) {
+    if (! $request->filled('journal_id') && ! $request->filled('journal_ids')
+        && ! $request->filled('date_debut') && ! $request->filled('date_fin')) {
 
         $query->whereDate('date', today());
 
@@ -57,13 +59,7 @@ public function liste(Request $request)
 
     $ecritures = $query
         ->orderBy('date', 'desc')
-        ->orderByDesc(
-            Journaux::query()
-                ->select('reference')
-                ->whereColumn('journaux.id', 'ecritures_comptables.journal_id')
-                ->limit(1)
-        )
-        ->orderByRaw('CASE WHEN debit_cdf > 0 THEN 0 ELSE 1 END')
+        ->orderByDesc('created_at')
         ->orderBy('id', 'desc')
         ->paginate(20)
         ->withQueryString();
@@ -84,6 +80,88 @@ public function liste(Request $request)
     );
 }
 
+public function imputationCompte(Request $request)
+{
+    abort_unless(Auth::user()?->hasRole(['Super Admin', 'Admin', 'Comptable']), 403);
+
+    $journaux = Journaux::with([
+            'journalType.compte', 'brcs.validateur', 'brcs.lignes',
+            'ecritures' => fn ($query) => $query->with('compte'),
+            'user', 'validateur',
+        ])
+        ->where('statut', 'Validé')
+        ->whereHas('brcs')
+        ->when($request->filled('reference'), function ($query) use ($request) {
+            $reference = trim((string) $request->input('reference'));
+            $query->where('reference', 'like', '%'.$reference.'%');
+        })
+        ->when($request->filled('date_debut'), fn ($query) => $query->whereDate('date', '>=', $request->date_debut))
+        ->when($request->filled('date_fin'), fn ($query) => $query->whereDate('date', '<=', $request->date_fin))
+        ->when(! $request->filled('date_debut') && ! $request->filled('date_fin'), fn ($query) => $query->whereDate('date', today()))
+        ->when($request->filled('journal_id'), fn ($query) => $query->whereKey($request->integer('journal_id')))
+        ->orderByDesc('date')
+        ->orderByDesc('id')
+        ->paginate(15)
+        ->withQueryString();
+
+    $comptes = ListeDesComptes::orderBy('compte')->get();
+
+    return view('Comptabilite.imputation', compact('journaux', 'comptes'));
+}
+
+public function traiterJournal(Request $request, Journaux $journal, WorkflowComptableService $workflow)
+{
+    abort_unless(Auth::user()?->hasRole(['Super Admin', 'Comptable']), 403);
+    abort_unless($journal->brcs()->exists(), 404);
+
+    $validated = $request->validate([
+        'comptes' => ['required', 'array'],
+        'comptes.*' => ['required', 'integer', 'exists:liste_des_comptes,id'],
+        'piece_justificative' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+    ]);
+
+    $reference = mb_strtoupper(trim((string) $journal->reference));
+    $pieceObligatoire = preg_match('/^(BSC|BSB|BSM)/', $reference) === 1;
+    $pieceExistante = filled($journal->piece_justificatif)
+        || $journal->ecritures()->whereNotNull('piece_justificative')->exists();
+
+    if ($pieceObligatoire && ! $pieceExistante && ! $request->hasFile('piece_justificative')) {
+        throw ValidationException::withMessages([
+            'piece_justificative' => 'La pièce justificative est obligatoire pour les bons BSC, BSB et BSM.',
+        ]);
+    }
+
+    $chemin = $request->hasFile('piece_justificative')
+        ? $request->file('piece_justificative')->store('ecritures/pieces', 'public')
+        : null;
+
+    DB::transaction(function () use ($journal, $validated, $chemin, $workflow) {
+        $ecritures = EcritureComptable::where('journal_id', $journal->id)
+            ->where('statut', 'En attente')
+            ->lockForUpdate()
+            ->get();
+
+        if ($ecritures->isEmpty()) {
+            throw ValidationException::withMessages(['statut' => 'Ce journal ne contient aucune écriture à imputer.']);
+        }
+
+        foreach ($ecritures as $ecriture) {
+            $compteId = $validated['comptes'][$ecriture->id] ?? null;
+            if (! $compteId) {
+                throw ValidationException::withMessages(['comptes' => 'Tous les comptes doivent être renseignés.']);
+            }
+
+            $ecriture->update([
+                'liste_des_comptes_id' => $compteId,
+                'piece_justificative' => $chemin ?: $ecriture->piece_justificative,
+            ]);
+            $workflow->validerEcriture($ecriture);
+        }
+    });
+
+    return redirect()->route('ecritures.liste', ['journal_id' => $journal->id])
+        ->with('success', 'Journal imputé et écritures comptables validées avec succès.');
+}
 public function show($id, FinancialDocumentService $documents)
 {
     $ecriture = EcritureComptable::with(['journal.entreeCaisse', 'journal.sortieCaisse.etatBesoin', 'journal.brcs', 'journal.clotureJournaliere', 'compte', 'user', 'validateur'])->findOrFail($id);
@@ -96,7 +174,43 @@ public function show($id, FinancialDocumentService $documents)
         $journal?->sortieCaisse?->etatBesoin ? ['label' => "Voir l’État de besoin", 'url' => route('etat-besoins.show', $journal->sortieCaisse->etatBesoin), 'icon' => 'file-earmark-text'] : null,
     ])->filter()->values();
 
-    return view('Comptabilite.ecritures.show', compact('ecriture', 'suppressionDependencies', 'documentLinks'));
+    $reference = mb_strtoupper(trim((string) $ecriture->piece));
+    $ecrituresReference = EcritureComptable::with('compte')
+        ->when($reference !== '',
+            fn ($query) => $query->whereRaw('UPPER(TRIM(piece)) = ?', [$reference]),
+            fn ($query) => $query->whereKey($ecriture->id)
+        )
+        ->orderByRaw('CASE WHEN debit_cdf > 0 THEN 0 ELSE 1 END')
+        ->orderBy('id')
+        ->get();
+    $comptes = ListeDesComptes::orderBy('compte')->get();
+    $pieceObligatoire = preg_match('/^(BSC|BSB|BSM)/', $reference) === 1;
+    $estImpute = $ecrituresReference->isNotEmpty()
+        && $ecrituresReference->every(fn ($ligne) => $ligne->statut === 'Validé');
+    $ligneAuDebit = (float) $ecriture->debit_cdf > 0;
+    $lignesOpposees = $ecrituresReference->filter(fn ($ligne) =>
+        (int) $ligne->journal_id === (int) $ecriture->journal_id
+        && ($ligneAuDebit ? (float) $ligne->credit_cdf > 0 : (float) $ligne->debit_cdf > 0)
+    )->values();
+
+    $bon = $journal?->entreeCaisse ?? $journal?->sortieCaisse;
+    $montantTva = (float) ($bon?->montant_tva ?? 0);
+    if ($montantTva > 0 && mb_strtoupper((string) $bon?->monnaie) === 'USD') {
+        $montantTva *= (float) (TauxDeChange::latest()->value('taux_de_change') ?? 0);
+    }
+    $montantTresorerie = max(
+        (float) $ecriture->debit_cdf,
+        (float) $ecriture->credit_cdf
+    );
+    $montantTotalAImputer = $montantTresorerie;
+    $montantContrepartie = max(0, $montantTresorerie - $montantTva);
+
+    return view('Comptabilite.ecritures.show', compact(
+        'ecriture', 'ecrituresReference', 'lignesOpposees', 'comptes',
+        'pieceObligatoire', 'estImpute', 'montantTva', 'montantContrepartie',
+        'montantTotalAImputer',
+        'suppressionDependencies', 'documentLinks'
+    ));
 }
 
     /**
@@ -107,53 +221,131 @@ public function valider(Request $request, $id)
     abort_unless(Auth::user()?->hasRole(['Super Admin', 'Comptable']), 403);
 
     $request->validate([
+        'imputations' => ['nullable', 'array', 'min:1'],
+        'imputations.*.liste_des_comptes_id' => ['required_with:imputations', 'integer', 'exists:liste_des_comptes,id'],
+        'imputations.*.montant' => ['required_with:imputations', 'numeric', 'gt:0'],
+        'imputations.*.piece_justificative' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+        // Compatibilité avec les anciens formulaires et appels internes.
+        'liste_des_comptes_id' => ['nullable', 'required_without:imputations', 'integer', 'exists:liste_des_comptes,id'],
         'piece_justificative' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
     ]);
 
-    $alreadyValidated = DB::transaction(function () use ($request, $id): bool {
-        $ecriture = EcritureComptable::query()
-            ->lockForUpdate()
-            ->findOrFail($id);
+    $imputations = collect($request->input('imputations', []));
+    if ($imputations->isEmpty()) {
+        $imputations = collect([['liste_des_comptes_id' => $request->integer('liste_des_comptes_id')]]);
+    }
 
-        if (trim($ecriture->statut) === 'Validé') {
-            return true;
-        }
-
+    $alreadyValidated = DB::transaction(function () use ($request, $id, $imputations): bool {
+        $ecriture = EcritureComptable::query()->lockForUpdate()->findOrFail($id);
         $reference = mb_strtoupper(trim((string) $ecriture->piece));
-        if (str_starts_with($reference, 'BSC')
-            && ! $ecriture->piece_justificative
-            && ! $request->hasFile('piece_justificative')) {
+        $ecritures = EcritureComptable::query()
+            ->when($reference !== '',
+                fn ($query) => $query->whereRaw('UPPER(TRIM(piece)) = ?', [$reference]),
+                fn ($query) => $query->whereKey($ecriture->id)
+            )
+            ->lockForUpdate()->get();
+
+        $enAttente = $ecritures->filter(fn ($ligne) => trim((string) $ligne->statut) !== 'Validé');
+        if ($enAttente->isEmpty()) return true;
+
+        $ligneAuDebit = (float) $ecriture->debit_cdf > 0;
+        $montantContrepartie = max(
+            (float) $ecriture->debit_cdf,
+            (float) $ecriture->credit_cdf
+        );
+        $lignesOpposees = $ecritures->filter(fn ($ligne) =>
+            (int) $ligne->journal_id === (int) $ecriture->journal_id
+            && ($ligneAuDebit ? (float) $ligne->credit_cdf > 0 : (float) $ligne->debit_cdf > 0)
+        )->values();
+
+        if ($lignesOpposees->isEmpty()) {
+            $lignesOpposees = collect();
+            foreach ($imputations as $imputation) {
+                $montantLigne = (float) ($imputation['montant'] ?? $montantContrepartie);
+                $ligneOpposee = EcritureComptable::create([
+                    'user_id' => Auth::id() ?? $ecriture->user_id,
+                    'journal_id' => $ecriture->journal_id,
+                    'liste_des_comptes_id' => (int) $imputation['liste_des_comptes_id'],
+                    'date' => $ecriture->date,
+                    'piece' => $ecriture->piece,
+                    'libelle' => $ecriture->libelle,
+                    'debit_cdf' => $ligneAuDebit ? 0 : $montantLigne,
+                    'credit_cdf' => $ligneAuDebit ? $montantLigne : 0,
+                    'statut' => 'En attente',
+                ]);
+                $lignesOpposees->push($ligneOpposee);
+                $ecritures->push($ligneOpposee);
+                $enAttente->push($ligneOpposee);
+            }
+
+        } elseif ($imputations->count() > $lignesOpposees->count()) {
             throw ValidationException::withMessages([
-                'piece_justificative' => 'La pièce justificative est obligatoire pour une écriture dont la référence commence par BSC.',
+                'imputations' => 'Le nombre de lignes ajoutées dépasse le nombre de contreparties disponibles.',
             ]);
         }
 
-        $chemin = $ecriture->piece_justificative;
-        if ($request->hasFile('piece_justificative')) {
-            if ($chemin) {
-                Storage::disk('public')->delete($chemin);
-            }
-            $chemin = $request->file('piece_justificative')->store('ecritures/pieces', 'public');
+        $pieceObligatoire = preg_match('/^(BSC|BSB|BSM)/', $reference) === 1;
+        $fichierCommun = $request->file('piece_justificative')
+            ?? $request->file('imputations.0.piece_justificative');
+        $pieceExistanteGroupe = $ecritures
+            ->first(fn ($ligne) => filled($ligne->piece_justificative))
+            ?->piece_justificative;
+        if ($pieceObligatoire && ! $pieceExistanteGroupe && ! $fichierCommun) {
+            throw ValidationException::withMessages([
+                'piece_justificative' => 'Une pièce justificative est obligatoire pour cette imputation BSC, BSB ou BSM.',
+            ]);
         }
 
-        $ecriture->update([
-            'piece_justificative' => $chemin,
-            'statut' => 'Validé',
-            'date_validation' => now(),
-            'valide_par' => Auth::id(),
-        ]);
+        foreach ($imputations as $index => $imputation) {
+            $ligneOpposee = $lignesOpposees->get($index);
+            if (! $ligneOpposee) {
+                throw ValidationException::withMessages(['imputations' => 'La ligne de sens opposé est introuvable.']);
+            }
 
+
+            $montantImpute = (float) ($imputation['montant'] ?? max(
+                (float) $ligneOpposee->debit_cdf,
+                (float) $ligneOpposee->credit_cdf
+            ));
+            $ligneOpposee->update([
+                'liste_des_comptes_id' => (int) $imputation['liste_des_comptes_id'],
+                'debit_cdf' => $ligneAuDebit ? 0 : $montantImpute,
+                'credit_cdf' => $ligneAuDebit ? $montantImpute : 0,
+            ]);
+        }
+
+        $equilibre = EcritureComptable::query()
+            ->when($reference !== '',
+                fn ($query) => $query->whereRaw('UPPER(TRIM(piece)) = ?', [$reference]),
+                fn ($query) => $query->whereKey($ecriture->id)
+            )
+            ->where('statut', '!=', 'Validé')
+            ->selectRaw('COALESCE(SUM(debit_cdf), 0) AS total_debit, COALESCE(SUM(credit_cdf), 0) AS total_credit')
+            ->first();
+        $ecart = abs((float) $equilibre->total_debit - (float) $equilibre->total_credit);
+        if ($ecart > 0.005) {
+            throw ValidationException::withMessages([
+                'imputations' => 'Écriture non équilibrée : écart de '.number_format($ecart, 2, ',', ' ').' CDF.',
+            ]);
+        }
+
+        $pieceCommune = $fichierCommun
+            ? $fichierCommun->store('ecritures/pieces', 'public')
+            : $pieceExistanteGroupe;
+        foreach ($enAttente as $ligne) {
+            $ligne->update([
+                'piece_justificative' => $ligne->piece_justificative ?: $pieceCommune,
+                'statut' => 'Validé',
+                'date_validation' => now(),
+                'valide_par' => Auth::id(),
+            ]);
+        }
         return false;
     });
 
-    if ($alreadyValidated) {
-        return back()->with('warning', 'Cette écriture est déjà validée.');
-    }
+    if ($alreadyValidated) return back()->with('warning', 'Cette écriture est déjà validée.');
 
-    return back()->with(
-        'success',
-        'Écriture validée avec succès.'
-    );
+    return back()->with('success', 'Imputation enregistrée : les contreparties et la TVA sont maintenant visibles.');
 }
 
     public function pieceJustificative($id)

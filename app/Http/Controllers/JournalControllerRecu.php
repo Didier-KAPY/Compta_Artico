@@ -24,7 +24,29 @@ class JournalControllerRecu extends Controller
 
     private function donnees(int $id): array
     {
-        $journal = Journaux::with(['journalType.compte', 'user', 'validateur'])->findOrFail($id);
-        return ['journal' => $journal, 'entreprise' => Entreprise::first()];
+        $selection = Journaux::findOrFail($id);
+        $journaux = Journaux::with(['journalType.compte', 'user', 'validateur'])
+            ->where('reference', $selection->reference)
+            ->orderBy('id')
+            ->get();
+
+        $journal = $journaux->first(fn (Journaux $ligne) => mb_strtolower(trim((string) $ligne->description)) !== 'tva')
+            ?? $journaux->first();
+        $lignesTva = $journaux->filter(fn (Journaux $ligne) => mb_strtolower(trim((string) $ligne->description)) === 'tva');
+        $lignesPrincipales = $journaux->diff($lignesTva);
+
+        $montantHt = $lignesTva->isNotEmpty()
+            ? $lignesPrincipales->sum(fn (Journaux $ligne) => (float) ($ligne->montant_ht ?: $ligne->montant_ttc))
+            : (float) $journal->montant_ht;
+        $montantTva = (float) $journaux->sum('montant_tva');
+        $montantTtc = round($montantHt + $montantTva, 2);
+        $tauxTva = (float) ($journaux->first(fn (Journaux $ligne) => (float) $ligne->taux_tva > 0)?->taux_tva ?? 0);
+        $description = $lignesPrincipales->pluck('description')->filter()->unique()->implode(' / ');
+        $tousValides = $journaux->every(fn (Journaux $ligne) => in_array(mb_strtolower(trim((string) $ligne->statut)), ['validé', 'valide'], true));
+
+        return compact(
+            'journal', 'journaux', 'montantHt', 'montantTva', 'montantTtc',
+            'tauxTva', 'description', 'tousValides'
+        ) + ['entreprise' => Entreprise::first()];
     }
 }

@@ -21,9 +21,16 @@ class DocumentNumberService
             : Carbon::parse($dateComptable);
         $type = strtoupper(trim($typeDocument));
         $tresorerie = $this->normaliserTresorerie($typeTresorerie);
+        if ($type === 'BSC') {
+            $type = match ($tresorerie) {
+                'banque' => 'BSB',
+                'mobile_money' => 'BSM',
+                default => 'BSC',
+            };
+        }
         $entrepriseId ??= (int) (Entreprise::query()->value('id') ?? 0);
 
-        if (! in_array($type, ['BEC', 'BSC', 'BRC', 'EB', 'CLJ'], true)) {
+        if (! in_array($type, ['BEC', 'BEM', 'BEB', 'BSC', 'BSB', 'BSM', 'BRC', 'EB', 'CLJ'], true)) {
             throw new InvalidArgumentException("Type de document non pris en charge : {$type}");
         }
 
@@ -69,7 +76,8 @@ class DocumentNumberService
         };
 
         return match ($type) {
-            'BEC', 'BSC' => $type.$codeTresorerie.'-'.$date->format('ym').str_pad((string) $numero, 4, '0', STR_PAD_LEFT),
+            'BEC', 'BEM', 'BEB' => $type.'-'.$date->format('ym').str_pad((string) $numero, 4, '0', STR_PAD_LEFT),
+            'BSC', 'BSB', 'BSM' => $type.'-'.$date->format('ym').str_pad((string) $numero, 4, '0', STR_PAD_LEFT),
             'BRC' => 'BRC-'.$date->format('Ymd').'-'.str_pad((string) $numero, 6, '0', STR_PAD_LEFT),
             'EB' => 'EB-'.str_pad((string) $numero, 4, '0', STR_PAD_LEFT).'-'.$date->format('y-m'),
             'CLJ' => 'CLJ-'.$date->format('y-m').'-'.str_pad((string) $numero, 4, '0', STR_PAD_LEFT),
@@ -90,8 +98,8 @@ class DocumentNumberService
     {
         [$table, $colonne, $motif] = match ($type) {
             'EB' => ['etat_besoins', 'numero', '/^EB-(\d+)-'.$date->format('y-m').'$/'],
-            'BEC' => ['entree_caisses', 'numero', $this->motifBon('BEC', $date, $tresorerie)],
-            'BSC' => ['sortie_caisses', 'numero', $this->motifBon('BSC', $date, $tresorerie)],
+            'BEC', 'BEM', 'BEB' => ['entree_caisses', 'numero', $this->motifBon($type, $date, '')],
+            'BSC', 'BSB', 'BSM' => ['sortie_caisses', 'numero', $this->motifBon($type, $date, '')],
             'BRC' => ['brcs', 'reference', '/^BRC-'.$date->format('Ym').'\d{2}-(\d+)$/'],
             'CLJ' => ['clotures_journalieres', 'numero_cloture', '/^CLJ-'.$date->format('y-m').'-(\d+)$/'],
         };

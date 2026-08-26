@@ -46,6 +46,8 @@ class Journaux extends Model
 
         'description',
 
+        'observation',
+
         'piece_justificatif',
 
         'type',
@@ -192,6 +194,22 @@ class Journaux extends Model
     |--------------------------------------------------------------------------
     */
 
+    public function getLibelleReleveAttribute(): string
+    {
+        if (mb_strtolower(trim((string) $this->description)) !== 'tva') {
+            return (string) $this->description;
+        }
+
+        if ($this->entree_caisse_id) {
+            return 'TVA_FACTUREE';
+        }
+
+        if ($this->sortie_caisse_id) {
+            return 'TVA_RECUPERABLE';
+        }
+
+        return 'TVA';
+    }
     public function compte()
     {
 

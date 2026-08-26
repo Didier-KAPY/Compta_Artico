@@ -9,6 +9,7 @@ use App\Models\EntreeCaisse;
 use App\Models\EntreeCaisseLigne;
 use App\Models\Journaux;
 use App\Models\JournalType;
+use App\Models\ParametrageComptable;
 use App\Models\Entreprise;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -33,20 +34,45 @@ class EntreeCaisseController extends Controller
 
     public function create()
     {
-        return view('entree_caisses.create');
+        return view('entree_caisses.create', [
+            'tauxTva' => (float) config('syscohada.taux_tva', 16),
+        ]);
     }
 
     public function store(Request $request, DocumentNumberService $numbers)
 {
+    $this->normaliserChampsNumeriques($request);
+
     $request->validate([
         'date' => 'required|date',
-        'motif' => 'required|string',
-        'monnaie' => 'required|string',
+        'monnaie' => 'required|in:CDF,USD',
+        'type_bon' => 'nullable|in:BEC,BEM,BEB',
+        'nom_partenaire' => 'nullable|string|max:255',
+        'telephone_partenaire' => 'nullable|string|max:50',
+        'adresse_partenaire' => 'nullable|string|max:255',
+        'appliquer_tva' => 'nullable|boolean',
         //'type' => 'required|string|in:Caisse,Banque,Monnaie électronique',
         'designation.*' => 'required|string',
         'quantite.*' => 'required|numeric',
         'prix_unitaire.*' => 'required|numeric',
     ]);
+
+    $typeBon = strtoupper($request->input('type_bon', 'BEC'));
+    $appliquerTva = $request->boolean('appliquer_tva');
+    $tauxTva = $appliquerTva ? round((float) config('syscohada.taux_tva', 16), 2) : 0;
+    $motif = trim((string) collect($request->input('designation', []))
+        ->first(fn ($designation) => trim((string) $designation) !== ''));
+
+    if ($motif === '') {
+        throw ValidationException::withMessages([
+            'designation.0' => 'La première désignation est obligatoire.',
+        ]);
+    }
+    $typeTresorerie = match ($typeBon) {
+        'BEM' => 'Mobile Money',
+        'BEB' => 'Banque',
+        default => 'Caisse',
+    };
 
     DB::beginTransaction();
 
@@ -54,12 +80,18 @@ class EntreeCaisseController extends Controller
 
         // 🔥 CREATE ENTRÉE
         $entree = EntreeCaisse::create([
-            'numero' => $numbers->next('BEC', $request->date, $request->input('type', 'Caisse')),
+            'numero' => $numbers->next($typeBon, $request->date),
+            'type_bon' => $typeBon,
             'user_id' => auth()->id(),
             'date' => $request->date,
-            'motif' => $request->motif,
+            'motif' => $motif,
+            'nom_partenaire' => trim((string) $request->nom_partenaire),
+            'telephone_partenaire' => filled($request->telephone_partenaire) ? trim((string) $request->telephone_partenaire) : null,
+            'adresse_partenaire' => filled($request->adresse_partenaire) ? trim((string) $request->adresse_partenaire) : null,
             'monnaie' => $request->monnaie,
-            //'type' => $request->type,
+            'type' => $typeTresorerie,
+            'appliquer_tva' => $appliquerTva,
+            'taux_tva' => $tauxTva,
             'statut' => 'En attente',
             'montant' => 0
         ]);
@@ -85,8 +117,15 @@ class EntreeCaisseController extends Controller
         }
 
         // 🔥 UPDATE TOTAL
+        $montantHt = $appliquerTva && $tauxTva > 0
+            ? round($total / (1 + $tauxTva / 100), 2)
+            : round($total, 2);
+        $montantTva = $appliquerTva ? round($total - $montantHt, 2) : 0;
+
         $entree->update([
-            'montant' => $total
+            'montant' => $total,
+            'montant_ht' => $montantHt,
+            'montant_tva' => $montantTva,
         ]);
 
         DB::commit();
@@ -225,73 +264,113 @@ class EntreeCaisseController extends Controller
         }
 
 
-        // Création du journal comptable, qui devra être validé séparément.
-        $journalExistant = $this->journauxDuBon($caisse)->first();
-        $journalTypeId = $journalExistant?->journal_type_id
-            ?? JournalType::where('est_tresorerie', true)->where('nature', 'caisse')->value('id');
+        $natureJournal = match ($caisse->type_bon) {
+            'BEM' => 'mobile_money',
+            'BEB' => 'banque',
+            default => 'caisse',
+        };
+        $routeJournal = match ($caisse->type_bon) {
+            'BEM' => 'journaux.create.mobile',
+            'BEB' => 'journaux.create.banque',
+            default => 'journaux.create.caisse',
+        };
+        $modePaiement = match ($caisse->type_bon) {
+            'BEM' => 'mobile_money',
+            'BEB' => 'banque',
+            default => 'espèces',
+        };
+        $journalType = JournalType::with('compte')
+            ->where('est_tresorerie', true)
+            ->where('nature', $natureJournal)
+            ->where('monnaie', $caisse->monnaie)
+            ->whereNotNull('liste_des_comptes_id')
+            ->first();
 
-        if (! $journalTypeId) {
+        if (! $journalType?->compte) {
             throw ValidationException::withMessages([
-                'journal' => 'Aucun type de journal de caisse n’est configuré.',
+                'journal' => 'Aucun journal '.$natureJournal.' n’est configuré en '.$caisse->monnaie.'.',
             ]);
         }
 
+        $montantTva = $caisse->appliquer_tva ? round((float) $caisse->montant_tva, 2) : 0;
+        $montantPrincipal = $montantTva > 0
+            ? round((float) $caisse->montant_ht, 2)
+            : $montant;
+
         Journaux::updateOrCreate(
-
+            ['entree_caisse_id' => $caisse->id, 'type' => 'recette'],
             [
-                'entree_caisse_id' => $caisse->id
-            ],
-
-            [
-
                 'user_id' => auth()->id(),
-
-                'journal_type_id' => $journalTypeId,
-
-                'entree_caisse_id' => $caisse->id,
-
+                'journal_type_id' => $journalType->id,
+                'liste_des_comptes_id' => $journalType->liste_des_comptes_id,
                 'reference' => $caisse->numero,
-
                 'date' => $caisse->date,
-
                 'description' => $caisse->motif,
-
+                'nom_partenaire' => $caisse->nom_partenaire,
+                'telephone_partenaire' => $caisse->telephone_partenaire,
+                'adresse_partenaire' => $caisse->adresse_partenaire,
                 'monnaie' => $caisse->monnaie,
-
-
-                'entrees_cdf' => $caisse->monnaie == 'CDF'
-                    ? $montant : 0,
-
-
-                'entrees_usd' => $caisse->monnaie == 'USD'
-                    ? $montant : 0,
-
-
+                'mode_paiement' => $modePaiement,
+                'montant_ht' => $caisse->montant_ht ?: $montant,
+                'taux_tva' => 0,
+                'montant_tva' => 0,
+                'montant_ttc' => $montantPrincipal,
+                'entrees_cdf' => $caisse->monnaie === 'CDF' ? $montantPrincipal : 0,
                 'sorties_cdf' => 0,
-
+                'entrees_usd' => $caisse->monnaie === 'USD' ? $montantPrincipal : 0,
                 'sorties_usd' => 0,
-
-
                 'statut' => 'En attente',
-
                 'date_validation' => null,
-
-                'valide_par' => null
-
+                'valide_par' => null,
             ]
         );
 
+        if ($montantTva > 0) {
+            $compteTvaId = ParametrageComptable::query()
+                ->whereIn('code', ['TVA_FACTUREE', 'TVA_DUE'])
+                ->orderByRaw("CASE code WHEN 'TVA_FACTUREE' THEN 0 ELSE 1 END")
+                ->value('liste_des_comptes_id');
+
+            if (! $compteTvaId) {
+                throw ValidationException::withMessages([
+                    'appliquer_tva' => 'Aucun compte de TVA facturée n’est configuré.',
+                ]);
+            }
+
+            Journaux::updateOrCreate(
+                ['entree_caisse_id' => $caisse->id, 'type' => 'depense', 'description' => 'TVA'],
+                [
+                    'user_id' => auth()->id(),
+                    'journal_type_id' => $journalType->id,
+                    'liste_des_comptes_id' => $compteTvaId,
+                    'reference' => $caisse->numero,
+                    'date' => $caisse->date,
+                    'nom_partenaire' => $caisse->nom_partenaire,
+                    'telephone_partenaire' => $caisse->telephone_partenaire,
+                    'adresse_partenaire' => $caisse->adresse_partenaire,
+                    'monnaie' => $caisse->monnaie,
+                    'mode_paiement' => $modePaiement,
+                    'montant_ht' => 0,
+                    'taux_tva' => $caisse->taux_tva,
+                    'montant_tva' => $montantTva,
+                    'montant_ttc' => $montantTva,
+                    // La TVA provient d'un bon d'entrée : elle reste donc affichée
+                    // dans la colonne des entrées, dans la monnaie du bon.
+                    'entrees_cdf' => $caisse->monnaie === 'CDF' ? $montantTva : 0,
+                    'sorties_cdf' => 0,
+                    'entrees_usd' => $caisse->monnaie === 'USD' ? $montantTva : 0,
+                    'sorties_usd' => 0,
+                    'statut' => 'En attente',
+                    'date_validation' => null,
+                    'valide_par' => null,
+                ]
+            );
+        }
 
         DB::commit();
 
-
-        return back()->with(
-            'success',
-            'Entrée de caisse validée avec succès.'
-        );
-
-
-    } catch(\Exception $e) {
+        return back()->with('success', 'Entrée validée et journal placé en attente.');
+} catch(\Exception $e) {
 
 
         DB::rollBack();
@@ -337,7 +416,8 @@ public function edit($id)
 }
 public function update(Request $request, $id)
 {
-    
+    $this->normaliserChampsNumeriques($request);
+
     DB::beginTransaction();
 
     try {
@@ -363,15 +443,20 @@ public function update(Request $request, $id)
         $total = collect($request->lignes ?? [])->sum(function ($l) {
             return ($l['quantite'] ?? 0) * ($l['prix_unitaire'] ?? 0);
         });
+        $tauxTva = $entree->appliquer_tva ? (float) $entree->taux_tva : 0;
+        $montantHt = $tauxTva > 0 ? round($total / (1 + $tauxTva / 100), 2) : round($total, 2);
+        $montantTva = $entree->appliquer_tva ? round($total - $montantHt, 2) : 0;
 
         // ================= UPDATE ENTREE =================
         $entree->update([
             'date' => $request->date,
-            'motif' => $request->motif,
+            'motif' => $motif,
         //'type' => $request->type,
             'monnaie' => $request->monnaie,
             'observation' => $request->observation,
             'montant' => $total,
+            'montant_ht' => $montantHt,
+            'montant_tva' => $montantTva,
 
             // retour automatique en attente
             'statut' => 'En attente',
@@ -450,6 +535,29 @@ private function donneesDocument($id): array
     }
 
     return compact('entree', 'entreprise', 'logoData');
+}
+
+private function normaliserChampsNumeriques(Request $request): void
+{
+    $decimal = static function ($value) {
+        if (! is_string($value)) {
+            return $value;
+        }
+
+        return str_replace(',', '.', preg_replace('/[\s\x{00A0}]+/u', '', trim($value)));
+    };
+
+    $request->merge([
+        'taux_tva' => $decimal($request->input('taux_tva')),
+        'montant_total' => $decimal($request->input('montant_total')),
+        'quantite' => collect($request->input('quantite', []))->map($decimal)->all(),
+        'prix_unitaire' => collect($request->input('prix_unitaire', []))->map($decimal)->all(),
+        'lignes' => collect($request->input('lignes', []))->map(function ($ligne) use ($decimal) {
+            $ligne['quantite'] = $decimal($ligne['quantite'] ?? null);
+            $ligne['prix_unitaire'] = $decimal($ligne['prix_unitaire'] ?? null);
+            return $ligne;
+        })->all(),
+    ]);
 }
 
 private function statutEstValide(?string $statut): bool

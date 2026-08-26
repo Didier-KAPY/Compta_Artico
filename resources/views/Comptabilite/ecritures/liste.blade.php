@@ -60,10 +60,10 @@
                     </button>
                 </div>
                 <div class="col-md-3 d-flex align-items-end">
-                    <a href="{{ route('ecritures.create') }}"
+                    <a href="{{ route('comptabilite.imputation-compte') }}"
                     class="btn btn-info text-white w-100">
                         <i class="bi bi-diagram-3"></i>
-                        Imputation des comptes
+                        Journal des opérations diverses
                     </a>
                 </div>
             </form>      
@@ -81,7 +81,7 @@
                             <th>Validé par</th>
                         @endif
                         <th>Compte</th>
-                        <th>Désignation</th>
+                        <th>Libellé du bon</th>
                         <th class="text-end">
                             Débit CDF
                         </th>
@@ -110,7 +110,7 @@
                                 {{ $ecriture->compte->compte ?? '-' }}
                             </td>
                             <td>
-                                {{ $ecriture->compte->designation ?? '-' }}
+                                {{ $ecriture->journal?->description ?: ($ecriture->libelle ?: '-') }}
                             </td>
                           
                             <td class="text-end">
@@ -146,75 +146,11 @@
 
 
                             <td class="text-center">
-
-                                @can('valider', $ecriture)
-                                @if($ecriture->statut === 'En attente')
-                                {{-- Valider --}}
-                                <form
-                                    action="{{ route('ecritures.valider', $ecriture->id) }}"
-                                    method="POST"
-                                    enctype="multipart/form-data"
-                                    class="d-inline-flex align-items-center gap-1">
-
-                                    @csrf
-
-                                    <input type="file"
-                                           name="piece_justificative"
-                                           class="form-control form-control-sm"
-                                           style="max-width:180px"
-                                           accept=".pdf,.jpg,.jpeg,.png"
-                                           @required(str_starts_with(mb_strtoupper(trim((string) $ecriture->piece)), 'BSC'))
-                                           title="Pièce justificative{{ str_starts_with(mb_strtoupper(trim((string) $ecriture->piece)), 'BSC') ? ' obligatoire' : ' facultative' }}">
-
-                                    <button type="submit"
-                                            class="btn btn-sm btn-success"
-                                            title="Valider">
-
-                                        <i class="bi bi-check-circle"></i>
-
-                                    </button>
-
-                                </form>
-                                @endif
-                                @endcan
-
-                                @if($ecriture->piece_justificative)
-                                <a href="{{ route('ecritures.piece', $ecriture->id) }}"
-                                   target="_blank"
-                                   class="btn btn-sm btn-info"
-                                   title="Visualiser la pièce justificative">
-                                    <i class="bi bi-eye"></i>
+                                <a href="{{ route('ecritures.show', $ecriture) }}"
+                                   class="btn btn-sm btn-primary"
+                                   title="Imputation">
+                                    <i class="bi bi-diagram-3 me-1"></i>Imputation
                                 </a>
-                                @endif
-
-                                @can('update', $ecriture)
-                                {{-- Modifier --}}
-                                <a
-                                    href="{{ route('ecritures.edit', $ecriture->id) }}"
-                                    class="btn btn-sm btn-warning"
-                                    title="Modifier">
-
-                                    <i class="bi bi-pencil-square"></i>
-
-                                </a>
-                                @endcan
-
-                                <a href="{{ route('ecritures.show', $ecriture) }}" class="btn btn-sm btn-outline-primary" title="Voir"><i class="bi bi-eye"></i></a>
-
-                                @can('reouvrir', $ecriture)
-                                @if($ecriture->statut === 'Validé')
-                                <form action='{{ route('ecritures.reouvrir', $ecriture->id) }}'
-                                      method='POST' class='d-inline'>
-                                    @csrf
-                                    @method('PATCH')
-                                    <button type='submit' class='btn btn-sm btn-warning'
-                                            title='Réouvrir'>
-                                        <i class='bi bi-arrow-counterclockwise'></i>
-                                    </button>
-                                </form>
-                                @endif
-                                @endcan
-
                             </td>
                         </tr>
                     @empty

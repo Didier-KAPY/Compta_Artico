@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\BilanInitial;
 use App\Models\EcritureComptable;
 use App\Models\JournalType;
 use App\Models\Journaux;
@@ -100,6 +101,48 @@ class EtatFinancierTest extends TestCase
         $this->get('/comptabilite/etats-financiers')->assertOk();
         $this->get('/comptabilite/etats-financiers/bilan')->assertOk();
         $this->get('/comptabilite/etats-financiers/compte-resultat')->assertOk();
+    }
+
+    public function test_un_daf_peut_archiver_le_bilan_initial_affiche(): void
+    {
+        $user = $this->user('DAF');
+        $compte = $this->compte($user, '571100', 'Caisse', 'Actif', 'Bilan');
+        $this->ecriture($user, $compte, '2026-03-01', 125, 0, 'Validé');
+
+        $this->actingAs($user)
+            ->post('/comptabilite/etats-financiers/bilan/archiver', [
+                'libelle' => 'Bilan initial 2026',
+                'date_debut' => '2026-01-01',
+                'date_fin' => '2026-12-31',
+            ])
+            ->assertRedirect('/comptabilite/etats-financiers/bilan?date_debut=2026-01-01&date_fin=2026-12-31')
+            ->assertSessionHas('success');
+
+        $archive = BilanInitial::firstOrFail();
+        $this->assertSame('Bilan initial 2026', $archive->libelle);
+        $this->assertSame($user->id, $archive->user_id);
+        $this->assertSame('125.00', $archive->total_actif);
+        $this->assertSame(125.0, (float) $archive->donnees['bilan']['total_actif']);
+
+        $this->get('/comptabilite/etats-financiers/bilan?date_debut=2026-01-01&date_fin=2026-12-31')
+            ->assertOk()
+            ->assertSee('Consulter le bilan initial')
+            ->assertDontSee('Libellé de l’archive');
+
+        $this->get(route('comptabilite.etats-financiers.bilan-initial', $archive))
+            ->assertOk()
+            ->assertViewIs('Comptabilite.etats_financiers.bilan_initial')
+            ->assertSee('Bilan initial 2026')
+            ->assertSee('125,00')
+            ->assertSee('Supprimer')
+            ->assertDontSee('Actualiser')
+            ->assertDontSee('name="date_debut"', false)
+            ->assertDontSee('name="date_fin"', false);
+
+        $this->delete(route('comptabilite.etats-financiers.bilan-initial.supprimer', $archive))
+            ->assertRedirect('/comptabilite/etats-financiers/bilan?date_debut=2026-01-01&date_fin=2026-12-31')
+            ->assertSessionHas('success');
+        $this->assertDatabaseMissing('bilan_initials', ['id' => $archive->id]);
     }
 
     private function service(): SyscohadaEtatFinancierService

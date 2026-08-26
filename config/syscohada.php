@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'taux_tva' => (float) env('SYSCOHADA_TAUX_TVA', 16),
     // Les préfixes les plus longs restent prioritaires et sont modifiables ici.
     'bilan' => [
         'actif' => [

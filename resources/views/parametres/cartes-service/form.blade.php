@@ -5,7 +5,7 @@
 @section('content')
 <div class="container py-4" style="max-width:960px">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <div><h2 class="fw-bold mb-1">{{ $carteService ? 'Modifier la carte' : 'Créer une carte de service' }}</h2><p class="text-muted mb-0">Les nom, prénom, photo, département et fonction viennent du compte utilisateur.</p></div>
+        <div><h2 class="fw-bold mb-1">{{ $carteService ? 'Modifier la carte' : 'Créer une carte de service' }}</h2><p class="text-muted mb-0">Les nom, prénom, photo, direction et fonction viennent du compte utilisateur.</p></div>
         <a href="{{ route('parametres.cartes-service.index') }}" class="btn btn-outline-secondary">Retour</a>
     </div>
     <div class="card border-0 shadow-sm"><div class="card-body p-4 p-lg-5">
@@ -48,7 +48,7 @@
                     </div>
                     <div class="form-text mt-2">Ces éléments sont repris automatiquement sur la carte de service.</div>
                 </div>
-                <div class="col-12"><label class="form-label fw-semibold">Agent *</label><select name="user_id" class="form-select @error('user_id') is-invalid @enderror" required><option value="">Choisir l’agent</option>@foreach($agents as $agent)<option value="{{ $agent->id }}" @selected(old('user_id', $carteService?->user_id)==$agent->id)>{{ $agent->nom }} {{ $agent->prenom }} — {{ $agent->departement?->designation ?? 'Sans département' }} / {{ $agent->fonction?->designation ?? 'Sans fonction' }}</option>@endforeach</select>@error('user_id')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
+                <div class="col-12"><label class="form-label fw-semibold">Agent *</label><select name="user_id" class="form-select @error('user_id') is-invalid @enderror" required><option value="">Choisir l’agent</option>@foreach($agents as $agent)<option value="{{ $agent->id }}" @selected(old('user_id', $carteService?->user_id)==$agent->id)>{{ $agent->nom }} {{ $agent->prenom }} — {{ $agent->departement?->designation ?? 'Sans direction' }} / {{ $agent->fonction?->designation ?? 'Sans fonction' }}</option>@endforeach</select>@error('user_id')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
                 <div class="col-md-6"><label class="form-label fw-semibold">Postnom</label><input name="postnom" value="{{ old('postnom', $carteService?->postnom) }}" class="form-control @error('postnom') is-invalid @enderror">@error('postnom')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
                 <div class="col-md-6"><label class="form-label fw-semibold">Sexe</label><select name="sexe" class="form-select @error('sexe') is-invalid @enderror"><option value="">Choisir</option><option @selected(old('sexe', $carteService?->sexe)==='Masculin')>Masculin</option><option @selected(old('sexe', $carteService?->sexe)==='Féminin')>Féminin</option></select>@error('sexe')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
                 <div class="col-md-6"><label class="form-label fw-semibold">Date de naissance</label><input type="date" name="date_naissance" value="{{ old('date_naissance', $carteService?->date_naissance?->format('Y-m-d')) }}" class="form-control @error('date_naissance') is-invalid @enderror">@error('date_naissance')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>

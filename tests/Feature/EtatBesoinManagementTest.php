@@ -32,18 +32,23 @@ class EtatBesoinManagementTest extends TestCase
             ])->assertForbidden();
 
             foreach (['rejeter', 'attente'] as $action) {
-                $this->actingAs($user)->post(route('etat-besoins.valider', $etat), [
+                $this->actingAs($user)->from(route('etat-besoins.show', $etat))->post(route('etat-besoins.valider', $etat), [
                     'observation' => 'Action interdite', 'action' => $action, 'monnaie' => 'CDF',
                 ])->assertForbidden();
             }
 
-            $this->actingAs($user)->post(route('etat-besoins.valider', $etat), [
+            $this->actingAs($user)->from(route('etat-besoins.show', $etat))->post(route('etat-besoins.valider', $etat), [
                 'observation' => 'Validation autorisée', 'action' => 'valider', 'monnaie' => 'CDF',
-            ])->assertRedirect(route('etat-besoins.index'));
+            ])->assertRedirect(route('etat-besoins.show', $etat));
 
             $this->assertSame('Validé', $etat->fresh()->statut);
             $this->assertSame($user->id, $etat->fresh()->valide_par);
             $this->assertDatabaseHas('sortie_caisses', ['etat_besoin_id' => $etat->id, 'statut' => 'En attente']);
+            $sortie = SortieCaisse::where('etat_besoin_id', $etat->id)->firstOrFail();
+            $this->assertNull($sortie->numero);
+            $this->assertNull($sortie->type_bon);
+            $this->actingAs($user)->get(route('sortie-caisses.show', $sortie))
+                ->assertOk()->assertSee('Nature du bon')->assertSee('Non attribué');
         }
     }
 

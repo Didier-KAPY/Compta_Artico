@@ -30,62 +30,10 @@ class JournalController extends Controller
 {
 
 
-    public function index(Request $request)
-{
-    $journaux = Journaux::with(['journalType.compte', 'user', 'validateur'])
-
-        ->when($request->filled('brc_id'), fn ($query) => $query->whereHas('brcs', fn ($brc) => $brc->whereKey($request->integer('brc_id'))))
-        ->when($request->filled('entree_caisse_id'), fn ($query) => $query->where('entree_caisse_id', $request->integer('entree_caisse_id')))
-        ->when($request->filled('sortie_caisse_id'), fn ($query) => $query->where('sortie_caisse_id', $request->integer('sortie_caisse_id')))
-        ->when($request->filled('etat_besoin_id'), fn ($query) => $query->whereHas('sortieCaisse', fn ($sortie) => $sortie->where('etat_besoin_id', $request->integer('etat_besoin_id'))))
-
-        ->when($request->filled('journal_type_id'), function ($query) use ($request) {
-            $query->where('journal_type_id', $request->journal_type_id);
-        })
-
-        ->when($request->filled('reference'), function ($query) use ($request) {
-            $query->where('reference', 'like', '%'.$request->reference.'%');
-        })
-
-        ->when($request->date_debut, function($query) use($request){
-
-            $query->whereDate(
-                'date',
-                '>=',
-                $request->date_debut
-            );
-
-        })
-
-        ->when($request->date_fin, function($query) use($request){
-
-            $query->whereDate(
-                'date',
-                '<=',
-                $request->date_fin
-            );
-
-        })
-
-        ->orderByDesc('date')
-        ->orderByDesc('id')
-
-        ->paginate(10)
-        ->withQueryString();
-
-    $journalTypesTresorerie = JournalType::with('compte')
-        ->where('est_tresorerie', true)
-        ->whereNotNull('liste_des_comptes_id')
-        ->orderBy('nature')
-        ->orderBy('monnaie')
-        ->orderBy('code')
-        ->get();
-
-    return view(
-        'journaux.index',
-        compact('journaux', 'journalTypesTresorerie')
-    );
-}
+    public function index()
+    {
+        return redirect()->route('journaux.create.caisse');
+    }
 
 public function banque(Request $request)
 {
@@ -271,7 +219,7 @@ public function releve(Request $request)
         ->first();
 
     $journaux = (clone $baseQuery)
-        ->with('journalType.compte')
+        ->with(['journalType.compte', 'compte'])
         ->whereBetween('date', [$dateDebut, $dateFin])
         ->orderBy('date')
         ->orderBy('id')
@@ -313,78 +261,58 @@ public function releve(Request $request)
 
 public function create()
 {
-    return $this->formulaireCreation(null, 'journaux.create');
+    return redirect()->route('journaux.index')
+        ->with('warning', 'Les journaux sont générés automatiquement après validation des bons.');
 }
 
-public function createCaisse()
+public function createCaisse(Request $request)
 {
-    return $this->formulaireCreation('caisse', 'journaux.create_caisse');
+    return $this->journauxEnAttenteParNature($request, 'caisse', 'journaux.create_caisse');
 }
 
-public function createBanque()
+public function createBanque(Request $request)
 {
-    return $this->formulaireCreation('banque', 'journaux.create_banque');
+    return $this->journauxEnAttenteParNature($request, 'banque', 'journaux.create_banque');
 }
 
-public function createMobile()
+public function createMobile(Request $request)
 {
-    return $this->formulaireCreation('mobile_money', 'journaux.create_mobile');
+    return $this->journauxEnAttenteParNature($request, 'mobile_money', 'journaux.create_mobile');
 }
 
-private function formulaireCreation(?string $natureJournal, string $view)
+private function journauxEnAttenteParNature(Request $request, string $nature, string $view)
 {
+    $request->validate([
+        'reference' => 'nullable|string|max:100',
+        'date_debut' => 'nullable|date',
+        'date_fin' => 'nullable|date|after_or_equal:date_debut',
+    ]);
 
-    /*
-    |--------------------------------------------------------------------------
-    | JOURNAUX DE TRESORERIE
-    |--------------------------------------------------------------------------
-    */
+    $query = Journaux::with(['journalType.compte', 'user', 'validateur'])
+        ->whereHas('journalType', fn ($journalType) => $journalType->where('nature', $nature))
+        ->when($request->filled('reference'), fn ($builder) => $builder->where('reference', 'like', '%'.$request->reference.'%'))
+        ->when($request->filled('date_debut'), fn ($builder) => $builder->whereDate('date', '>=', $request->date_debut))
+        ->when($request->filled('date_fin'), fn ($builder) => $builder->whereDate('date', '<=', $request->date_fin));
 
-    $journalTypes = JournalType::with('compte')
-        ->where('est_tresorerie', true)
+    // Sans TVA, le montant appartient uniquement au total HT.
+    // Le TTC ne reprend que les bons réellement soumis à la TVA.
+    $queryAvecTva = (clone $query)->where(function ($builder) {
+        $builder->where('montant_tva', '>', 0)
+            ->orWhere('taux_tva', '>', 0)
+            ->orWhereHas('entreeCaisse', fn ($entree) => $entree->where('appliquer_tva', true))
+            ->orWhereHas('sortieCaisse', fn ($sortie) => $sortie->where('appliquer_tva', true));
+    });
 
-        ->when($natureJournal, fn ($query) => $query->where('nature', $natureJournal))
+    $totaux = [
+        'nombre' => (clone $query)->where('statut', 'En attente')->count(),
+        'ttc' => $queryAvecTva->sum('montant_ttc'),
+        'ht' => (clone $query)->sum('montant_ht'),
+        'tva' => (clone $query)->sum('montant_tva'),
+    ];
 
-        ->whereNotNull('liste_des_comptes_id')
+    $journaux = $query->orderByDesc('date')->orderByDesc('id')->paginate(15)->withQueryString();
 
-        ->orderBy('id')
-
-        ->get();
-
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | COMPTES D'OPERATION
-    |--------------------------------------------------------------------------
-    */
-
-    $comptes = ListeDesComptes::orderBy('compte')
-
-        ->get();
-
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | TAUX DE CHANGE
-    |--------------------------------------------------------------------------
-    */
-
-    $taux = TauxDeChange::latest()->first();
-
-
-
-    return view(
-        $view,
-        compact(
-            'journalTypes',
-            'comptes',
-            'taux',
-            'natureJournal'
-        )
-    );
-
+    return view($view, compact('journaux', 'totaux'));
 }
 
   public function store(Request $request)
@@ -395,6 +323,8 @@ private function formulaireCreation(?string $natureJournal, string $view)
         'journal_type_id'=>'nullable|required_without:journal_nature|exists:journal_types,id',
 
         'journal_nature'=>'nullable|in:caisse,banque,mobile_money',
+
+        'entree_caisse_id'=>'nullable|exists:entree_caisses,id',
 
         'liste_des_comptes_id'=>'required|exists:liste_des_comptes,id',
 
@@ -634,11 +564,25 @@ private function formulaireCreation(?string $natureJournal, string $view)
             'mobile_money' => 'Mobile Money',
             default => 'Caisse',
         };
-        $bonEntree = null;
+        $bonEntree = $request->filled('entree_caisse_id')
+            ? EntreeCaisse::findOrFail($request->integer('entree_caisse_id'))
+            : null;
         $bonSortie = null;
         $traitementCloture = $request->boolean('regroupement_quotidien');
 
-        if (! $traitementCloture && in_array($typeOperation, $typesEntree, true)) {
+        if ($bonEntree && $bonEntree->statut !== 'Validé') {
+            throw ValidationException::withMessages([
+                'entree_caisse_id' => 'Le bon d’entrée doit être validé avant sa comptabilisation.',
+            ]);
+        }
+
+        if ($bonEntree && Journaux::where('entree_caisse_id', $bonEntree->id)->exists()) {
+            throw ValidationException::withMessages([
+                'entree_caisse_id' => 'Ce bon d’entrée possède déjà un journal comptable.',
+            ]);
+        }
+
+        if (! $traitementCloture && in_array($typeOperation, $typesEntree, true) && ! $bonEntree) {
             $bonEntree = EntreeCaisse::create([
                 'user_id' => Auth::id(),
                 'numero' => 'BEC-'.now()->format('ymdHis').'-'.strtoupper(str()->random(6)),
@@ -717,9 +661,9 @@ private function formulaireCreation(?string $natureJournal, string $view)
             'journal_type_id'=>$journalType->id,
 
 
-            // IMPORTANT : uniquement trésorerie
+            // Le compte de trésorerie vient du type; le journal garde la contrepartie.
 
-            'liste_des_comptes_id'=>$traitementCloture ? $compteOperation->id : $compteTresorerie->id,
+            'liste_des_comptes_id'=>$compteOperation->id,
 
             'entree_caisse_id'=>$bonEntree?->id,
 
@@ -1017,7 +961,27 @@ private function formulaireCreation(?string $natureJournal, string $view)
 
 
     }
+public function showCaisse($id, FinancialDocumentService $documents)
+{
+    return $this->showParNature($id, $documents, 'caisse', 'journaux.show_caisse');
+}
+
+public function showBanque($id, FinancialDocumentService $documents)
+{
+    return $this->showParNature($id, $documents, 'banque', 'journaux.show_banque');
+}
+
+public function showMobile($id, FinancialDocumentService $documents)
+{
+    return $this->showParNature($id, $documents, 'mobile_money', 'journaux.show_mobile');
+}
+
 public function show($id, FinancialDocumentService $documents)
+{
+    return $this->showParNature($id, $documents);
+}
+
+private function showParNature($id, FinancialDocumentService $documents, ?string $natureAttendue = null, string $view = 'journaux.show')
 {
     // Journal avec ses relations
     $journal = Journaux::with([
@@ -1025,6 +989,7 @@ public function show($id, FinancialDocumentService $documents)
         'journalType.compte',
         'entreeCaisse', 'sortieCaisse.etatBesoin', 'ecritures', 'brcs', 'clotureJournaliere'
     ])->findOrFail($id);
+    abort_if($natureAttendue !== null && $journal->journalType?->nature !== $natureAttendue, 404);
     $suppressionDependencies = $documents->dependencies($journal);
     $documentLinks = collect([
         $journal->clotureJournaliere ? ['label' => 'Voir la clôture '.$journal->clotureJournaliere->numero_cloture, 'url' => route('parametres.clotures.show', $journal->clotureJournaliere), 'icon' => 'calendar2-check'] : null,
@@ -1096,7 +1061,7 @@ public function show($id, FinancialDocumentService $documents)
     $comptes = ListeDesComptes::orderBy('designation')->get();
 
 
-    return view('Journaux.show', compact(
+    return view($view, compact(
         'journal',
         'tauxActuel',
         'lignes',
@@ -1178,21 +1143,27 @@ public function destroy(DeleteFinancialDocumentRequest $request, $id, FinancialD
 }
 public function rejeter(Request $request, $id)
 {
+    $validated = $request->validate([
+        'observation' => ['required', 'string', 'min:3', 'max:2000'],
+        'nom_partenaire' => ['nullable', 'string', 'max:255'],
+        'telephone_partenaire' => ['nullable', 'string', 'max:50'],
+        'adresse_partenaire' => ['nullable', 'string', 'max:255'],
+    ], [
+        'observation.required' => 'L’observation est obligatoire pour rejeter un journal.',
+    ]);
+
     $journal = Journaux::findOrFail($id);
     Gate::authorize('rejeter', $journal);
 
-    $donnees = [
+    $journal->update([
         'statut' => 'Rejeté',
+        'observation' => trim($validated['observation']),
+        'nom_partenaire' => $validated['nom_partenaire'] ?? null,
+        'telephone_partenaire' => $validated['telephone_partenaire'] ?? null,
+        'adresse_partenaire' => $validated['adresse_partenaire'] ?? null,
         'date_validation' => Carbon::now(),
         'valide_par' => Auth::id(),
-    ];
-    if ($request->filled('journal_type_id')) {
-        $donnees['journal_type_id'] = $request->journal_type_id;
-    }
-    if ($request->filled('mode_paiement')) {
-        $donnees['mode_paiement'] = $request->mode_paiement;
-    }
-    $journal->update($donnees);
+    ]);
 
     return redirect()
         ->route('journaux.show', $journal->id)
@@ -1200,24 +1171,70 @@ public function rejeter(Request $request, $id)
 }
 public function valider(Request $request, $id, WorkflowComptableService $workflow)
 {
-    $validated = $request->validate([
-        'journal_type_id' => ['required', 'integer', 'exists:journal_types,id'],
-        'liste_des_comptes_id' => ['required', 'integer', 'exists:liste_des_comptes,id'],
+    $coordonnees = $request->validate([
+        'nom_partenaire' => ['nullable', 'string', 'max:255'],
+        'telephone_partenaire' => ['nullable', 'string', 'max:50'],
+        'adresse_partenaire' => ['nullable', 'string', 'max:255'],
     ]);
 
-    $journal = Journaux::findOrFail($id);
+    $journal = Journaux::with('journalType')->findOrFail($id);
     Gate::authorize('valider', $journal);
-    $workflow->validerJournal(
+
+    $nature = $journal->journalType?->nature;
+    $journalType = $journal->journalType;
+
+    // Le journal des opérations diverses conserve son type d’origine.
+    // Les journaux de trésorerie sont automatiquement ventilés par monnaie.
+    if ($nature !== 'od') {
+        $journalType = JournalType::with('compte')
+            ->where('est_tresorerie', true)
+            ->where('nature', $nature)
+            ->where('monnaie', mb_strtoupper((string) $journal->monnaie))
+            ->whereNotNull('liste_des_comptes_id')
+            ->first();
+
+        if (! $journalType?->compte) {
+            throw ValidationException::withMessages([
+                'journal_type' => 'Aucun journal de '.$nature.' n’est configuré pour la monnaie '.$journal->monnaie.'.',
+            ]);
+        }
+    }
+
+    if (! $journalType || ! $journal->liste_des_comptes_id) {
+        throw ValidationException::withMessages([
+            'journal_type' => 'Le journal et son compte de contrepartie doivent être configurés avant validation.',
+        ]);
+    }
+
+    // La contrepartie Client/Fournisseur est volontairement différée.
+    // Elle sera créée lors de l’imputation de l’écriture.
+    $workflow->validerJournalAvecTva(
         $journal,
-        (int) $validated['journal_type_id'],
-        (int) $validated['liste_des_comptes_id']
+        (int) $journalType->id,
+        null
     );
 
-    return redirect()
-        ->back()
-        ->with('success', 'Journal validé avec succès.');
-}
+    Journaux::query()
+        ->where('reference', $journal->reference)
+        ->update([
+            'nom_partenaire' => $coordonnees['nom_partenaire'] ?? null,
+            'telephone_partenaire' => $coordonnees['telephone_partenaire'] ?? null,
+            'adresse_partenaire' => $coordonnees['adresse_partenaire'] ?? null,
+        ]);
 
+    $ecritureId = EcritureComptable::query()
+        ->where('journal_id', $journal->id)
+        ->orderBy('id')
+        ->value('id');
+
+    if (! $ecritureId) {
+        throw ValidationException::withMessages([
+            'ecriture' => 'Aucune écriture comptable n’a été générée pour ce journal.',
+        ]);
+    }
+
+    return back()->with('success', 'Journal validé : cette écriture attend son imputation.');
+}
 public function reouvrir($id, WorkflowComptableService $workflow)
 {
     $journal = Journaux::findOrFail($id);

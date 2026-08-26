@@ -79,20 +79,7 @@ class EtatBesoinController extends Controller
     }
 
 
-    // Aucun filtre → aujourd'hui
-    if (
-        !$request->filled('numero') &&
-        !$request->filled('date_debut') &&
-        !$request->filled('date_fin') &&
-        !$request->filled('departement_id')
-    ) {
 
-        $query->whereDate(
-            'date',
-            Carbon::today()
-        );
-
-    }
 
 
     $etatBesoins = $query
@@ -126,6 +113,15 @@ class EtatBesoinController extends Controller
      */
     public function store(Request $request, DocumentNumberService $numbers)
 {
+    $decimal = static fn ($value) => is_string($value)
+        ? str_replace(',', '.', preg_replace('/[\\s\\x{00A0}]+/u', '', trim($value)))
+        : $value;
+
+    $request->merge([
+        'quantite' => collect($request->input('quantite', []))->map($decimal)->all(),
+        'prix_unitaire' => collect($request->input('prix_unitaire', []))->map($decimal)->all(),
+    ]);
+
     $request->validate([
         'date' => 'required|date',
         'departement_id' => 'required|exists:departements,id',
@@ -133,6 +129,12 @@ class EtatBesoinController extends Controller
         'demandeur' => 'required|string|max:255',
         'motif' => 'required|string',
         'monnaie' => 'required|in:CDF,USD',
+        'designation' => 'required|array|min:1',
+        'designation.*' => 'required|string|max:255',
+        'quantite' => 'required|array|min:1',
+        'quantite.*' => 'required|numeric|min:0.01',
+        'prix_unitaire' => 'required|array|min:1',
+        'prix_unitaire.*' => 'required|numeric|min:0',
     ]);
     $budgetsDepensesActifs = LigneBudgetaire::where('statut', 'Active')
         ->whereHas('budget', fn ($q) => $q->where('statut', 'Validé'))
@@ -448,7 +450,8 @@ public function valider(Request $request, $id, FinancialDocumentService $documen
                 SortieCaisse::create([
 
                     'user_id'          => auth()->id(),
-                    'numero'           => $numbers->next('BSC', $etat->date, 'Caisse'),
+                    'numero'           => null,
+                    'type_bon'         => null,
                     'date'             => $etat->date,
                     'etat_besoin_id'   => $etat->id,
                     'beneficiaire'     => $etat->demandeur,
@@ -491,9 +494,7 @@ public function valider(Request $request, $id, FinancialDocumentService $documen
 
         DB::commit();
 
-        return redirect()
-            ->route('etat-besoins.index')
-            ->with('success', $message);
+        return back()->with('success', $message);
 
     } catch (\Exception $e) {
 

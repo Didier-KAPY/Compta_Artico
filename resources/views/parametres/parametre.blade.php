@@ -13,7 +13,7 @@
 
     $rubriques = collect([
         ['visible' => $isAdmin, 'route' => 'parametres.entreprise', 'icon' => 'bi-building', 'color' => 'primary', 'title' => 'Entreprise', 'text' => 'Identité, coordonnées et informations légales.'],
-        ['visible' => $isAdmin, 'route' => 'parametres.departements', 'icon' => 'bi-diagram-3', 'color' => 'info', 'title' => 'Départements et fonctions', 'text' => 'Structure organisationnelle et affectation des agents.'],
+        ['visible' => $isAdmin, 'route' => 'parametres.departements', 'icon' => 'bi-diagram-3', 'color' => 'info', 'title' => 'Directions et fonctions', 'text' => 'Structure organisationnelle et affectation des agents.'],
         ['visible' => $isAdmin, 'route' => 'parametres.utilisateurs', 'icon' => 'bi-people', 'color' => 'primary', 'title' => 'Utilisateurs', 'text' => 'Créer les comptes et consulter les dernières connexions.'],
         ['visible' => $isAdmin || $user->hasRole('DAF'), 'route' => 'parametres.rh.index', 'icon' => 'bi-person-workspace', 'color' => 'info', 'title' => 'Gestion des ressources humaines', 'text' => 'Employés, contrats, présences, congés, paie et évaluations.'],
         ['visible' => $peutGererCartes, 'route' => 'parametres.cartes-service.index', 'icon' => 'bi-person-badge', 'color' => 'success', 'title' => 'Cartes de service', 'text' => 'Créer, imprimer et télécharger les cartes PVC du personnel.'],
@@ -24,7 +24,7 @@
         ['visible' => $isSuperAdmin, 'route' => 'parametres.audit.index', 'icon' => 'bi-shield-check', 'color' => 'danger', 'title' => 'Suivi et alertes comptables', 'text' => 'Surveiller les suppressions, restaurations et opérations sensibles.'],
         ['visible' => config('features.accounting') && $isSuperAdmin, 'route' => 'parametres.clotures.index', 'icon' => 'bi-calendar2-check', 'color' => 'primary', 'title' => 'Clôtures journalières', 'text' => 'Simuler, lancer, vérifier et suivre les clôtures comptables.'],
         ['visible' => config('features.accounting') && $isSuperAdmin, 'route' => 'parametres.periodes.index', 'icon' => 'bi-calendar-range', 'color' => 'warning', 'title' => 'Périodes comptables', 'text' => 'Clôturer ou réouvrir les mois et exercices comptables.'],
-        ['visible' => config('features.budget') && ($isSuperAdmin || $user->hasRole('DAF')), 'route' => 'parametres.budgets.index', 'icon' => 'bi-pie-chart', 'color' => 'success', 'title' => 'Budgets', 'text' => 'Prévisions, réalisations, écarts et pourcentages par compte et département.'],
+        ['visible' => config('features.budget') && ($isSuperAdmin || $user->hasRole('DAF')), 'route' => 'parametres.budgets.index', 'icon' => 'bi-pie-chart', 'color' => 'success', 'title' => 'Budgets', 'text' => 'Prévisions, réalisations, écarts et pourcentages par compte et direction.'],
         ['visible' => config('features.accounting') && ($isSuperAdmin || $isComptabilite), 'route' => 'parametres.imports.index', 'icon' => 'bi-file-earmark-arrow-up', 'color' => 'info', 'title' => 'Imports comptables', 'text' => 'Prévisualiser et importer le plan comptable depuis un fichier CSV.'],
         ['visible' => $isSuperAdmin, 'route' => 'parametres.sauvegardes.index', 'icon' => 'bi-database-check', 'color' => 'danger', 'title' => 'Sauvegardes', 'text' => 'Créer, télécharger et restaurer les sauvegardes MySQL.'],
     ])->where('visible');

@@ -22,7 +22,7 @@ class BRCController extends Controller
 {
     public function index(Request $request)
     {
-        $brcs = BRC::with(['journalType.compte', 'user', 'validateur'])
+        $brcs = BRC::with(['journalType.compte', 'lignes.compte', 'user', 'validateur'])
             ->when($request->filled('journal_id'), fn ($query) => $query->whereHas('journaux', fn ($journal) => $journal->whereKey($request->integer('journal_id'))))
             ->latest('date')->latest('id')->paginate(20);
 
@@ -40,6 +40,15 @@ class BRCController extends Controller
         $documentLinks = collect();
 
         return view('BRC.show', compact('brc', 'suppressionDependencies', 'documentLinks'));
+    }
+
+    public function pieceJustificative(BRC $brc)
+    {
+        abort_unless($brc->piece_justificative && Storage::disk('public')->exists($brc->piece_justificative), 404);
+
+        return Storage::disk('public')->response($brc->piece_justificative, basename($brc->piece_justificative), [
+            'Content-Disposition' => 'inline; filename="'.basename($brc->piece_justificative).'"',
+        ]);
     }
 
     public function telechargerPdf(BRC $brc)
@@ -79,13 +88,18 @@ class BRCController extends Controller
             'journal_type_id' => ['required', 'exists:journal_types,id'],
             'monnaie' => ['required', 'in:CDF,USD'],
             'sens' => ['required', 'in:debit,credit'],
+            'piece_justificative' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
             'lignes' => ['required', 'array', 'min:1'],
             'lignes.*.compte_id' => ['required', 'exists:liste_des_comptes,id'],
             'lignes.*.libelle' => ['required', 'string', 'max:255'],
             'lignes.*.montant' => ['required', 'numeric', 'min:0.01'],
         ]);
 
-        DB::transaction(function () use ($data, $numbers) {
+        $piecePath = $request->hasFile('piece_justificative')
+            ? $request->file('piece_justificative')->store('brcs/pieces', 'public')
+            : null;
+
+        $brc = DB::transaction(function () use ($data, $numbers, $piecePath) {
             $journalType = JournalType::with('compte')->findOrFail($data['journal_type_id']);
             if (! $journalType->compte) {
                 throw ValidationException::withMessages(['journal_type_id' => 'Ce journal n’a pas de compte associé.']);
@@ -104,6 +118,7 @@ class BRCController extends Controller
                 'monnaie' => $data['monnaie'],
                 'sens' => $data['sens'],
                 'total' => collect($data['lignes'])->sum(fn ($ligne) => (float) $ligne['montant']),
+                'piece_justificative' => $piecePath,
                 'statut' => 'En attente',
             ]);
             foreach ($data['lignes'] as $ligne) {
@@ -113,14 +128,18 @@ class BRCController extends Controller
                     'montant' => $ligne['montant'],
                 ]);
             }
+            return $brc;
         });
 
-        return redirect()->route('brc.index')->with('success', 'BRC enregistré et mis en attente de validation.');
+        $this->valider($brc);
+
+        return redirect()->route('comptabilite.imputation-compte', ['journal_id' => $brc->fresh()->journal_id])
+            ->with('success', 'BRC enregistré : le BRC, le journal et toutes les écritures ont été validés.');
     }
 
     public function valider(BRC $brc)
     {
-        abort_unless(auth()->user()?->hasRole(['Super Admin', 'Comptable']), 403);
+        abort_unless(auth()->user()?->hasRole(['Super Admin', 'Admin', 'Comptable']), 403);
 
         DB::transaction(function () use ($brc) {
             $brc = BRC::with(['lignes', 'journalType.compte'])->lockForUpdate()->findOrFail($brc->id);
@@ -163,6 +182,7 @@ class BRCController extends Controller
                 'statut' => 'Validé',
                 'date_validation' => now(),
                 'valide_par' => auth()->id(),
+                'piece_justificatif' => $brc->piece_justificative,
             ]);
 
             EcritureComptable::create([
@@ -171,7 +191,10 @@ class BRCController extends Controller
                 'date' => $brc->date, 'piece' => $brc->reference, 'libelle' => $libelle,
                 'debit_cdf' => $brc->sens === 'debit' ? $totalCdf : 0,
                 'credit_cdf' => $brc->sens === 'credit' ? $totalCdf : 0,
-                'statut' => 'En attente',
+                'statut' => 'Validé',
+                'piece_justificative' => $brc->piece_justificative,
+                'date_validation' => now(),
+                'valide_par' => auth()->id(),
             ]);
 
             foreach ($brc->lignes as $ligne) {
@@ -182,7 +205,10 @@ class BRCController extends Controller
                     'date' => $brc->date, 'piece' => $brc->reference, 'libelle' => $ligne->libelle,
                     'debit_cdf' => $brc->sens === 'credit' ? $montantCdf : 0,
                     'credit_cdf' => $brc->sens === 'debit' ? $montantCdf : 0,
-                    'statut' => 'En attente',
+                    'statut' => 'Validé',
+                    'piece_justificative' => $brc->piece_justificative,
+                    'date_validation' => now(),
+                    'valide_par' => auth()->id(),
                 ]);
             }
 
@@ -193,7 +219,7 @@ class BRCController extends Controller
             $brc->journaux()->syncWithoutDetaching([$journal->id]);
         });
 
-        return redirect()->route('brc.index')->with('success', 'BRC validé : journal validé et écritures mises en attente.');
+        return back()->with('success', 'BRC validé : le journal et toutes les écritures comptables ont également été validés.');
     }
 
     public function destroy(DeleteFinancialDocumentRequest $request, BRC $brc, FinancialDocumentService $documents)

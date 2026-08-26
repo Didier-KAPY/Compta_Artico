@@ -1,7 +1,7 @@
 <li class="nav-item mb-1">
 
     @php
-        $isActive = request()->routeIs('journaux.*', 'ecritures.create');
+        $isActive = request()->routeIs('journaux.*', 'comptabilite.imputation-compte*');
     @endphp
 
 
@@ -22,14 +22,13 @@
     <!-- SOUS MENU -->
     <ul class="submenu list-unstyled ps-3 mt-2 {{ $isActive ? 'show' : '' }}">
         @can('manageJournaux')
-        <!-- Liste journaux -->
+        @if(auth()->user()->hasRole(['Super Admin', 'Admin', 'Comptable']))
         <li>
-            <a href="{{ route('journaux.index') }}"
-               class="nav-link {{ request()->routeIs('journaux.index') ? 'active-menu' : '' }}">
-                <i class="bi bi-list-ul me-2"></i>
-                Caisses
+            <a href="{{ route('comptabilite.imputation-compte') }}" class="nav-link {{ request()->routeIs('comptabilite.imputation-compte*') ? 'active-menu' : '' }}">
+                <i class="bi bi-table me-2"></i>Journal des opérations diverses
             </a>
         </li>
+        @endif
         <!-- Nouveaux journaux de trésorerie -->
         <li>
             <a href="{{ route('journaux.create.caisse') }}" class="nav-link {{ request()->routeIs('journaux.create.caisse') ? 'active-menu' : '' }}">
@@ -46,11 +45,7 @@
                 <i class="bi bi-phone me-2"></i>Journal Mobile Money
             </a>
         </li>
-        <li>
-            <a href="{{ route('ecritures.create') }}" class="nav-link {{ request()->routeIs('ecritures.create') ? 'active-menu' : '' }}">
-                <i class="bi bi-journal-check me-2"></i>Journal des opérations diverses
-            </a>
-        </li>
+
         @endcan
         <!-- Relevé -->
         <li class="nav-item">

@@ -411,10 +411,14 @@ Route::middleware(['auth', 'force.password.change', 'accounting.open'])->group(f
         Route::get('/create/mobile', [JournalController::class, 'createMobile'])
             ->middleware('can:manageJournaux')
             ->name('create.mobile');
+        Route::get('/caisse/{journal}', [JournalController::class, 'showCaisse'])->whereNumber('journal')->middleware('can:manageJournaux')->name('show.caisse');
+        Route::get('/banque/{journal}', [JournalController::class, 'showBanque'])->whereNumber('journal')->middleware('can:manageJournaux')->name('show.banque');
+        Route::get('/mobile/{journal}', [JournalController::class, 'showMobile'])->whereNumber('journal')->middleware('can:manageJournaux')->name('show.mobile');
         Route::post('/', [JournalController::class, 'store'])
             ->middleware('can:manageJournaux')
             ->name('store');
         Route::get('/{journal}', [JournalController::class, 'show'])
+            ->whereNumber('journal')
             ->middleware('can:manageJournaux')
             ->name('show');
         Route::get('/{journal}/edit', [JournalController::class, 'edit'])
@@ -435,8 +439,11 @@ Route::middleware(['auth', 'force.password.change', 'accounting.open'])->group(f
         ->middleware('role:Super Admin,Admin,Directeur Général,DAF,Comptable')
         ->name('brc.index');
     Route::get('/brc/create', [BRCController::class, 'create'])
-        ->middleware('role:Super Admin,Admin,Comptable')
+        ->middleware('role:Super Admin,Admin,Comptable,Chargé des finances')
         ->name('brc.create');
+    Route::get('/brc/{brc}/piece-justificative', [BRCController::class, 'pieceJustificative'])
+        ->name('brc.piece');
+
     Route::get('/brc/{brc}/pdf', [BRCController::class, 'telechargerPdf'])
         ->middleware('role:Super Admin,Admin,Directeur Général,DAF,Comptable')
         ->name('brc.pdf');
@@ -447,7 +454,7 @@ Route::middleware(['auth', 'force.password.change', 'accounting.open'])->group(f
         ->middleware('role:Super Admin,Admin,Directeur Général,DAF,Comptable')
         ->name('brc.show');
     Route::post('/brc', [BRCController::class, 'store'])
-        ->middleware('role:Super Admin,Admin,Comptable')
+        ->middleware('role:Super Admin,Admin,Comptable,Chargé des finances')
         ->name('brc.store');
     Route::post('/brc/{brc}/valider', [BRCController::class, 'valider'])
         ->middleware('role:Super Admin,Comptable')
@@ -468,11 +475,20 @@ Route::middleware(['auth', 'force.password.change', 'accounting.open'])->group(f
         ->group(function () {
             Route::get('/', [EtatFinancierController::class, 'index'])->name('index');
             Route::get('/bilan', [EtatFinancierController::class, 'bilan'])->name('bilan');
+            Route::post('/bilan/archiver', [EtatFinancierController::class, 'archiverBilanInitial'])->name('bilan-archiver');
+            Route::get('/bilan-initial/{bilanInitial}', [EtatFinancierController::class, 'consulterBilanInitial'])->name('bilan-initial');
+            Route::delete('/bilan-initial/{bilanInitial}', [EtatFinancierController::class, 'supprimerBilanInitial'])->name('bilan-initial.supprimer');
             Route::get('/bilan/pdf', [EtatFinancierController::class, 'bilanPdf'])->name('bilan-pdf');
             Route::get('/compte-resultat', [EtatFinancierController::class, 'compteResultat'])->name('compte-resultat');
             Route::get('/compte-resultat/pdf', [EtatFinancierController::class, 'compteResultatPdf'])->name('compte-resultat-pdf');
         });
 
+    Route::get('/journaux/journal-des-opérations-diverses', [EcritureComptableController::class, 'imputationCompte'])
+        ->middleware(['feature:accounting', 'role:Super Admin,Admin,Comptable'])
+        ->name('comptabilite.imputation-compte');
+    Route::post('/journaux/journal-des-opérations-diverses/{journal}/traiter', [EcritureComptableController::class, 'traiterJournal'])
+        ->middleware(['feature:accounting', 'role:Super Admin,Comptable'])
+        ->name('comptabilite.imputation-compte.traiter');
     Route::get('/ecritures', [EcritureComptableController::class, 'liste'])
         ->middleware(['feature:accounting', 'role:Super Admin,Admin,Directeur Général,DAF,Comptable'])
         ->name('ecritures.liste');
@@ -497,10 +513,5 @@ Route::middleware(['auth', 'force.password.change', 'accounting.open'])->group(f
     Route::delete('/ecritures/{id}', [EcritureComptableController::class, 'destroy'])
         ->middleware(['feature:accounting', 'can:deleteFinancialDocument'])
         ->name('ecritures.destroy');
-    Route::get('/imputation-comptes', [EcritureComptableController::class, 'create'])
-        ->middleware(['feature:accounting', 'role:Super Admin,Admin,Comptable,Caissier,Caissière,Trésorier,Trésorière'])
-        ->name('ecritures.create');
-    Route::post('/imputation-comptes', [EcritureComptableController::class, 'store'])
-        ->middleware(['feature:accounting', 'role:Super Admin,Admin,Comptable,Caissier,Caissière,Trésorier,Trésorière'])
-        ->name('ecritures.store');
+
 });

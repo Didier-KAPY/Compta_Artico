@@ -81,6 +81,13 @@
     .signature-space{
         height:45px;
     }
+    .receipt-stamp{
+        display:block;
+        max-width:32mm;
+        max-height:24mm;
+        margin:3px auto;
+        object-fit:contain;
+    }
     .draft{
         margin:8px 0;
         padding:6px;
@@ -118,7 +125,7 @@
         @if($entreprise?->telephone)<div>Tél. {{ $entreprise->telephone }}</div>@endif
     </div>
     <div class="line"></div>
-    @if(!in_array(mb_strtolower(trim($journal->statut ?? '')), ['validé', 'valide'], true))
+    @if(!$tousValides)
         <div class="draft">PROVISOIRE — NON VALIDÉ</div>
     @endif
     <div class="text-center bold">
@@ -158,7 +165,7 @@
         Désignation :
     </div>
     <div>
-        {{ $journal->description }}
+        {{ $description ?: $journal->description }}
     </div>
 
     <div class="line"></div>
@@ -167,21 +174,21 @@
         <tr>
             <td>Montant HT</td>
             <td class="text-right">
-                {{ number_format($journal->montant_ht,2,',',' ') }}
+                {{ number_format($montantHt,2,',',' ') }}
                 {{ $journal->monnaie }}
             </td>
         </tr>
         <tr>
-            <td>TVA{{ (float) $journal->taux_tva > 0 ? ' ('.number_format($journal->taux_tva, 2, ',', ' ').' %)' : '' }}</td>
+            <td>TVA{{ $tauxTva > 0 ? ' ('.number_format($tauxTva, 2, ',', ' ').' %)' : '' }}</td>
             <td class="text-right">
-                {{ number_format($journal->montant_tva,2,',',' ') }}
+                {{ number_format($montantTva,2,',',' ') }}
                 {{ $journal->monnaie }}
             </td>
         </tr>
         <tr class="total">
             <td>TOTAL TTC</td>
             <td class="text-right">
-                {{ number_format($journal->montant_ttc,2,',',' ') }}
+                {{ number_format($montantTtc,2,',',' ') }}
                 {{ $journal->monnaie }}
             </td>
         </tr>
@@ -207,7 +214,15 @@
             <strong>
                 Caissier
             </strong>
-            <br><br><br>
+            @if($entreprise?->cachet)
+                <img
+                    src="{{ ($isPdf ?? false) ? public_path('storage/'.$entreprise->cachet) : asset('storage/'.$entreprise->cachet) }}"
+                    class="receipt-stamp"
+                    alt="Cachet de l'entreprise"
+                >
+            @else
+                <div class="signature-space"></div>
+            @endif
             __________________
             <br>
             {{ trim(($journal->user?->prenom ?? '').' '.($journal->user?->nom ?? '')) ?: 'Utilisateur' }}

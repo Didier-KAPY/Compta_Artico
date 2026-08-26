@@ -27,6 +27,10 @@
 
         <form action="{{ route('journaux.store') }}" method="POST" enctype="multipart/form-data">
             @csrf
+            @if(old('entree_caisse_id'))
+                <input type="hidden" name="entree_caisse_id" value="{{ old('entree_caisse_id') }}">
+                <div class="alert alert-info mx-4 mt-4 mb-0"><i class="bi bi-link-45deg me-2"></i>Journal prérempli depuis le bon d’entrée validé.</div>
+            @endif
             @if($natureJournal ?? null)<input type="hidden" name="journal_nature" value="{{ $natureJournal }}">@endif
             <div class="card journal-main-card">
                 <div class="card-header journal-card-header d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">

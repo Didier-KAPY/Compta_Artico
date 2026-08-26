@@ -37,10 +37,12 @@ return [
         | MySQL
         |--------------------------------------------------------------------------
         |
-        | Configuration utilisée par Compta_Artico sur Render.
-        | Le certificat CA d'Aiven est copié dans le conteneur Docker sous :
+        | En local :
+        | MYSQL_ATTR_SSL_CA n'est pas défini => connexion MySQL normale.
         |
-        | /etc/ssl/certs/aiven-ca.pem
+        | Sur Render :
+        | MYSQL_ATTR_SSL_CA=/etc/ssl/certs/aiven-ca.pem
+        | => connexion SSL vers Aiven.
         |
         */
 
@@ -65,20 +67,14 @@ return [
             'strict' => true,
             'engine' => null,
 
-            /*
-            |--------------------------------------------------------------------------
-            | Aiven SSL
-            |--------------------------------------------------------------------------
-            */
+            'options' => extension_loaded('pdo_mysql')
+                ? array_filter([
+                    PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
 
-            'options' => extension_loaded('pdo_mysql') ? array_filter([
-                PDO::MYSQL_ATTR_SSL_CA => env(
-                    'MYSQL_ATTR_SSL_CA',
-                    '/etc/ssl/certs/aiven-ca.pem'
-                ),
-
-                PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false,
-            ]) : [],
+                    PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT =>
+                        env('MYSQL_ATTR_SSL_CA') ? false : null,
+                ])
+                : [],
         ],
 
         /*
