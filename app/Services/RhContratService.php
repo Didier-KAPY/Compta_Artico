@@ -1,0 +1,6 @@
+<?php
+namespace App\Services;
+use App\Models\{Employe,RhContrat};
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+class RhContratService {public function creer(array $d,int $auteur):RhContrat{return DB::transaction(function()use($d,$auteur){$e=Employe::lockForUpdate()->findOrFail($d['employe_id']);if($d['statut']==='Actif'&&RhContrat::where('employe_id',$e->id)->where('statut','Actif')->whereDate('date_debut','<=',$d['date_fin']??'9999-12-31')->where(fn($q)=>$q->whereNull('date_fin')->orWhereDate('date_fin','>=',$d['date_debut']))->exists())throw ValidationException::withMessages(['date_debut'=>'Un contrat actif chevauche déjà cette période.']);return RhContrat::create($d+['entreprise_id'=>$e->entreprise_id,'user_id'=>$e->user_id,'departement_id'=>$e->departement_id,'fonction_id'=>$e->fonction_id,'cree_par'=>$auteur]);});}public function valider(RhContrat $c,int $validateur):void{if($c->statut!=='Brouillon')throw ValidationException::withMessages(['statut'=>'Seul un contrat brouillon peut être validé.']);if($c->cree_par===$validateur)throw ValidationException::withMessages(['statut'=>'Le créateur ne peut pas valider son propre contrat.']);DB::transaction(fn()=>$c->update(['statut'=>'Actif','valide_par'=>$validateur,'valide_le'=>now()]));}}

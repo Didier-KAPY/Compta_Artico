@@ -22,6 +22,8 @@ class AuditLogService
     ): AuditLog {
         return AuditLog::create([
             'user_id' => $request->user()?->id ?? Auth::id(),
+            'entreprise_id' => $model->entreprise_id ?? null,
+            'module' => str_starts_with($action, 'creation_document_rh') || str_contains($action, '_rh') ? 'ressources_humaines' : 'comptabilite',
             'action' => $action,
             'model_type' => $model::class,
             'model_id' => $model->getKey(),

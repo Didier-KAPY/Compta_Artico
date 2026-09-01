@@ -41,6 +41,28 @@ class BudgetImportSecurityTest extends TestCase
     {
         $user = $this->admin('Comptable');
         $this->actingAs($user)->get(route('parametres.sauvegardes.index'))->assertForbidden();
+        $this->actingAs($user)->post(route('parametres.sauvegardes.import'), [
+            'fichier' => UploadedFile::fake()->createWithContent('base.sql', 'SELECT 1;'),
+            'password' => 'password',
+            'confirmation' => '1',
+        ])->assertForbidden();
+    }
+
+    public function test_import_de_sauvegarde_exige_un_fichier_sql_et_le_mot_de_passe(): void
+    {
+        $user = $this->admin();
+
+        $this->actingAs($user)->post(route('parametres.sauvegardes.import'), [
+            'fichier' => UploadedFile::fake()->createWithContent('base.txt', 'SELECT 1;'),
+            'password' => 'password',
+            'confirmation' => '1',
+        ])->assertSessionHasErrors('fichier');
+
+        $this->actingAs($user)->post(route('parametres.sauvegardes.import'), [
+            'fichier' => UploadedFile::fake()->createWithContent('base.sql', 'SELECT 1;'),
+            'password' => 'incorrect',
+            'confirmation' => '1',
+        ])->assertSessionHasErrors('password');
     }
 
     public function test_ecrans_administratifs_sont_rendus_et_connexion_est_limitee(): void
@@ -49,7 +71,9 @@ class BudgetImportSecurityTest extends TestCase
         $this->actingAs($user)->get(route('parametres.budgets.index'))->assertOk()->assertSee('Gestion budgétaire');
         $this->actingAs($user)->get(route('parametres.imports.index'))->assertOk()->assertSee('Import du plan comptable');
         $this->actingAs($user)->get(route('parametres.periodes.index'))->assertOk()->assertSee('Clôtures mensuelles et annuelles');
-        $this->actingAs($user)->get(route('parametres.sauvegardes.index'))->assertOk()->assertSee('Sauvegardes MySQL');
+        $this->actingAs($user)->get(route('parametres.sauvegardes.index'))->assertOk()
+            ->assertSee('Import et export MySQL')
+            ->assertSee('Importer et restaurer');
 
         auth()->logout();
         RateLimiter::clear('inconnu@test.local|127.0.0.1');
@@ -63,6 +87,7 @@ class BudgetImportSecurityTest extends TestCase
     private function admin(string $role = 'Super Admin'): User
     {
         $roleModel = Role::create(['designation' => $role]);
+
         return User::create(['nom' => 'Admin', 'prenom' => 'Test', 'email' => uniqid().'@test.local', 'password' => bcrypt('password'), 'role_id' => $roleModel->id, 'password_default' => 0, 'statut' => 'Actif']);
     }
 }

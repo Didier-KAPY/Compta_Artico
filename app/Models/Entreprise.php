@@ -33,5 +33,6 @@ class Entreprise extends Model
     {
         return $this->belongsTo(User::class);
     }
+    public function employes(){ return $this->hasMany(Employe::class); }
     
 }

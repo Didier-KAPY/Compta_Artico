@@ -1,0 +1,3 @@
+<?php
+namespace App\Http\Requests;use Illuminate\Foundation\Http\FormRequest;
+class StoreRhPresenceRequest extends FormRequest {public function authorize():bool{return $this->user()?->can('manageAttendance')??false;}public function rules():array{return ['employe_id'=>'required|exists:rh_employes,id','date'=>'required|date','heure_arrivee'=>'nullable|required_if:statut,Présent,Retard,Télétravail,Mission|date_format:H:i','debut_pause'=>'nullable|date_format:H:i|after:heure_arrivee','fin_pause'=>'nullable|date_format:H:i|after:debut_pause','heure_depart'=>'nullable|date_format:H:i|after:heure_arrivee','statut'=>'required|in:Présent,Absent,Retard,Mission,Télétravail,Congé,Jour férié','observation'=>'nullable|string'];}}

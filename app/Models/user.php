@@ -62,6 +62,12 @@ class User extends Authenticatable
     {
         return $this->belongsTo(Fonction::class);
     }
+    public function employe(){ return $this->hasOne(Employe::class); }
+    public function hasRhPermission(string $permission): bool
+    {
+        if ($this->isSuperAdmin()) return true;
+        return $this->role?->rhPermissions()->where('code', $permission)->exists() ?? false;
+    }
 
     public function cartesService()
     {

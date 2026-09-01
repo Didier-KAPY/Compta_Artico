@@ -75,7 +75,7 @@ class ProfilController extends Controller
 
             'signature'=>'nullable|image|mimes:png|max:2048',
 
-            'logo'=>'nullable|image|mimes:png|max:2048',
+            'logo'=>'nullable|image|mimes:png,jpg,jpeg|max:2048',
 
             'cachet'=>'nullable|image|max:2048',
 

@@ -38,6 +38,9 @@ class AppServiceProvider extends ServiceProvider
         Gate::before(function (User $user, string $ability): ?bool {
             return $user->isSuperAdmin() ? true : null;
         });
+        foreach (['viewHRDashboard','viewEmployees','createEmployees','updateEmployees','archiveEmployees','viewEmployeeSensitiveData','manageDepartments','managePositions','viewContracts','manageContracts','validateContracts','viewAttendance','manageAttendance','validateAttendance','requestLeave','viewTeamLeaves','approveManagerLeave','approveHRLeave','manageLeaveBalances','viewPayroll','createPayroll','validatePayroll','payPayroll','cancelPayroll','viewPayslips','manageEvaluations','manageTrainings','manageDisciplinaryActions','viewHRReports','exportHRReports','viewHRAuditLog','manageHRSettings'] as $permission) {
+            Gate::define($permission, fn (User $user): bool => $user->hasRhPermission($permission));
+        }
 
         Gate::define('viewAccountingReports', fn (User $user): bool => $user->hasRole(
             ['Super Admin', 'Admin', 'DAF', 'Comptable']
@@ -69,6 +72,11 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('forceDeleteFinancialDocument', fn (User $user): bool => $user->isSuperAdmin());
         Gate::define('viewFinancialTrash', fn (User $user): bool => $user->isSuperAdmin());
         Gate::define('viewFinancialAudit', fn (User $user): bool => $user->isSuperAdmin());
+        Gate::define('viewHR', fn (User $user): bool => $user->hasRole(['Super Admin', 'Admin', 'Directeur Général', 'Gérant', 'Gerant', 'DAF']));
+        Gate::define('manageHR', fn (User $user): bool => $user->hasRole(['Super Admin', 'Admin', 'Directeur Général', 'Gérant', 'Gerant']));
+        Gate::define('approveHRLeave', fn (User $user): bool => $user->hasRole(['Super Admin', 'Admin', 'Directeur Général', 'Gérant', 'Gerant']));
+        Gate::define('managePayroll', fn (User $user): bool => $user->hasRole(['Super Admin', 'DAF']));
+        Gate::define('deleteHR', fn (User $user): bool => $user->hasRole(['Super Admin', 'Admin', 'Directeur Général', 'Gérant', 'Gerant']));
         Gate::define('viewBudget', fn (User $user): bool => $user->hasRole(['Super Admin','Admin','Directeur Général','Gérant','Gerant','DAF','Comptable']));
         Gate::define('createBudget', fn (User $user): bool => $user->hasRole(['Super Admin','DAF']));
         Gate::define('updateBudget', fn (User $user): bool => $user->hasRole(['Super Admin','DAF']));

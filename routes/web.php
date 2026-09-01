@@ -21,6 +21,13 @@ use App\Http\Controllers\PeriodeComptableController;
 use App\Http\Controllers\ProfilController;
 use App\Http\Controllers\ReportExportController;
 use App\Http\Controllers\RessourceHumaineController;
+use App\Http\Controllers\EmployeController;
+use App\Http\Controllers\RhDocumentController;
+use App\Http\Controllers\RhContratController;
+use App\Http\Controllers\RhPaieController;
+use App\Http\Controllers\RhPayrollSettingController;
+use App\Http\Controllers\RhPresenceController;
+use App\Http\Controllers\RhSettingController;
 use App\Http\Controllers\SortieCaisseController;
 use App\Http\Controllers\SauvegardeController;
 use App\Http\Controllers\ClotureJournaliereController;
@@ -54,23 +61,42 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         ->middleware('role:Super Admin,Admin,Directeur Général,Gérant,Gerant,DAF,Comptable,Directeur Technique')
         ->name('parametres.parametre');
     Route::prefix('/parametres/ressources-humaines')->name('parametres.rh.')
-        ->middleware('role:Super Admin,Admin,Directeur Général,Gérant,Gerant,DAF')->group(function () {
-            Route::get('/', [RessourceHumaineController::class, 'index'])->name('index');
-            Route::get('/employes', [RessourceHumaineController::class, 'employes'])->name('employes');
-            Route::get('/contrats', [RessourceHumaineController::class, 'contrats'])->name('contrats');
-            Route::get('/presences', [RessourceHumaineController::class, 'presences'])->name('presences');
-            Route::get('/conges', [RessourceHumaineController::class, 'conges'])->name('conges');
-            Route::get('/paie', [RessourceHumaineController::class, 'paie'])->name('paie');
-            Route::get('/evaluations', [RessourceHumaineController::class, 'evaluations'])->name('evaluations');
-            Route::get('/rapports', [RessourceHumaineController::class, 'rapports'])->name('rapports');
-            Route::post('/contrats', [RessourceHumaineController::class, 'storeContrat'])->name('contrats.store');
-            Route::post('/presences', [RessourceHumaineController::class, 'storePresence'])->name('presences.store');
-            Route::post('/conges', [RessourceHumaineController::class, 'storeConge'])->name('conges.store');
-            Route::patch('/conges/{conge}/statut', [RessourceHumaineController::class, 'statutConge'])->name('conges.statut');
-            Route::post('/paie', [RessourceHumaineController::class, 'storePaie'])->name('paie.store');
-            Route::post('/evaluations', [RessourceHumaineController::class, 'storeEvaluation'])->name('evaluations.store');
-            Route::delete('/{type}/{id}', [RessourceHumaineController::class, 'destroy'])->whereIn('type',['contrats','presences','conges','paie','evaluations'])->name('destroy');
-            Route::get('/rapport/{format}', [RessourceHumaineController::class, 'report'])->whereIn('format',['print','pdf','excel'])->name('report');
+        ->group(function () {
+            Route::get('/', [RessourceHumaineController::class, 'index'])->middleware('can:viewHRDashboard')->name('index');
+            Route::get('/employes', [EmployeController::class, 'index'])->middleware('can:viewEmployees')->name('employes');
+            Route::get('/employes/creer', [EmployeController::class, 'create'])->middleware('can:createEmployees')->name('employes.create');
+            Route::post('/employes', [EmployeController::class, 'store'])->middleware('can:createEmployees')->name('employes.store');
+            Route::get('/employes/{employe}', [EmployeController::class, 'show'])->middleware('can:viewEmployees')->name('employes.show');
+            Route::get('/employes/{employe}/modifier', [EmployeController::class, 'edit'])->middleware('can:updateEmployees')->name('employes.edit');
+            Route::put('/employes/{employe}', [EmployeController::class, 'update'])->middleware('can:updateEmployees')->name('employes.update');
+            Route::delete('/employes/{employe}', [EmployeController::class, 'destroy'])->middleware('can:archiveEmployees')->name('employes.destroy');
+            Route::get('/employes/{employe}/pdf', [EmployeController::class, 'pdf'])->middleware('can:viewEmployees')->name('employes.pdf');
+            Route::post('/employes/{employe}/documents', [RhDocumentController::class, 'store'])->middleware('can:updateEmployees')->name('documents.store');
+            Route::get('/documents/{document}/telecharger', [RhDocumentController::class, 'download'])->middleware('can:viewEmployeeSensitiveData')->name('documents.download');
+            Route::get('/contrats', [RhContratController::class, 'index'])->middleware('can:viewContracts')->name('contrats');
+            Route::get('/presences', [RhPresenceController::class, 'index'])->middleware('can:viewAttendance')->name('presences');
+            Route::get('/presences/excel', [RhPresenceController::class, 'exportExcel'])->middleware('can:viewAttendance')->name('presences.excel');
+            Route::get('/conges', [RessourceHumaineController::class, 'conges'])->middleware('can:viewTeamLeaves')->name('conges');
+            Route::get('/paie', [RessourceHumaineController::class, 'paie'])->middleware('can:viewPayroll')->name('paie');
+            Route::get('/evaluations', [RessourceHumaineController::class, 'evaluations'])->middleware('can:manageEvaluations')->name('evaluations');
+            Route::get('/rapports', [RessourceHumaineController::class, 'rapports'])->middleware('can:viewHRReports')->name('rapports');
+            Route::post('/contrats', [RhContratController::class, 'store'])->middleware('can:manageContracts')->name('contrats.store');
+            Route::patch('/contrats/{contrat}/valider', [RhContratController::class, 'validateContract'])->middleware('can:validateContracts')->name('contrats.validate');
+            Route::post('/presences', [RhPresenceController::class, 'store'])->middleware('can:manageAttendance')->name('presences.store');
+            Route::post('/conges', [RessourceHumaineController::class, 'storeConge'])->middleware('can:requestLeave')->name('conges.store');
+            Route::patch('/conges/{conge}/statut', [RessourceHumaineController::class, 'statutConge'])->middleware('can:approveHRLeave')->name('conges.statut');
+            Route::post('/paie', [RhPaieController::class, 'store'])->middleware('can:createPayroll')->name('paie.store');
+            Route::get('/paie/{paie}/bulletin', [RessourceHumaineController::class, 'bulletin'])->middleware('can:viewPayslips')->name('paie.bulletin');
+            Route::get('/parametres', [RhSettingController::class, 'index'])->middleware('can:manageHRSettings')->name('settings');
+            Route::post('/parametres/horaires', [RhSettingController::class, 'storeSchedule'])->middleware('can:manageHRSettings')->name('settings.schedules.store');
+            Route::put('/parametres/horaires/{horaire}', [RhSettingController::class, 'updateSchedule'])->middleware('can:manageHRSettings')->name('settings.schedules.update');
+            Route::delete('/parametres/horaires/{horaire}', [RhSettingController::class, 'destroySchedule'])->middleware('can:manageHRSettings')->name('settings.schedules.destroy');
+            Route::post('/parametres/rubriques-paie', [RhPayrollSettingController::class, 'store'])->middleware('can:manageHRSettings')->name('paie.settings.store');
+            Route::put('/parametres/rubriques-paie/{rubrique}', [RhPayrollSettingController::class, 'update'])->middleware('can:manageHRSettings')->name('paie.settings.update');
+            Route::delete('/parametres/rubriques-paie/{rubrique}', [RhPayrollSettingController::class, 'destroy'])->middleware('can:manageHRSettings')->name('paie.settings.destroy');
+            Route::post('/evaluations', [RessourceHumaineController::class, 'storeEvaluation'])->middleware('can:manageEvaluations')->name('evaluations.store');
+            Route::delete('/{type}/{id}', [RessourceHumaineController::class, 'destroy'])->middleware('can:deleteHR')->whereIn('type',['contrats','presences','conges','paie','evaluations'])->name('destroy');
+            Route::get('/rapport/{format}', [RessourceHumaineController::class, 'report'])->middleware('can:exportHRReports')->whereIn('format',['print','pdf','excel'])->name('report');
         });
     Route::get('/parametres/audit-comptable', [FinancialAuditController::class, 'index'])
         ->middleware('can:viewFinancialAudit')
@@ -140,6 +166,7 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         ->middleware('role:Super Admin')->group(function () {
             Route::get('/', [SauvegardeController::class, 'index'])->name('index');
             Route::post('/', [SauvegardeController::class, 'store'])->name('store');
+            Route::post('/importer', [SauvegardeController::class, 'import'])->name('import');
             Route::get('/{fichier}', [SauvegardeController::class, 'download'])->name('download');
             Route::post('/restaurer/base', [SauvegardeController::class, 'restore'])->name('restore');
         });
@@ -259,7 +286,7 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
 
 Route::middleware(['auth', 'force.password.change', 'accounting.open'])->group(function () {
     Route::get('/exports/{rapport}/{format}', function (Request $request, string $rapport, string $format) {
-        $methodes = ['ecritures', 'journaux', 'entrees', 'sorties', 'etat-besoins', 'grand-livre', 'tresorerie', 'releve', 'balance', 'bilan', 'compte-resultat'];
+        $methodes = ['ecritures', 'journaux', 'operations-diverses', 'entrees', 'sorties', 'etat-besoins', 'grand-livre', 'tresorerie', 'releve', 'balance', 'bilan', 'compte-resultat'];
         abort_unless(in_array($rapport, $methodes, true), 404);
         $methode = str_replace('-', '', lcfirst(ucwords($rapport, '-')));
         return app(ReportExportController::class)->{$methode}($request, $format);

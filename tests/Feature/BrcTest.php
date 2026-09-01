@@ -45,6 +45,53 @@ class BrcTest extends TestCase
 
         $this->assertDatabaseCount('brcs', 1);
     }
+
+    public function test_la_liste_affiche_uniquement_les_brc_du_jour_sans_validateur(): void
+    {
+        $this->travelTo('2026-08-28 10:00:00');
+        [$user, $type] = $this->contexte();
+        $attributs = [
+            'user_id' => $user->id,
+            'journal_type_id' => $type->id,
+            'monnaie' => 'CDF',
+            'sens' => 'debit',
+            'total' => 100,
+            'statut' => 'Validé',
+            'valide_par' => $user->id,
+        ];
+        BRC::create($attributs + ['reference' => 'BRC-AUJOURDHUI', 'date' => '2026-08-28']);
+        BRC::create($attributs + ['reference' => 'BRC-HIER', 'date' => '2026-08-27']);
+
+        $this->actingAs($user)->get(route('brc.index'))
+            ->assertOk()
+            ->assertViewHas('brcs', function ($brcs): bool {
+                return $brcs->pluck('reference')->all() === ['BRC-AUJOURDHUI'];
+            })
+            ->assertDontSee('<th>Validé par</th>', false);
+    }
+
+    public function test_le_super_admin_voit_la_colonne_valide_par(): void
+    {
+        $this->travelTo('2026-08-28 10:00:00');
+        [$user, $type] = $this->contexte('Super Admin');
+        BRC::create([
+            'user_id' => $user->id,
+            'journal_type_id' => $type->id,
+            'reference' => 'BRC-SUPER-ADMIN',
+            'date' => '2026-08-28',
+            'monnaie' => 'CDF',
+            'sens' => 'debit',
+            'total' => 100,
+            'statut' => 'Validé',
+            'valide_par' => $user->id,
+        ]);
+
+        $this->actingAs($user)->get(route('brc.index'))
+            ->assertOk()
+            ->assertSee('<th>Validé par</th>', false)
+            ->assertSee('BRC Test');
+    }
+
     public function test_creation_genere_une_reference_brc_et_valide_toute_la_chaine(): void
     {
         [$user, $type, , $compteImputation] = $this->contexte();
@@ -69,7 +116,14 @@ class BrcTest extends TestCase
         ]));
         $page->assertOk()->assertSee('Journal des opérations diverses')->assertSee('Compte débit')->assertSee('Compte crédit')
             ->assertSee('Numéro de référence')->assertSee('Date début')->assertSee('Date fin')
-            ->assertSee($brc->reference)->assertDontSee('<th>Journal</th>', false);
+            ->assertSee($brc->reference)->assertDontSee('<th>Journal</th>', false)
+            ->assertSee('operations-diverses/pdf', false)->assertSee('operations-diverses/excel', false);
+
+        $filtres = ['date_debut' => '2026-08-04', 'date_fin' => '2026-08-04', 'reference' => $brc->reference];
+        $this->actingAs($user)->get(route('exports.periode', ['rapport' => 'operations-diverses', 'format' => 'excel'] + $filtres))
+            ->assertOk()->assertDownload();
+        $this->actingAs($user)->get(route('exports.periode', ['rapport' => 'operations-diverses', 'format' => 'pdf'] + $filtres))
+            ->assertOk()->assertDownload();
     }
 
     public function test_creation_accepte_et_propage_une_piece_justificative(): void
@@ -97,6 +151,7 @@ class BrcTest extends TestCase
         $this->assertSame(2, EcritureComptable::where('piece_justificative', $brc->piece_justificative)->count());
         $this->actingAs($user)->get(route('brc.piece', $brc))->assertOk();
     }
+
     public function test_validation_cree_un_journal_et_des_ecritures_equilibrees_valides(): void
     {
         [$user, $type, $compteJournal, $compteImputation] = $this->contexte();
@@ -156,6 +211,7 @@ class BrcTest extends TestCase
         $this->assertSame(2, EcritureComptable::where('journal_id', $journal->id)->where('statut', 'Validé')->count());
         $this->assertEquals(25000.0, EcritureComptable::where('journal_id', $journal->id)->sum('debit_cdf'));
     }
+
     private function contexte(string $roleDesignation = 'Comptable'): array
     {
         $role = Role::firstOrCreate(['designation' => $roleDesignation]);

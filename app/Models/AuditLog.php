@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class AuditLog extends Model
 {
     protected $fillable = [
-        'user_id', 'action', 'model_type', 'model_id', 'reference_document',
+        'user_id', 'entreprise_id', 'module', 'action', 'model_type', 'model_id', 'reference_document',
         'ancien_statut', 'motif', 'ancienne_valeur', 'nouvelle_valeur',
         'dependances', 'type_suppression', 'adresse_ip', 'user_agent',
     ];

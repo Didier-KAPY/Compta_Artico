@@ -3,6 +3,7 @@
     @php($liens = [['index','speedometer2','Tableau de bord'],['employes','people','Employés'],['contrats','file-earmark-text','Contrats'],['presences','clock-history','Présences'],['conges','calendar2-check','Congés'],['paie','cash-stack','Paie'],['evaluations','clipboard-data','Évaluations'],['rapports','file-earmark-bar-graph','Rapports RH']])
     <ul class="nav flex-column">
         @foreach($liens as [$route,$icone,$libelle])<li><a href="{{ route('parametres.rh.'.$route) }}" class="nav-link {{ request()->routeIs('parametres.rh.'.$route) ? 'active-menu' : '' }}"><i class="bi bi-{{ $icone }} me-2"></i>{{ $libelle }}</a></li>@endforeach
+        @can('manageHRSettings')<li><a href="{{route('parametres.rh.settings')}}" class="nav-link {{request()->routeIs('parametres.rh.settings*')?'active-menu':''}}"><i class="bi bi-sliders me-2"></i>Paramètres RH</a></li>@endcan
         <li class="mt-3 pt-3 border-top border-light border-opacity-10"><a href="{{ route('dashboard') }}" class="nav-link"><i class="bi bi-arrow-left-circle me-2"></i>Retour à la comptabilité</a></li>
         <li><a href="{{ route('parametres.parametre') }}" class="nav-link"><i class="bi bi-gear me-2"></i>Paramètres</a></li>
     </ul>

@@ -77,6 +77,23 @@ class EtatFinancierTest extends TestCase
         $this->assertNotNull(collect($etat['bilan']['actif'])->pluck('lignes')->flatten(1)->firstWhere('code', '571100'));
     }
 
+    public function test_un_compte_avec_un_solde_nul_ne_figure_pas_dans_le_bilan(): void
+    {
+        $user = $this->user('DAF');
+        $compteNul = $this->compte($user, '571200', 'Caisse soldée', 'Actif', 'Bilan');
+        $compteNonNul = $this->compte($user, '571300', 'Caisse active', 'Actif', 'Bilan');
+        $this->ecriture($user, $compteNul, '2026-03-01', 100, 0, 'Validé');
+        $this->ecriture($user, $compteNul, '2026-03-02', 0, 100, 'Validé');
+        $this->ecriture($user, $compteNonNul, '2026-03-03', 50, 0, 'Validé');
+
+        $etat = $this->service()->generer(new CarbonImmutable('2026-01-01'), new CarbonImmutable('2026-12-31'));
+        $lignes = collect($etat['bilan']['actif'])->pluck('lignes')->flatten(1);
+
+        $this->assertNull($lignes->firstWhere('code', '571200'));
+        $this->assertNotNull($lignes->firstWhere('code', '571300'));
+        $this->assertSame(50.0, $etat['bilan']['total_actif']);
+    }
+
     public function test_ecriture_sans_compte_est_signalee(): void
     {
         $user = $this->user('DAF');
@@ -153,6 +170,7 @@ class EtatFinancierTest extends TestCase
     private function user(string $designation): User
     {
         $role = Role::firstOrCreate(['designation' => $designation]);
+
         return User::create(['nom' => 'Test', 'prenom' => $designation, 'email' => uniqid().'@test.local', 'password' => bcrypt('password'), 'role_id' => $role->id, 'password_default' => 0, 'statut' => 'Actif']);
     }
 
@@ -165,6 +183,7 @@ class EtatFinancierTest extends TestCase
     {
         $type = JournalType::create(['user_id' => $user->id, 'code' => uniqid('OD'), 'libelle' => 'OD', 'nature' => 'od']);
         $journal = Journaux::create(['user_id' => $user->id, 'journal_type_id' => $type->id, 'liste_des_comptes_id' => $compte->id, 'reference' => uniqid('J'), 'date' => $date, 'type' => 'od', 'monnaie' => 'CDF', 'statut' => 'Validé']);
+
         return EcritureComptable::create(['user_id' => $user->id, 'journal_id' => $journal->id, 'liste_des_comptes_id' => $compte->id, 'date' => $date, 'libelle' => 'Test', 'debit_cdf' => $dc, 'credit_cdf' => $cc, 'statut' => $statut]);
     }
 }

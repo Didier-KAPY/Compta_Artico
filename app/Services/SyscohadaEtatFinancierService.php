@@ -50,6 +50,7 @@ class SyscohadaEtatFinancierService
                 $debit = (float) $lignes->sum('debit_cdf');
                 $credit = (float) $lignes->sum('credit_cdf');
                 $nature = (string) ($compte?->nature ?? '');
+
                 return [
                     'id' => $compte?->id, 'compte' => (string) ($compte?->compte ?? ''),
                     'designation' => (string) ($compte?->designation ?? 'Écriture sans compte'),
@@ -73,13 +74,29 @@ class SyscohadaEtatFinancierService
             'nature' => 'Passif', 'observation' => 'Bilan',
             'actuel' => $resultat['resultat_net']['actuel'], 'precedent' => $resultat['resultat_net']['precedent'],
         ];
+        $this->retirerSoldesNuls($sortie['actif']);
+        $this->retirerSoldesNuls($sortie['passif']);
         $this->totaliserSections($sortie['actif']);
         $this->totaliserSections($sortie['passif']);
         $sortie['total_actif'] = collect($sortie['actif'])->sum('total_actuel');
         $sortie['total_passif'] = collect($sortie['passif'])->sum('total_actuel');
         $sortie['ecart'] = $sortie['total_actif'] - $sortie['total_passif'];
         $sortie['equilibre'] = abs($sortie['ecart']) <= (float) config('syscohada.equilibrium_tolerance', 0.01);
+
         return $sortie;
+    }
+
+    private function retirerSoldesNuls(array &$sections): void
+    {
+        $tolerance = (float) config('syscohada.equilibrium_tolerance', 0.01);
+
+        foreach ($sections as &$section) {
+            $section['lignes'] = collect($section['lignes'])
+                ->filter(fn (array $ligne): bool => abs((float) $ligne['actuel']) > $tolerance)
+                ->values()
+                ->all();
+        }
+        unset($section);
     }
 
     private function compteResultat(Collection $actuel, Collection $precedent): array
@@ -98,6 +115,7 @@ class SyscohadaEtatFinancierService
             $ordinaire = $exploitation + $financier;
             $hao = $total('produits_hao') - $total('charges_hao');
             $impot = $total('impot_resultat');
+
             return [
                 'resultat_exploitation' => $exploitation, 'resultat_financier' => $financier,
                 'resultat_activites_ordinaires' => $ordinaire, 'resultat_hao' => $hao,
@@ -109,6 +127,7 @@ class SyscohadaEtatFinancierService
         foreach ($n as $cle => $montant) {
             $sortie[$cle] = ['actuel' => $montant, 'precedent' => $nMoinsUn[$cle]];
         }
+
         return $sortie;
     }
 
@@ -116,11 +135,13 @@ class SyscohadaEtatFinancierService
     {
         foreach ($mouvements as $mouvement) {
             $classement = $this->classer($mouvement);
-            if (! $classement || $classement['etat'] !== $etat) continue;
+            if (! $classement || $classement['etat'] !== $etat) {
+                continue;
+            }
             if ($etat === 'bilan') {
-                $section =& $sortie[$classement['sens']][$classement['section']];
+                $section = &$sortie[$classement['sens']][$classement['section']];
             } else {
-                $section =& $sortie[$classement['section']];
+                $section = &$sortie[$classement['section']];
             }
             $index = collect($section['lignes'])->search(fn (array $ligne): bool => $ligne['cle'] === $mouvement['id']);
             if ($index === false) {
@@ -138,7 +159,9 @@ class SyscohadaEtatFinancierService
 
     private function classer(array $mouvement): ?array
     {
-        if ($mouvement['sans_compte']) return null;
+        if ($mouvement['sans_compte']) {
+            return null;
+        }
         $nature = $this->normaliser($mouvement['nature']);
         $observation = $this->normaliser($mouvement['observation']);
         $coherent = ($observation === 'bilan' && in_array($nature, ['actif', 'passif'], true))
@@ -149,6 +172,7 @@ class SyscohadaEtatFinancierService
         if ($coherent && $observation === 'gestion') {
             return ['etat' => 'resultat', 'section' => $this->sectionResultatParPrefixe($mouvement['compte'], $nature) ?? ($nature === 'charge' ? 'charges_exploitation' : 'produits_exploitation')];
         }
+
         return $this->classementParPrefixe($mouvement['compte']);
     }
 
@@ -158,13 +182,16 @@ class SyscohadaEtatFinancierService
         foreach (config('syscohada.bilan.'.$sens, []) as $cle => $definition) {
             $sortie[$cle] = ['label' => $definition['label'], 'lignes' => [], 'total_actuel' => 0.0, 'total_precedent' => 0.0];
         }
+
         return $sortie;
     }
 
     private function totaliserSections(array &$sections): void
     {
         foreach ($sections as &$section) {
-            if (! isset($section['lignes'])) continue;
+            if (! isset($section['lignes'])) {
+                continue;
+            }
             $section['total_actuel'] = collect($section['lignes'])->sum('actuel');
             $section['total_precedent'] = collect($section['lignes'])->sum('precedent');
         }
@@ -175,9 +202,12 @@ class SyscohadaEtatFinancierService
     {
         foreach (config('syscohada.bilan.'.$sens, []) as $sectionCle => $section) {
             foreach ($section['rubriques'] as $rubrique) {
-                if ($this->correspond($compte, $rubrique['prefixes'])) return $sectionCle;
+                if ($this->correspond($compte, $rubrique['prefixes'])) {
+                    return $sectionCle;
+                }
             }
         }
+
         return null;
     }
 
@@ -188,30 +218,43 @@ class SyscohadaEtatFinancierService
             : ['produits_exploitation', 'produits_financiers', 'produits_hao'];
         foreach ($sections as $sectionCle) {
             foreach (config('syscohada.resultat.'.$sectionCle.'.rubriques', []) as $rubrique) {
-                if ($this->correspond($compte, $rubrique['prefixes'])) return $sectionCle;
+                if ($this->correspond($compte, $rubrique['prefixes'])) {
+                    return $sectionCle;
+                }
             }
         }
+
         return null;
     }
 
     private function classementParPrefixe(string $compte): ?array
     {
         foreach (['actif', 'passif'] as $sens) {
-            if ($section = $this->sectionBilanParPrefixe($compte, $sens)) return ['etat' => 'bilan', 'sens' => $sens, 'section' => $section];
+            if ($section = $this->sectionBilanParPrefixe($compte, $sens)) {
+                return ['etat' => 'bilan', 'sens' => $sens, 'section' => $section];
+            }
         }
         foreach (['charge', 'produit'] as $nature) {
-            if ($section = $this->sectionResultatParPrefixe($compte, $nature)) return ['etat' => 'resultat', 'section' => $section];
+            if ($section = $this->sectionResultatParPrefixe($compte, $nature)) {
+                return ['etat' => 'resultat', 'section' => $section];
+            }
         }
+
         return null;
     }
 
     private function anomalies(Collection $mouvements): array
     {
         return $mouvements->filter(function (array $ligne): bool {
-            if ($ligne['sans_compte']) return true;
+            if ($ligne['sans_compte']) {
+                return true;
+            }
             $nature = $this->normaliser($ligne['nature']);
             $observation = $this->normaliser($ligne['observation']);
-            if ($nature === '' && $observation === '') return false;
+            if ($nature === '' && $observation === '') {
+                return false;
+            }
+
             return ! (($observation === 'bilan' && in_array($nature, ['actif', 'passif'], true))
                 || ($observation === 'gestion' && in_array($nature, ['charge', 'produit'], true)));
         })->map(fn (array $ligne): array => $this->detailAnomalie($ligne, $ligne['sans_compte'] ? 'Écriture sans compte comptable associé' : 'Compte mal paramétré dans liste_des_comptes'))->values()->all();
@@ -239,7 +282,12 @@ class SyscohadaEtatFinancierService
 
     private function correspond(string $compte, array $prefixes): bool
     {
-        foreach ($prefixes as $prefixe) if (str_starts_with($compte, (string) $prefixe)) return true;
+        foreach ($prefixes as $prefixe) {
+            if (str_starts_with($compte, (string) $prefixe)) {
+                return true;
+            }
+        }
+
         return false;
     }
 }

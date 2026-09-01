@@ -2,7 +2,7 @@
 @section('title', 'Journal des opérations diverses')
 @section('content')
 <div class="container-fluid py-3">
-    <div class="mb-3"><h4 class="mb-0"><i class="bi bi-table me-2"></i>Journal des opérations diverses</h4><small class="text-muted">Écritures issues uniquement des BRC validés</small></div>
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-2 mb-3"><div><h4 class="mb-0"><i class="bi bi-table me-2"></i>Journal des opérations diverses</h4><small class="text-muted">Écritures issues uniquement des BRC validés</small></div>@include('partials.period-export-buttons', ['rapport' => 'operations-diverses', 'exportParams' => ['date_debut' => request('date_debut', today()->toDateString()), 'date_fin' => request('date_fin', today()->toDateString()), 'reference' => request('reference')]])</div>
     @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
     @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
 

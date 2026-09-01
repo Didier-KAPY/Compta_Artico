@@ -2,31 +2,38 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\DeleteFinancialDocumentRequest;
 use App\Models\BRC;
 use App\Models\EcritureComptable;
+use App\Models\Entreprise;
 use App\Models\JournalType;
 use App\Models\Journaux;
 use App\Models\ListeDesComptes;
 use App\Models\TauxDeChange;
-use App\Models\Entreprise;
+use App\Services\DocumentNumberService;
+use App\Services\FinancialDocumentService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
-use Barryvdh\DomPDF\Facade\Pdf;
-use App\Http\Requests\DeleteFinancialDocumentRequest;
-use App\Services\FinancialDocumentService;
-use App\Services\DocumentNumberService;
 
 class BRCController extends Controller
 {
     public function index(Request $request)
     {
-        $brcs = BRC::with(['journalType.compte', 'lignes.compte', 'user', 'validateur'])
+        $afficherValidateur = $request->user()->isSuperAdmin();
+        $relations = ['journalType.compte', 'lignes.compte', 'user'];
+        if ($afficherValidateur) {
+            $relations[] = 'validateur';
+        }
+
+        $brcs = BRC::with($relations)
+            ->whereDate('date', today())
             ->when($request->filled('journal_id'), fn ($query) => $query->whereHas('journaux', fn ($journal) => $journal->whereKey($request->integer('journal_id'))))
             ->latest('date')->latest('id')->paginate(20);
 
-        return view('BRC.index', compact('brcs'));
+        return view('BRC.index', compact('brcs', 'afficherValidateur'));
     }
 
     public function show(BRC $brc, FinancialDocumentService $documents)
@@ -34,7 +41,9 @@ class BRCController extends Controller
         $brc->load(['lignes.compte', 'journalType.compte', 'journaux.ecritures', 'user', 'validateur', 'clotureJournaliere']);
         if ($brc->journal_id && ! $brc->journaux->contains('id', $brc->journal_id)) {
             $legacy = Journaux::with('ecritures')->find($brc->journal_id);
-            if ($legacy) $brc->setRelation('journaux', $brc->journaux->push($legacy));
+            if ($legacy) {
+                $brc->setRelation('journaux', $brc->journaux->push($legacy));
+            }
         }
         $suppressionDependencies = $documents->dependencies($brc);
         $documentLinks = collect();
@@ -128,6 +137,7 @@ class BRCController extends Controller
                     'montant' => $ligne['montant'],
                 ]);
             }
+
             return $brc;
         });
 
@@ -148,6 +158,7 @@ class BRCController extends Controller
             }
             if ($brc->origine === 'cloture') {
                 $brc->update(['statut' => 'Validé', 'valide_par' => auth()->id(), 'date_validation' => now()]);
+
                 return;
             }
             if (! $brc->journalType?->compte) {

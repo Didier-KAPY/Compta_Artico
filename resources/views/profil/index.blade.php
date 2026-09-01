@@ -65,9 +65,9 @@
                                 @if($entreprise?->logo)
                                     <div class="mb-2"><img src="{{ asset('storage/'.$entreprise->logo) }}" alt="Logo de l’entreprise" style="max-width:180px;max-height:120px;object-fit:contain"></div>
                                 @endif
-                                <input type="file" name="logo" accept="image/png" class="form-control @error('logo') is-invalid @enderror" @disabled(!$entreprise)>
+                                <input type="file" name="logo" accept="image/png,image/jpeg,.png,.jpg,.jpeg" class="form-control @error('logo') is-invalid @enderror" @disabled(!$entreprise)>
                                 @error('logo')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                                <div class="form-text">{{ $entreprise ? 'Ce logo sera repris automatiquement sur les cartes de service. PNG avec fond transparent, 2 Mo maximum.' : 'Veuillez d’abord renseigner l’entreprise dans les paramètres.' }}</div>
+                                <div class="form-text">{{ $entreprise ? 'Ce logo sera repris automatiquement sur les cartes de service. PNG, JPG ou JPEG, 2 Mo maximum.' : 'Veuillez d’abord renseigner l’entreprise dans les paramètres.' }}</div>
                             </div>
                         @endif
                     </div>

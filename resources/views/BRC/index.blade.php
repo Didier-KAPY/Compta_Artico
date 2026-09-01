@@ -15,7 +15,7 @@
             <div class="table-responsive">
                 <table class="table table-bordered table-hover align-middle">
                     <thead class="table-light">
-                        <tr><th>Date</th><th>Référence</th><th>Compte débit</th><th>Compte crédit</th><th>Libellé</th><th>Monnaie</th><th class="text-end">Montant</th><th>Statut</th><th>Validé par</th><th>Actions</th></tr>
+                        <tr><th>Date</th><th>Référence</th><th>Compte débit</th><th>Compte crédit</th><th>Libellé</th><th>Monnaie</th><th class="text-end">Montant</th><th>Statut</th>@if($afficherValidateur)<th>Validé par</th>@endif<th>Actions</th></tr>
                     </thead>
                     <tbody>
                     @forelse($brcs as $brc)
@@ -32,7 +32,7 @@
                             <td>{{ $brc->monnaie }}</td>
                             <td class="text-end">{{ number_format($brc->total, 2, ',', ' ') }}</td>
                             <td><span class="badge {{ $brc->statut === 'Validé' ? 'bg-success' : 'bg-warning text-dark' }}">{{ $brc->statut }}</span></td>
-                            <td>{{ trim(($brc->validateur?->prenom ?? '').' '.($brc->validateur?->nom ?? '')) ?: '—' }}</td>
+                            @if($afficherValidateur)<td>{{ trim(($brc->validateur?->prenom ?? '').' '.($brc->validateur?->nom ?? '')) ?: '—' }}</td>@endif
                             <td>
                                 <a class="btn btn-outline-primary btn-sm" href="{{ route('brc.show', $brc) }}" title="Voir le BRC"><i class="bi bi-eye"></i></a>
                                 <a class="btn btn-outline-danger btn-sm" href="{{ route('brc.pdf', $brc) }}" title="Télécharger le bon en PDF"><i class="bi bi-file-earmark-pdf"></i></a>
@@ -50,7 +50,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="10" class="text-center text-muted py-4">Aucun BRC enregistré.</td></tr>
+                        <tr><td colspan="{{ $afficherValidateur ? 10 : 9 }}" class="text-center text-muted py-4">Aucun BRC enregistré aujourd’hui.</td></tr>
                     @endforelse
                     </tbody>
                 </table>
