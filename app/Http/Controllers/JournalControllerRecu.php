@@ -42,11 +42,13 @@ class JournalControllerRecu extends Controller
         $montantTtc = round($montantHt + $montantTva, 2);
         $tauxTva = (float) ($journaux->first(fn (Journaux $ligne) => (float) $ligne->taux_tva > 0)?->taux_tva ?? 0);
         $description = $lignesPrincipales->pluck('description')->filter()->unique()->implode(' / ');
+        $nomPartenaire = $journaux->pluck('nom_partenaire')
+            ->first(fn ($nom) => filled($nom));
         $tousValides = $journaux->every(fn (Journaux $ligne) => in_array(mb_strtolower(trim((string) $ligne->statut)), ['validé', 'valide'], true));
 
         return compact(
             'journal', 'journaux', 'montantHt', 'montantTva', 'montantTtc',
-            'tauxTva', 'description', 'tousValides'
+            'tauxTva', 'description', 'nomPartenaire', 'tousValides'
         ) + ['entreprise' => Entreprise::first()];
     }
 }

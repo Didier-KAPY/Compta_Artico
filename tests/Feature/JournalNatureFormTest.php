@@ -27,6 +27,7 @@ class JournalNatureFormTest extends TestCase
                 'liste_des_comptes_id' => $types[$route]->liste_des_comptes_id,
                 'reference' => 'ATTENTE-'.strtoupper($route),
                 'date' => now(),
+                'nom_partenaire' => 'Partenaire '.strtoupper($route),
                 'description' => 'Journal '.$nature,
                 'monnaie' => 'CDF',
                 'montant_ttc' => 116,
@@ -52,12 +53,14 @@ class JournalNatureFormTest extends TestCase
         foreach (['caisse', 'banque', 'mobile'] as $route) {
             $response = $this->actingAs($user)->get(route('journaux.create.'.$route));
             $response->assertOk()
+                ->assertSee('Validé par')
                 ->assertSee('Liste des journaux')
                 ->assertSee('Total TTC')
                 ->assertSee('Total HT')
                 ->assertSee('Total TVA')
                 ->assertSee('ATTENTE-'.strtoupper($route))
                 ->assertSee('VALIDE-'.strtoupper($route))
+                ->assertSee('Partenaire '.strtoupper($route))
                 ->assertViewHas('totaux', fn ($totaux) =>
                     (float) $totaux['ht'] === 150.0
                     && (float) $totaux['tva'] === 16.0
@@ -67,6 +70,14 @@ class JournalNatureFormTest extends TestCase
                     && $journaux->pluck('reference')->contains('ATTENTE-'.strtoupper($route))
                     && $journaux->pluck('reference')->contains('VALIDE-'.strtoupper($route)));
         }
+
+        $roleComptable = Role::create(['designation' => 'Comptable']);
+        $user->update(['role_id' => $roleComptable->id]);
+        $user->refresh();
+
+        $this->actingAs($user)->get(route('journaux.create.caisse'))
+            ->assertOk()
+            ->assertDontSee('Validé par');
 
         $this->actingAs($user)->get(route('journaux.create'))
             ->assertRedirect(route('journaux.index'));

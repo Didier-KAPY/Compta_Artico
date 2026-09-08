@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('module-sidebar') @include('ressources_humaines._sidebar') @endsection
 
 @section('title', $carteService ? 'Modifier la carte' : 'Nouvelle carte de service')
 

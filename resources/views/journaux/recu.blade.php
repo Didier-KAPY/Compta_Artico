@@ -147,9 +147,9 @@
             </td>
         </tr>
         <tr>
-            <td>Partenaire :</td>
+            <td>Dénomination :</td>
             <td class="text-right">
-                {{ $journal->nom_partenaire ?: 'Non renseigné' }}
+                {{ $nomPartenaire ?: 'Non renseigné' }}
             </td>
         </tr>
         <tr>
@@ -234,7 +234,7 @@
             <br><br><br>
             __________________
             <br>
-            {{ $journal->nom_partenaire ?? '' }}
+            {{ $nomPartenaire ?? '' }}
         </td>
     </tr>
     </table>

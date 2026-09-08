@@ -42,6 +42,7 @@
     <table class="meta">
         <tr><td><span class="label">Date</span><span class="value">{{ $brc->date?->format('d/m/Y') }}</span></td><td><span class="label">Statut</span><span class="value">{{ $brc->statut }}</span></td></tr>
         <tr><td><span class="label">Journal</span><span class="value">{{ $brc->journalType?->code }} — {{ $brc->journalType?->libelle }}</span></td><td><span class="label">Monnaie / sens</span><span class="value">{{ $brc->monnaie }} — {{ $brc->sens === 'debit' ? 'Débit' : 'Crédit' }}</span></td></tr>
+        <tr><td colspan="2"><span class="label">Mode de paiement</span><span class="value">{{ match($brc->mode_paiement ?? 'mobile_money') {'mobile_money'=>'Mobile money','espèces'=>'Espèces','banque'=>'Banque',default=>$brc->mode_paiement} }}</span></td></tr>
     </table>
     <table class="lines">
         <thead><tr><th>N°</th><th>Compte</th><th>Libellé</th><th>Montant</th></tr></thead>

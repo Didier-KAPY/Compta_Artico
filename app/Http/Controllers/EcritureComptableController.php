@@ -985,6 +985,7 @@ private function construireBrc(Request $request): array
             'date' => $request->date,
             'monnaie' => $request->monnaie,
             'sens' => $request->sens,
+            'mode_paiement' => $request->input('mode_paiement', 'mobile_money'),
             'total' => $total,
             'statut' => 'Validé',
             'valide_par' => auth()->id(),

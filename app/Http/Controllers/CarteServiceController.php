@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\CarteService;
 use App\Models\Entreprise;
 use App\Models\User;
+use App\Services\QrCodeService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class CarteServiceController extends Controller
@@ -75,8 +77,24 @@ class CarteServiceController extends Controller
         $data = $this->cardData($carteService) + ['pdfMode' => true];
 
         return Pdf::loadView('parametres.cartes-service.carte', $data)
+            ->setOptions([
+                'defaultMediaType' => 'screen',
+                'dpi' => 96,
+                'isRemoteEnabled' => false,
+            ])
             ->setPaper([0, 0, 153.01, 242.65])
             ->download('carte-service-'.$carteService->numero.'.pdf');
+    }
+
+    public function photo(CarteService $carteService)
+    {
+        $path = $carteService->user?->photo;
+        abort_unless($path && Storage::disk('public')->exists($path), 404);
+
+        return response(Storage::disk('public')->get($path), 200, [
+            'Content-Type' => Storage::disk('public')->mimeType($path) ?: 'image/jpeg',
+            'Cache-Control' => 'no-store, max-age=0',
+        ]);
     }
 
     private function validated(Request $request): array
@@ -104,15 +122,33 @@ class CarteServiceController extends Controller
 
     private function cardData(CarteService $carteService): array
     {
-        $carteService->load(['user.departement', 'user.fonction']);
+        $carteService->load(['user.departement', 'user.fonction', 'user.employe']);
         $entreprise = Entreprise::first();
         $gerant = $this->gerant();
         $logoData = $this->imageData($entreprise?->logo);
-        $photoData = $this->imageData($carteService->user?->photo);
+        $photoData = $this->photoData($carteService->user?->photo);
+        $photoUrl = $carteService->user?->photo
+            ? route('parametres.cartes-service.photo', $carteService, false).'?v='.urlencode((string) $carteService->updated_at?->timestamp)
+            : null;
         $signatureData = $this->imageData($gerant?->signature);
         $cachetData = $this->imageData($entreprise?->cachet);
+        $qrCodeData = $this->qrCodeData($carteService);
 
-        return compact('carteService', 'entreprise', 'logoData', 'photoData', 'signatureData', 'cachetData');
+        return compact('carteService', 'entreprise', 'logoData', 'photoData', 'photoUrl', 'signatureData', 'cachetData', 'qrCodeData');
+    }
+
+    private function qrCodeData(CarteService $carteService): ?string
+    {
+        $employe = $carteService->user?->employe;
+        if (! $employe || $employe->statut !== 'Actif') {
+            return null;
+        }
+
+        if (! $employe->qr_token) {
+            $employe->forceFill(['qr_token' => Str::random(64), 'qr_genere_le' => now()])->save();
+        }
+
+        return app(QrCodeService::class)->pngDataUri('rh-attendance:'.$employe->qr_token, 220, 1);
     }
 
     private function gerant(): ?User
@@ -132,6 +168,47 @@ class CarteServiceController extends Controller
 
         $mime = Storage::disk('public')->mimeType($path) ?: 'image/png';
         return 'data:'.$mime.';base64,'.base64_encode(Storage::disk('public')->get($path));
+    }
+
+    private function photoData(?string $path): ?string
+    {
+        if (! $path || ! Storage::disk('public')->exists($path)) {
+            return null;
+        }
+
+        $source = @imagecreatefromstring(Storage::disk('public')->get($path));
+        if (! $source) {
+            return $this->imageData($path);
+        }
+
+        $largeur = imagesx($source);
+        $hauteur = imagesy($source);
+        $cibleLargeur = 640;
+        $cibleHauteur = 700;
+        $ratioSource = $largeur / $hauteur;
+        $ratioCible = $cibleLargeur / $cibleHauteur;
+        $x = 0;
+        $y = 0;
+        $largeurSource = $largeur;
+        $hauteurSource = $hauteur;
+
+        if ($ratioSource > $ratioCible) {
+            $largeurSource = (int) round($hauteur * $ratioCible);
+            $x = (int) floor(($largeur - $largeurSource) / 2);
+        } else {
+            $hauteurSource = (int) round($largeur / $ratioCible);
+            $y = (int) floor(($hauteur - $hauteurSource) / 2);
+        }
+
+        $photo = imagecreatetruecolor($cibleLargeur, $cibleHauteur);
+        imagecopyresampled($photo, $source, 0, 0, $x, $y, $cibleLargeur, $cibleHauteur, $largeurSource, $hauteurSource);
+        ob_start();
+        imagepng($photo, null, 6);
+        $png = ob_get_clean();
+        imagedestroy($photo);
+        imagedestroy($source);
+
+        return $png === false ? $this->imageData($path) : 'data:image/png;base64,'.base64_encode($png);
     }
 
     private function prochainNumero(): string

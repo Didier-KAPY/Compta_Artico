@@ -27,6 +27,12 @@ use App\Http\Controllers\RhContratController;
 use App\Http\Controllers\RhPaieController;
 use App\Http\Controllers\RhPayrollSettingController;
 use App\Http\Controllers\RhPresenceController;
+use App\Http\Controllers\QrAttendanceController;
+use App\Http\Controllers\EmployeQrCodeController;
+use App\Http\Controllers\RhSyntheseMensuelleController;
+use App\Http\Controllers\RhPaiementController;
+use App\Http\Controllers\RhAvenantContratController;
+use App\Http\Controllers\RhPeriodePaieController;
 use App\Http\Controllers\RhSettingController;
 use App\Http\Controllers\SortieCaisseController;
 use App\Http\Controllers\SauvegardeController;
@@ -60,6 +66,7 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::get('/parametres', [ParametreController::class, 'parametre'])
         ->middleware('role:Super Admin,Admin,Directeur Général,Gérant,Gerant,DAF,Comptable,Directeur Technique')
         ->name('parametres.parametre');
+    Route::redirect('/ressources-humaines', '/parametres/ressources-humaines');
     Route::prefix('/parametres/ressources-humaines')->name('parametres.rh.')
         ->group(function () {
             Route::get('/', [RessourceHumaineController::class, 'index'])->middleware('can:viewHRDashboard')->name('index');
@@ -71,21 +78,53 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
             Route::put('/employes/{employe}', [EmployeController::class, 'update'])->middleware('can:updateEmployees')->name('employes.update');
             Route::delete('/employes/{employe}', [EmployeController::class, 'destroy'])->middleware('can:archiveEmployees')->name('employes.destroy');
             Route::get('/employes/{employe}/pdf', [EmployeController::class, 'pdf'])->middleware('can:viewEmployees')->name('employes.pdf');
+            Route::post('/employes/{employe}/qr-code', [EmployeQrCodeController::class, 'generate'])->middleware('can:manageAttendance')->name('employes.qr.generate');
+            Route::get('/employes/{employe}/qr-code', [EmployeQrCodeController::class, 'show'])->middleware('can:manageAttendance')->name('employes.qr.show');
+            Route::patch('/employes/{employe}/qr-code', [EmployeQrCodeController::class, 'regenerate'])->middleware('can:manageAttendance')->name('employes.qr.regenerate');
+            Route::get('/employes/{employe}/qr-code/telecharger', [EmployeQrCodeController::class, 'download'])->middleware('can:manageAttendance')->name('employes.qr.download');
             Route::post('/employes/{employe}/documents', [RhDocumentController::class, 'store'])->middleware('can:updateEmployees')->name('documents.store');
             Route::get('/documents/{document}/telecharger', [RhDocumentController::class, 'download'])->middleware('can:viewEmployeeSensitiveData')->name('documents.download');
             Route::get('/contrats', [RhContratController::class, 'index'])->middleware('can:viewContracts')->name('contrats');
             Route::get('/presences', [RhPresenceController::class, 'index'])->middleware('can:viewAttendance')->name('presences');
             Route::get('/presences/excel', [RhPresenceController::class, 'exportExcel'])->middleware('can:viewAttendance')->name('presences.excel');
+            Route::get('/presences/scanner', [QrAttendanceController::class, 'scanner'])->middleware('can:manageAttendance')->name('presences.scanner');
+            Route::get('/presences/scanner,', fn () => redirect()->route('parametres.rh.presences.scanner'))->middleware('can:manageAttendance');
+            Route::post('/presences/scanner', [QrAttendanceController::class, 'scan'])->middleware(['can:manageAttendance', 'throttle:60,1'])->name('presences.scan');
             Route::get('/conges', [RessourceHumaineController::class, 'conges'])->middleware('can:viewTeamLeaves')->name('conges');
             Route::get('/paie', [RessourceHumaineController::class, 'paie'])->middleware('can:viewPayroll')->name('paie');
+            Route::get('/periodes-paie', [RhPeriodePaieController::class, 'index'])->middleware('can:viewPayroll')->name('periodes');
+            Route::post('/periodes-paie', [RhPeriodePaieController::class, 'store'])->middleware('can:createPayroll')->name('periodes.store');
+            Route::patch('/periodes-paie/{periode}/statut', [RhPeriodePaieController::class, 'transition'])->middleware('can:validatePayroll')->name('periodes.transition');
             Route::get('/evaluations', [RessourceHumaineController::class, 'evaluations'])->middleware('can:manageEvaluations')->name('evaluations');
             Route::get('/rapports', [RessourceHumaineController::class, 'rapports'])->middleware('can:viewHRReports')->name('rapports');
             Route::post('/contrats', [RhContratController::class, 'store'])->middleware('can:manageContracts')->name('contrats.store');
+            Route::get('/contrats/{contrat}', [RhContratController::class, 'show'])->middleware('can:viewContracts')->name('contrats.show');
+            Route::patch('/contrats/{contrat}/soumettre', [RhContratController::class, 'soumettre'])->middleware('can:manageContracts')->name('contrats.submit');
             Route::patch('/contrats/{contrat}/valider', [RhContratController::class, 'validateContract'])->middleware('can:validateContracts')->name('contrats.validate');
+            Route::patch('/contrats/{contrat}/activer', [RhContratController::class, 'activer'])->middleware('can:validateContracts')->name('contrats.activate');
+            Route::post('/contrats/{contrat}/renouveler', [RhContratController::class, 'renouveler'])->middleware('can:manageContracts')->name('contrats.renew');
+            Route::patch('/contrats/{contrat}/terminer', [RhContratController::class, 'terminer'])->middleware('can:manageContracts')->name('contrats.terminate');
+            Route::get('/contrats/{contrat}/pdf', [RhContratController::class, 'pdf'])->middleware('can:viewContracts')->name('contrats.pdf');
+            Route::post('/contrats/{contrat}/avenants', [RhAvenantContratController::class, 'store'])->middleware('can:manageContracts')->name('contrats.avenants.store');
+            Route::patch('/avenants/{avenant}/valider', [RhAvenantContratController::class, 'valider'])->middleware('can:validateContracts')->name('avenants.validate');
             Route::post('/presences', [RhPresenceController::class, 'store'])->middleware('can:manageAttendance')->name('presences.store');
+            Route::patch('/presences/{presence}/statut', [RhPresenceController::class, 'transition'])->middleware('can:manageAttendance')->name('presences.transition');
+            Route::patch('/presences/{presence}/corriger', [RhPresenceController::class, 'corriger'])->middleware('can:manageAttendance')->name('presences.correct');
+            Route::get('/syntheses', [RhSyntheseMensuelleController::class, 'index'])->middleware('can:viewAttendance')->name('syntheses');
+            Route::post('/syntheses', [RhSyntheseMensuelleController::class, 'store'])->middleware('can:manageAttendance')->name('syntheses.store');
+            Route::post('/syntheses/generer-toutes', [RhSyntheseMensuelleController::class, 'storeAll'])->middleware('can:manageAttendance')->name('syntheses.store-all');
+            Route::patch('/syntheses/{synthese}/statut', [RhSyntheseMensuelleController::class, 'transition'])->middleware('can:manageAttendance')->name('syntheses.transition');
+            Route::put('/syntheses/{synthese}', [RhSyntheseMensuelleController::class, 'update'])->middleware('role:Super Admin')->name('syntheses.update');
+            Route::delete('/syntheses/{synthese}', [RhSyntheseMensuelleController::class, 'destroy'])->middleware('role:Super Admin')->name('syntheses.destroy');
             Route::post('/conges', [RessourceHumaineController::class, 'storeConge'])->middleware('can:requestLeave')->name('conges.store');
             Route::patch('/conges/{conge}/statut', [RessourceHumaineController::class, 'statutConge'])->middleware('can:approveHRLeave')->name('conges.statut');
             Route::post('/paie', [RhPaieController::class, 'store'])->middleware('can:createPayroll')->name('paie.store');
+            Route::post('/paie/generer-tous', [RhPaieController::class, 'storeAll'])->middleware('can:createPayroll')->name('paie.store-all');
+            Route::get('/paie/bulletins-collectifs', [RhPaieController::class, 'downloadAll'])->middleware('can:viewPayslips')->name('paie.download-all');
+            Route::get('/paie/{paie}/modifier', [RhPaieController::class, 'edit'])->middleware('can:createPayroll')->name('paie.edit');
+            Route::put('/paie/{paie}', [RhPaieController::class, 'update'])->middleware('can:createPayroll')->name('paie.update');
+            Route::patch('/paie/{p}/statut', [RhPaieController::class, 'transition'])->middleware('can:createPayroll')->name('paie.transition');
+            Route::post('/paie/{paie}/paiements', [RhPaiementController::class, 'store'])->middleware('can:createPayroll')->name('paie.paiements.store');
             Route::get('/paie/{paie}/bulletin', [RessourceHumaineController::class, 'bulletin'])->middleware('can:viewPayslips')->name('paie.bulletin');
             Route::get('/parametres', [RhSettingController::class, 'index'])->middleware('can:manageHRSettings')->name('settings');
             Route::post('/parametres/horaires', [RhSettingController::class, 'storeSchedule'])->middleware('can:manageHRSettings')->name('settings.schedules.store');
@@ -179,6 +218,7 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
             Route::get('/create', [CarteServiceController::class, 'create'])->name('create');
             Route::post('/', [CarteServiceController::class, 'store'])->name('store');
             Route::get('/{carteService}', [CarteServiceController::class, 'show'])->name('show');
+            Route::get('/{carteService}/photo', [CarteServiceController::class, 'photo'])->name('photo');
             Route::get('/{carteService}/edit', [CarteServiceController::class, 'edit'])->name('edit');
             Route::put('/{carteService}', [CarteServiceController::class, 'update'])->name('update');
             Route::delete('/{carteService}', [CarteServiceController::class, 'destroy'])->name('destroy');
@@ -194,25 +234,25 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         ->middleware('role:Super Admin,Admin,Gérant,Gerant,Directeur Général')
         ->name('parametres.entreprise.update');
 
-    Route::get('/parametres/departements', [ParametreController::class, 'departements'])
+    Route::get('/parametres/ressources-humaines/departements', [ParametreController::class, 'departements'])
         ->middleware('role:Super Admin,Admin,Gérant,Gerant,Directeur Général')
         ->name('parametres.departements');
-    Route::post('/parametres/departements', [ParametreController::class, 'storeDepartement'])
+    Route::post('/parametres/ressources-humaines/departements', [ParametreController::class, 'storeDepartement'])
         ->middleware('role:Super Admin,Admin,Gérant,Gerant,Directeur Général')
         ->name('parametres.departements.store');
-    Route::put('/parametres/departements/{departement}', [ParametreController::class, 'updateDepartement'])
+    Route::put('/parametres/ressources-humaines/departements/{departement}', [ParametreController::class, 'updateDepartement'])
         ->middleware('role:Super Admin,Admin,Gérant,Gerant,Directeur Général')
         ->name('parametres.departements.update');
-    Route::delete('/parametres/departements/{departement}', [ParametreController::class, 'destroyDepartement'])
+    Route::delete('/parametres/ressources-humaines/departements/{departement}', [ParametreController::class, 'destroyDepartement'])
         ->middleware('role:Super Admin,Admin,Gérant,Gerant,Directeur Général')
         ->name('parametres.departements.destroy');
-    Route::post('/parametres/fonctions', [ParametreController::class, 'storeFonction'])
+    Route::post('/parametres/ressources-humaines/fonctions', [ParametreController::class, 'storeFonction'])
         ->middleware('role:Super Admin,Admin,Gérant,Gerant,Directeur Général')
         ->name('parametres.fonctions.store');
-    Route::put('/parametres/fonctions/{fonction}', [ParametreController::class, 'updateFonction'])
+    Route::put('/parametres/ressources-humaines/fonctions/{fonction}', [ParametreController::class, 'updateFonction'])
         ->middleware('role:Super Admin,Admin,Gérant,Gerant,Directeur Général')
         ->name('parametres.fonctions.update');
-    Route::delete('/parametres/fonctions/{fonction}', [ParametreController::class, 'destroyFonction'])
+    Route::delete('/parametres/ressources-humaines/fonctions/{fonction}', [ParametreController::class, 'destroyFonction'])
         ->middleware('role:Super Admin,Admin,Gérant,Gerant,Directeur Général')
         ->name('parametres.fonctions.destroy');
     Route::patch('/parametres/utilisateurs/{user}/departement', [ParametreController::class, 'affecterDepartement'])
@@ -477,6 +517,10 @@ Route::middleware(['auth', 'force.password.change', 'accounting.open'])->group(f
     Route::get('/brc/{brc}/excel', [BRCController::class, 'telechargerExcel'])
         ->middleware('role:Super Admin,Admin,Directeur Général,DAF,Comptable')
         ->name('brc.excel');
+    Route::get('/brc/{brc}/edit', [BRCController::class, 'edit'])
+        ->middleware('role:Super Admin')->name('brc.edit');
+    Route::patch('/brc/{brc}', [BRCController::class, 'update'])
+        ->middleware('role:Super Admin')->name('brc.update');
     Route::get('/brc/{brc}', [BRCController::class, 'show'])
         ->middleware('role:Super Admin,Admin,Directeur Général,DAF,Comptable')
         ->name('brc.show');
@@ -504,6 +548,7 @@ Route::middleware(['auth', 'force.password.change', 'accounting.open'])->group(f
             Route::get('/bilan', [EtatFinancierController::class, 'bilan'])->name('bilan');
             Route::post('/bilan/archiver', [EtatFinancierController::class, 'archiverBilanInitial'])->name('bilan-archiver');
             Route::get('/bilan-initial/{bilanInitial}', [EtatFinancierController::class, 'consulterBilanInitial'])->name('bilan-initial');
+            Route::get('/bilan-initial/{bilanInitial}/pdf', [EtatFinancierController::class, 'bilanInitialPdf'])->name('bilan-initial.pdf');
             Route::delete('/bilan-initial/{bilanInitial}', [EtatFinancierController::class, 'supprimerBilanInitial'])->name('bilan-initial.supprimer');
             Route::get('/bilan/pdf', [EtatFinancierController::class, 'bilanPdf'])->name('bilan-pdf');
             Route::get('/compte-resultat', [EtatFinancierController::class, 'compteResultat'])->name('compte-resultat');

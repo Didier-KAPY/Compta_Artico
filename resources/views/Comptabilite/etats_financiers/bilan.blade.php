@@ -20,7 +20,7 @@
                 <input id="libelle_archive" type="text" name="libelle" value="{{ old('libelle') }}" class="form-control @error('libelle') is-invalid @enderror" placeholder="Ex. Bilan initial 2026" required>
                 @error('libelle')<div class="invalid-feedback">{{ $message }}</div>@enderror
             </div>
-            <div class="col-md-4 d-flex align-items-end"><button type="submit" class="btn btn-success w-100">Archiver le bilan initial</button></div>
+            <div class="col-md-4 d-flex align-items-end"><button type="submit" class="btn btn-success w-100">Archiver le bilan ouverture</button></div>
         </form>
     @endif
     <div class="row g-3">

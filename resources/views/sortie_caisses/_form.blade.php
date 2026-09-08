@@ -23,7 +23,7 @@
         <label class="form-label">Type de paiement *</label>
         <select name="type" class="form-select" required>
             @foreach(['Caisse', 'Banque', 'Mobile Money'] as $type)
-                <option value="{{ $type }}" {{ old('type', $sortie?->type ?? 'Caisse') === $type ? 'selected' : '' }}>{{ $type }}</option>
+                <option value="{{ $type }}" {{ old('type', $sortie?->type ?? 'Mobile Money') === $type ? 'selected' : '' }}>{{ $type }}</option>
             @endforeach
         </select>
     </div>

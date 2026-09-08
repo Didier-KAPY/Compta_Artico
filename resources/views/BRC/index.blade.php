@@ -12,6 +12,13 @@
         <div class="card-body">
             @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
             @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
+            <form method="GET" action="{{route('brc.index')}}" class="row g-3 align-items-end mb-4">
+                <div class="col-md-4"><label class="form-label">Numéro du bon <small class="text-muted">(facultatif)</small></label><input name="numero" value="{{request('numero')}}" class="form-control" placeholder="Laisser vide pour chercher uniquement par dates"></div>
+                <div class="col-md-3"><label class="form-label">Date de début</label><input type="date" name="date_debut" value="{{request('date_debut')}}" class="form-control"></div>
+                <div class="col-md-3"><label class="form-label">Date de fin</label><input type="date" name="date_fin" value="{{request('date_fin')}}" class="form-control"></div>
+                <div class="col-md-2 d-flex gap-2"><button class="btn btn-primary flex-grow-1"><i class="bi bi-search"></i> Rechercher</button>@if($rechercheHistorique)<a href="{{route('brc.index')}}" class="btn btn-outline-secondary" title="Réinitialiser"><i class="bi bi-x-lg"></i></a>@endif</div>
+            </form>
+            @if($rechercheHistorique)<p class="small text-muted">Résultats de la recherche dans l’historique des BRC.</p>@endif
             <div class="table-responsive">
                 <table class="table table-bordered table-hover align-middle">
                     <thead class="table-light">
@@ -50,7 +57,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="{{ $afficherValidateur ? 10 : 9 }}" class="text-center text-muted py-4">Aucun BRC enregistré aujourd’hui.</td></tr>
+                        <tr><td colspan="{{ $afficherValidateur ? 10 : 9 }}" class="text-center text-muted py-4">{{ $rechercheHistorique ? 'Aucun BRC ne correspond aux critères.' : 'Aucun BRC enregistré aujourd’hui.' }}</td></tr>
                     @endforelse
                     </tbody>
                 </table>

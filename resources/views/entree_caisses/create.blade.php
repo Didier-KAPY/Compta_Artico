@@ -53,8 +53,8 @@
                     <div class="col-md-4 mb-3">
                         <label class="form-label">Type de bon</label>
                         <select name="type_bon" class="form-select @error('type_bon') is-invalid @enderror" required>
-                            <option value="BEC" {{ old('type_bon', 'BEC') === 'BEC' ? 'selected' : '' }}>BEC — Bon d’entrée caisse</option>
-                            <option value="BEM" {{ old('type_bon') === 'BEM' ? 'selected' : '' }}>BEM — Bon d’entrée Mobile Money</option>
+                            <option value="BEC" {{ old('type_bon') === 'BEC' ? 'selected' : '' }}>BEC — Bon d’entrée caisse</option>
+                            <option value="BEM" {{ old('type_bon', 'BEM') === 'BEM' ? 'selected' : '' }}>BEM — Bon d’entrée Mobile Money</option>
                             <option value="BEB" {{ old('type_bon') === 'BEB' ? 'selected' : '' }}>BEB — Bon d’entrée bancaire</option>
                         </select>
                         @error('type_bon')<div class="invalid-feedback">{{ $message }}</div>@enderror

@@ -41,12 +41,16 @@ class DashboardService
         }
 
         if ($sections['cash']) {
-            $totals = Journaux::query()->selectRaw(
-                'COALESCE(SUM(entrees_cdf), 0) AS in_cdf,
+            $totals = Journaux::query()
+                ->where('statut', 'Validé')
+                ->whereHas('journalType', fn ($query) => $query->where('est_tresorerie', true))
+                ->whereDate('date', '<=', now()->toDateString())
+                ->selectRaw(
+                    'COALESCE(SUM(entrees_cdf), 0) AS in_cdf,
                  COALESCE(SUM(sorties_cdf), 0) AS out_cdf,
                  COALESCE(SUM(entrees_usd), 0) AS in_usd,
                  COALESCE(SUM(sorties_usd), 0) AS out_usd'
-            )->first();
+                )->first();
             $data['cash'] = [
                 'in_cdf' => (float) $totals->in_cdf,
                 'out_cdf' => (float) $totals->out_cdf,

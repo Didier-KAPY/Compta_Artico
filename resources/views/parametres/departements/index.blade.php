@@ -1,10 +1,11 @@
 @extends('layouts.app')
 @section('title', 'Directions et fonctions')
+@section('module-sidebar') @include('ressources_humaines._sidebar') @endsection
 @section('content')
 <div class="container-fluid py-4">
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
         <div><h3 class="fw-bold mb-1"><i class="bi bi-diagram-3 text-primary me-2"></i>Directions et fonctions</h3><p class="text-muted mb-0">Gérez séparément la structure et les postes des utilisateurs.</p></div>
-        <a href="{{ route('parametres.parametre') }}" class="btn btn-light border"><i class="bi bi-arrow-left me-1"></i>Paramètres</a>
+        <a href="{{ route('parametres.rh.settings') }}" class="btn btn-light border"><i class="bi bi-arrow-left me-1"></i>Paramètres RH</a>
     </div>
     @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
     @if(session('error'))<div class="alert alert-danger">{{ session('error') }}</div>@endif

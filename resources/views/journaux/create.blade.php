@@ -138,9 +138,9 @@
                             <div class="col-md-4">
                                 <label class="form-label">Mode de paiement *</label>
                                 <select name="mode_paiement" class="form-select" required>
-                                    <option value="espèces" {{ old('mode_paiement', 'espèces') === 'espèces' ? 'selected' : '' }}>Espèces</option>
+                                    <option value="espèces" {{ old('mode_paiement') === 'espèces' ? 'selected' : '' }}>Espèces</option>
                                     <option value="banque" {{ old('mode_paiement') === 'banque' ? 'selected' : '' }}>Banque</option>
-                                    <option value="mobile_money" {{ old('mode_paiement') === 'mobile_money' ? 'selected' : '' }}>Mobile Money</option>
+                                    <option value="mobile_money" {{ old('mode_paiement', 'mobile_money') === 'mobile_money' ? 'selected' : '' }}>Mobile Money</option>
                                 </select>
                             </div>
                             <div class="col-md-4">

@@ -149,12 +149,25 @@ class EtatFinancierTest extends TestCase
         $this->get(route('comptabilite.etats-financiers.bilan-initial', $archive))
             ->assertOk()
             ->assertViewIs('Comptabilite.etats_financiers.bilan_initial')
+            ->assertSee('Bilan d’ouverture')
             ->assertSee('Bilan initial 2026')
             ->assertSee('125,00')
+            ->assertSee('Date : 01/08/2026')
+            ->assertSee('Date d’archivage')
+            ->assertSee('Télécharger PDF')
+            ->assertSee('Signature du chargé des finances')
+            ->assertDontSee('Signature du comptable')
+            ->assertSee('Signature du gérant')
+            ->assertSee('Cachet de l’entreprise')
             ->assertSee('Supprimer')
             ->assertDontSee('Actualiser')
             ->assertDontSee('name="date_debut"', false)
             ->assertDontSee('name="date_fin"', false);
+
+        $this->get(route('comptabilite.etats-financiers.bilan-initial.pdf', $archive))
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf')
+            ->assertDownload('bilan-ouverture.pdf');
 
         $this->delete(route('comptabilite.etats-financiers.bilan-initial.supprimer', $archive))
             ->assertRedirect('/comptabilite/etats-financiers/bilan?date_debut=2026-01-01&date_fin=2026-12-31')

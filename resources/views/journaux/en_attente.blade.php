@@ -3,6 +3,10 @@
 @section('title', $journalTitre)
 
 @section('content')
+@php
+    $roleCourant = mb_strtolower(trim((string) auth()->user()?->role?->designation));
+    $afficherValidateur = in_array($roleCourant, ['admin', 'super admin', 'super_admin'], true);
+@endphp
 <div class="container-fluid py-4 px-lg-4 journal-waiting" style="--journal-color: {{ $journalCouleur }}; --journal-soft: {{ $journalFond }};">
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
         <div>
@@ -42,8 +46,9 @@
                 <thead class="table-dark">
                     <tr>
                         <th>Référence</th>
-                        <th>Validé par</th>
+                        @if($afficherValidateur)<th>Validé par</th>@endif
                         <th>Date</th>
+                        <th>Partenaire</th>
                         <th>Description</th>
                         <th>Monnaie</th>
                         <th class="text-end">Entrées CDF</th>
@@ -58,8 +63,9 @@
                     @forelse($journaux as $journal)
                         <tr>
                             <td><strong>{{ $journal->reference ?: '—' }}</strong></td>
-                            <td>{{ trim(($journal->validateur?->prenom ?? '').' '.($journal->validateur?->nom ?? '')) ?: 'Non validé' }}</td>
+                            @if($afficherValidateur)<td>{{ trim(($journal->validateur?->prenom ?? '').' '.($journal->validateur?->nom ?? '')) ?: 'Non validé' }}</td>@endif
                             <td>{{ $journal->date?->format('d/m/Y') ?? '—' }}</td>
+                            <td>{{ $journal->nom_partenaire ?: '—' }}</td>
                             <td>
                                 {{ $journal->description ?: '—' }}
                                 @if((float) $journal->taux_tva > 0 && (float) $journal->montant_tva > 0)
@@ -97,7 +103,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="11" class="text-center text-muted py-5"><i class="bi bi-journal-x fs-2 d-block mb-2"></i>Aucun journal dans cette catégorie.</td></tr>
+                        <tr><td colspan="{{ $afficherValidateur ? 12 : 11 }}" class="text-center text-muted py-5"><i class="bi bi-journal-x fs-2 d-block mb-2"></i>Aucun journal dans cette catégorie.</td></tr>
                     @endforelse
                 </tbody>
             </table>

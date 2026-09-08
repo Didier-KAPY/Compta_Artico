@@ -10,8 +10,8 @@
 <div class="row">
 <div class="col-md-4 mb-3"><label class="form-label">Date</label><input type="date" name="date" value="{{ old('date', date('Y-m-d')) }}" class="form-control" required></div>
 <div class="col-md-4 mb-3"><label class="form-label">Type de bon</label><select name="type_bon" class="form-select" required>
-<option value="BSC" {{ old('type_bon', 'BSC') === 'BSC' ? 'selected' : '' }}>BSC — Bon de sortie caisse</option>
-<option value="BSM" {{ old('type_bon') === 'BSM' ? 'selected' : '' }}>BSM — Bon de sortie Mobile Money</option>
+<option value="BSC" {{ old('type_bon') === 'BSC' ? 'selected' : '' }}>BSC — Bon de sortie caisse</option>
+<option value="BSM" {{ old('type_bon', 'BSM') === 'BSM' ? 'selected' : '' }}>BSM — Bon de sortie Mobile Money</option>
 <option value="BSB" {{ old('type_bon') === 'BSB' ? 'selected' : '' }}>BSB — Bon de sortie bancaire</option>
 </select></div>
 <div class="col-md-4 mb-3"><label class="form-label">Monnaie</label><select name="monnaie" class="form-select" required><option value="CDF" {{ old('monnaie', 'CDF') === 'CDF' ? 'selected' : '' }}>CDF</option><option value="USD" {{ old('monnaie') === 'USD' ? 'selected' : '' }}>USD</option></select></div>

@@ -4,6 +4,7 @@
     <tr><th>Référence</th><td>{{ $brc->reference }}</td><th>Date</th><td>{{ $brc->date?->format('d/m/Y') }}</td></tr>
     <tr><th>Journal</th><td>{{ $brc->journalType?->code }} — {{ $brc->journalType?->libelle }}</td><th>Statut</th><td>{{ $brc->statut }}</td></tr>
     <tr><th>Monnaie</th><td>{{ $brc->monnaie }}</td><th>Sens</th><td>{{ $brc->sens === 'debit' ? 'Débit' : 'Crédit' }}</td></tr>
+    <tr><th>Mode de paiement</th><td colspan="3">{{ match($brc->mode_paiement ?? 'mobile_money') {'mobile_money'=>'Mobile money','espèces'=>'Espèces','banque'=>'Banque',default=>$brc->mode_paiement} }}</td></tr>
     <tr><td colspan="4"></td></tr>
     <tr style="font-weight:bold;background:#dbeafe"><th>N°</th><th>Compte</th><th>Libellé</th><th>Montant</th></tr>
     @foreach($brc->lignes as $ligne)

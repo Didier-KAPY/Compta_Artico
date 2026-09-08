@@ -105,6 +105,7 @@ class BrcTest extends TestCase
         $brc = BRC::with('lignes')->firstOrFail();
         $this->assertSame('BRC-20260804-000001', $brc->reference);
         $this->assertSame('Validé', $brc->statut);
+        $this->assertSame('mobile_money', $brc->mode_paiement);
         $this->assertSame(250.0, (float) $brc->total);
         $this->assertCount(1, $brc->lignes);
         $this->assertDatabaseCount('journaux', 1);
@@ -210,6 +211,68 @@ class BrcTest extends TestCase
         $this->assertSame(10.0, (float) $journal->montant_ttc);
         $this->assertSame(2, EcritureComptable::where('journal_id', $journal->id)->where('statut', 'Validé')->count());
         $this->assertEquals(25000.0, EcritureComptable::where('journal_id', $journal->id)->sum('debit_cdf'));
+    }
+
+    public function test_seul_le_super_admin_modifie_un_brc_sans_pouvoir_changer_les_montants(): void
+    {
+        [$superAdmin, $type, , $compteImputation] = $this->contexte('Super Admin');
+        $brc = BRC::create([
+            'user_id' => $superAdmin->id, 'journal_type_id' => $type->id, 'reference' => 'BRC-MODIFIABLE',
+            'date' => '2026-08-04', 'monnaie' => 'CDF', 'sens' => 'debit', 'total' => 250, 'statut' => 'Validé',
+        ]);
+        $ligne = $brc->lignes()->create(['liste_des_comptes_id' => $compteImputation->id, 'libelle' => 'Ancien libellé', 'montant' => 250]);
+        $comptable = User::create([
+            'nom' => 'Interdit', 'prenom' => 'Comptable', 'email' => uniqid().'@test.local', 'password' => bcrypt('password'),
+            'role_id' => Role::firstOrCreate(['designation' => 'Comptable'])->id, 'password_default' => 0, 'statut' => 'Actif',
+        ]);
+
+        $this->actingAs($comptable)->get(route('brc.edit', $brc))->assertForbidden();
+        $this->actingAs($comptable)->patch(route('brc.update', $brc), [])->assertForbidden();
+
+        $this->actingAs($superAdmin)->get(route('brc.show', $brc))->assertOk()->assertSee('Modifier');
+        $this->actingAs($superAdmin)->get(route('brc.edit', $brc))
+            ->assertOk()->assertSee('Montants verrouillés')->assertSee('TOTAL NON MODIFIABLE');
+        $this->actingAs($superAdmin)->patch(route('brc.update', $brc), [
+            'date' => '2026-08-10', 'journal_type_id' => $type->id, 'monnaie' => 'CDF', 'sens' => 'credit', 'mode_paiement' => 'banque',
+            'total' => 999999,
+            'lignes' => [['id' => $ligne->id, 'compte_id' => $compteImputation->id, 'libelle' => 'Nouveau libellé', 'montant' => 999999]],
+        ])->assertRedirect(route('brc.show', $brc));
+
+        $this->assertSame('2026-08-10', $brc->fresh()->date->toDateString());
+        $this->assertSame('credit', $brc->fresh()->sens);
+        $this->assertSame('banque', $brc->fresh()->mode_paiement);
+        $this->assertSame(250.0, (float) $brc->fresh()->total);
+        $this->assertSame('Nouveau libellé', $ligne->fresh()->libelle);
+        $this->assertSame(250.0, (float) $ligne->fresh()->montant);
+    }
+
+    public function test_la_modification_du_brc_est_propagee_a_sa_contrepartie_sans_modifier_les_montants(): void
+    {
+        [$superAdmin, $type, , $compteImputation] = $this->contexte('Super Admin');
+        $this->actingAs($superAdmin)->post(route('brc.store'), [
+            'date' => '2026-08-04', 'journal_type_id' => $type->id, 'monnaie' => 'CDF', 'sens' => 'debit',
+            'mode_paiement' => 'mobile_money',
+            'lignes' => [['compte_id' => $compteImputation->id, 'libelle' => 'Libellé initial', 'montant' => 250]],
+        ])->assertRedirect();
+
+        $brc = BRC::with('lignes')->firstOrFail();
+        $ligne = $brc->lignes->first();
+        $this->actingAs($superAdmin)->patch(route('brc.update', $brc), [
+            'date' => '2026-08-11', 'journal_type_id' => $type->id, 'monnaie' => 'CDF', 'sens' => 'credit',
+            'mode_paiement' => 'banque',
+            'lignes' => [['id' => $ligne->id, 'compte_id' => $compteImputation->id, 'libelle' => 'Libellé propagé', 'montant' => 900]],
+        ])->assertRedirect(route('brc.show', $brc));
+
+        $journal = Journaux::firstOrFail();
+        $this->assertSame('2026-08-11', $journal->date->toDateString());
+        $this->assertSame('banque', $journal->mode_paiement);
+        $this->assertSame('Libellé propagé', $journal->description);
+        $this->assertSame(250.0, (float) $journal->montant_ttc);
+        $this->assertSame(2, EcritureComptable::where('journal_id', $journal->id)->whereDate('date', '2026-08-11')->count());
+        $this->assertSame(250.0, (float) EcritureComptable::where('journal_id', $journal->id)->sum('debit_cdf'));
+        $this->assertSame(250.0, (float) EcritureComptable::where('journal_id', $journal->id)->sum('credit_cdf'));
+        $this->assertSame(250.0, (float) $brc->fresh()->total);
+        $this->assertSame(250.0, (float) $ligne->fresh()->montant);
     }
 
     private function contexte(string $roleDesignation = 'Comptable'): array

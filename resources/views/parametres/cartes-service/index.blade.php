@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('module-sidebar') @include('ressources_humaines._sidebar') @endsection
 
 @section('title', 'Cartes de service')
 
@@ -35,7 +36,7 @@
                         <td class="text-end text-nowrap">
                             <a class="btn btn-sm btn-outline-primary" href="{{ route('parametres.cartes-service.show', $carte) }}" title="Aperçu"><i class="bi bi-eye"></i></a>
                             <a class="btn btn-sm btn-outline-secondary" href="{{ route('parametres.cartes-service.edit', $carte) }}" title="Modifier"><i class="bi bi-pencil"></i></a>
-                            <a class="btn btn-sm btn-outline-danger" href="{{ route('parametres.cartes-service.pdf', $carte) }}" title="Télécharger le PDF"><i class="bi bi-file-earmark-pdf"></i></a>
+                            <a class="btn btn-sm btn-outline-danger" href="{{ route('parametres.cartes-service.pdf', $carte) }}" data-no-loading title="Télécharger le PDF avec la photo"><i class="bi bi-file-earmark-pdf"></i></a>
                             <form class="d-inline" method="POST" action="{{ route('parametres.cartes-service.destroy', $carte) }}" data-confirm="Supprimer cette carte ?">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger" title="Supprimer"><i class="bi bi-trash"></i></button></form>
                         </td>
                     </tr>

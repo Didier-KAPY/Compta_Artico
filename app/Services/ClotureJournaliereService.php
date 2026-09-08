@@ -216,7 +216,7 @@ class ClotureJournaliereService
         $brc = BRC::create([
             'user_id' => Auth::id(), 'journal_type_id' => $premier->journal_type_id,
             'reference' => $this->numbers->next('BRC', $date, 'od'), 'date' => $date,
-            'monnaie' => $premier->monnaie, 'sens' => 'debit', 'total' => $total, 'statut' => 'Validé',
+            'monnaie' => $premier->monnaie, 'sens' => 'debit', 'mode_paiement' => $premier->mode_paiement ?? 'mobile_money', 'total' => $total, 'statut' => 'Validé',
             'origine' => 'cloture', 'cloture_journaliere_id' => $cloture->id, 'genere_automatiquement_le' => now(),
         ]);
         foreach ($journaux as $journal) {

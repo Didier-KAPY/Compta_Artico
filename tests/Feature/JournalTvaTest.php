@@ -39,6 +39,8 @@ class JournalTvaTest extends TestCase
         $this->assertEquals(16.0, (float) $journal->taux_tva);
         $this->actingAs($user)->get(route('journaux.recu', $journal->id))
             ->assertOk()
+            ->assertSee('Dénomination')
+            ->assertSee('Client')
             ->assertSee('TVA (16,00 %)')
             ->assertSee('100,00')
             ->assertSee('116,00');

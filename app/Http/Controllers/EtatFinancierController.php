@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\BilanInitial;
 use App\Models\Entreprise;
+use App\Models\User;
 use App\Services\SyscohadaEtatFinancierService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\CarbonImmutable;
@@ -81,8 +82,27 @@ class EtatFinancierController extends Controller
             'monnaie' => 'CDF',
             'etats' => $bilanInitial->donnees,
             'entreprise' => Entreprise::first(),
+            'gerant' => $this->gerant(),
+            'chargeFinances' => $this->utilisateurParRole([
+                'chargé des finances', 'chargé de finance', 'charge de finance', 'charger de finance',
+            ]),
             'bilanInitial' => $bilanInitial,
         ]);
+    }
+
+    public function bilanInitialPdf(BilanInitial $bilanInitial)
+    {
+        return Pdf::loadView('Comptabilite.etats_financiers.bilan_initial_pdf', [
+            'etats' => $bilanInitial->donnees,
+            'entreprise' => Entreprise::first(),
+            'gerant' => $this->gerant(),
+            'chargeFinances' => $this->utilisateurParRole([
+                'chargé des finances', 'chargé de finance', 'charge de finance', 'charger de finance',
+            ]),
+            'bilanInitial' => $bilanInitial,
+        ])
+            ->setPaper('a4', 'portrait')
+            ->download('bilan-ouverture.pdf');
     }
 
     public function supprimerBilanInitial(BilanInitial $bilanInitial)
@@ -150,5 +170,19 @@ class EtatFinancierController extends Controller
             'dateFin' => $valeurs['date_fin'],
             'monnaie' => 'CDF',
         ];
+    }
+
+    private function gerant(): ?User
+    {
+        return $this->utilisateurParRole(['gérant', 'gerant']);
+    }
+
+    private function utilisateurParRole(array $roles): ?User
+    {
+        return User::with('role')->get()->first(fn (User $user) => in_array(
+            mb_strtolower(trim((string) $user->role?->designation)),
+            $roles,
+            true
+        ));
     }
 }
