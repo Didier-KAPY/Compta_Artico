@@ -62,6 +62,12 @@ class EtatFinancierTest extends TestCase
         $this->assertNotNull(collect($etat['compte_resultat']['charges_exploitation']['lignes'])->firstWhere('code', '999103'));
         $this->assertNotNull(collect($etat['compte_resultat']['produits_exploitation']['lignes'])->firstWhere('code', '999104'));
         $this->assertSame(-20.0, $actif->firstWhere('code', '281100')['actuel']);
+
+        $this->actingAs($user)
+            ->get('/comptabilite/etats-financiers/bilan?date_debut=2026-01-01&date_fin=2026-12-31')
+            ->assertOk()
+            ->assertSee('text-danger fw-bold', false)
+            ->assertSee('-20,00');
     }
 
     public function test_compte_mal_parametre_est_signale_et_prefixe_reste_un_secours(): void
@@ -120,6 +126,15 @@ class EtatFinancierTest extends TestCase
         $this->get('/comptabilite/etats-financiers/compte-resultat')->assertOk();
     }
 
+    public function test_compte_resultat_selectionne_automatiquement_le_debut_annee(): void
+    {
+        $this->actingAs($this->user('DAF'))
+            ->get('/comptabilite/etats-financiers/compte-resultat')
+            ->assertOk()
+            ->assertViewHas('dateDebut', now()->startOfYear()->toDateString())
+            ->assertViewHas('dateFin', now()->toDateString());
+    }
+
     public function test_un_daf_peut_archiver_le_bilan_initial_affiche(): void
     {
         $user = $this->user('DAF');
@@ -143,8 +158,16 @@ class EtatFinancierTest extends TestCase
 
         $this->get('/comptabilite/etats-financiers/bilan?date_debut=2026-01-01&date_fin=2026-12-31')
             ->assertOk()
-            ->assertSee('Consulter le bilan initial')
+            ->assertSee('Afficher le bilan d’ouverture')
             ->assertDontSee('Libellé de l’archive');
+
+        $this->get('/comptabilite/etats-financiers/bilan?date_debut=2026-09-01&date_fin=2026-09-30')
+            ->assertOk()
+            ->assertSee('Bilan d’ouverture')
+            ->assertSee('Bilan initial 2026')
+            ->assertSee('125,00 CDF')
+            ->assertDontSee('Période du')
+            ->assertSee('Afficher le bilan d’ouverture');
 
         $this->get(route('comptabilite.etats-financiers.bilan-initial', $archive))
             ->assertOk()

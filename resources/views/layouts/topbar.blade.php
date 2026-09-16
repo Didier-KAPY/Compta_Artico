@@ -25,7 +25,7 @@
                     @endif
                 </span>
                 <span class="topbar-brand-copy">
-                    <strong>{{ $entreprise->nom_entreprise ?? 'COMPTA ARTICO' }}</strong>
+                    <strong>{{ $entreprise->nom_entreprise ?? 'COMPTA ARTICO' }}@include('partials.entreprise-identifiants')</strong>
                     <small>Gestion comptable</small>
                 </span>
             </a>
@@ -65,7 +65,6 @@
                             <div><strong class="d-block">Notifications</strong><small class="text-muted">Suivi des opérations</small></div>
                             <div class="d-flex gap-1">
                                 <span class="badge bg-warning text-dark">{{ $notifications['en_attente'] }} en attente</span>
-                                <span class="badge bg-success">{{ $notifications['valides'] }} validé{{ $notifications['valides'] > 1 ? 's' : '' }}</span>
                             </div>
                         </div>
                         @if($notifications['items']->isEmpty())
@@ -77,13 +76,13 @@
                             <div class="topbar-notification-list">
                                 @foreach($notifications['items']->take(15) as $notification)
                                     <a class="topbar-notification-item" href="{{ $notification['url'] }}">
-                                        <span class="topbar-notification-icon {{ $notification['statut'] === 'En attente' ? 'bg-warning bg-opacity-10 text-warning' : 'bg-success bg-opacity-10 text-success' }}">
+                                        <span class="topbar-notification-icon bg-warning bg-opacity-10 text-warning">
                                             <i class="bi {{ $notification['icon'] }}"></i>
                                         </span>
                                         <span class="flex-grow-1 overflow-hidden">
                                             <span class="d-flex justify-content-between gap-2">
                                                 <strong class="text-truncate">{{ $notification['title'] }}</strong>
-                                                <span class="badge {{ $notification['statut'] === 'En attente' ? 'bg-warning text-dark' : 'bg-success' }}">{{ $notification['statut'] }}</span>
+                                                <span class="badge bg-warning text-dark">{{ $notification['statut'] }}</span>
                                             </span>
                                             <small class="text-muted d-block text-truncate">{{ $notification['module_label'] }} — {{ $notification['description'] }}</small>
                                             <small class="text-muted">{{ $notification['date']->diffForHumans() }}</small>

@@ -21,6 +21,25 @@ class QrAttendanceController extends Controller
         return view('ressources_humaines.presences.scanner');
     }
 
+    public function photo(Request $request, Employe $employe, CurrentEntreprise $ctx)
+    {
+        abort_unless($employe->entreprise_id === $ctx->for($request->user())->id, 404);
+        $path = $this->photoEmploye($employe);
+        abort_unless($path, 404);
+
+        return response(Storage::disk('public')->get($path), 200, [
+            'Content-Type' => Storage::disk('public')->mimeType($path) ?: 'image/jpeg',
+            'Cache-Control' => 'private, no-store, max-age=0',
+        ]);
+    }
+
+    private function photoEmploye(Employe $employe): ?string
+    {
+        return collect([$employe->photo, $employe->user?->photo])
+            ->filter()
+            ->first(fn (string $chemin) => Storage::disk('public')->exists($chemin));
+    }
+
     public function scan(
         Request $request,
         CurrentEntreprise $ctx,
@@ -37,7 +56,7 @@ class QrAttendanceController extends Controller
         }
 
         $entreprise = $ctx->for($request->user());
-        $employe = Employe::with(['departement', 'service', 'horaire'])
+        $employe = Employe::with(['departement', 'service', 'horaire', 'user'])
             ->where('entreprise_id', $entreprise->id)
             ->where('qr_token', $token)
             ->first();
@@ -157,6 +176,8 @@ class QrAttendanceController extends Controller
         $presence = $resultat['presence'];
         $operation = $resultat['operation'];
 
+        $photo = $this->photoEmploye($employe);
+
         return response()->json([
             'message' => $operation.' ENREGISTRÉ'.($operation === 'ARRIVÉE' ? 'E' : '').' AVEC SUCCÈS',
             'operation' => $operation,
@@ -166,7 +187,7 @@ class QrAttendanceController extends Controller
                 'nom' => trim($employe->nom.' '.$employe->postnom.' '.$employe->prenom),
                 'matricule' => $employe->matricule,
                 'departement' => $employe->service?->nom ?? $employe->departement?->designation ?? '—',
-                'photo' => $employe->photo ? Storage::disk('public')->url($employe->photo) : null,
+                'photo' => $photo ? route('parametres.rh.presences.photo', $employe, false) : null,
             ],
             'retard_minutes' => $presence->retard_minutes,
             'depart_anticipe_minutes' => $presence->depart_anticipe_minutes,

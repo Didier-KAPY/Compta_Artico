@@ -48,6 +48,27 @@
         </table></div>
     </div>
 
+    @php
+        $peutAjouterPiece = auth()->user()?->isSuperAdmin() || in_array(mb_strtolower(trim((string) auth()->user()?->role?->designation)), [
+            'chargé des finances', 'chargé de finance', 'charge de finance', 'charger de finance',
+        ], true);
+    @endphp
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-light"><strong><i class="bi bi-paperclip me-2"></i>Pièces justificatives liées</strong></div>
+        <div class="card-body">
+            @include('partials.pieces-justificatives', ['document' => $ecriture, 'pieceRoute' => 'ecritures.piece'])
+            @if($peutAjouterPiece)
+                <form method="POST" action="{{ route('ecritures.piece.store', $ecriture) }}" enctype="multipart/form-data" class="mt-3">
+                    @csrf
+                    <label for="pieces_justificatives" class="form-label fw-bold">Ajouter une pièce ou plusieurs pièces justificatives</label>
+                    <input type="file" id="pieces_justificatives" name="pieces_justificatives[]" class="form-control" accept=".pdf,.jpg,.jpeg,.png" multiple required aria-describedby="piece-aide">
+                    <div id="piece-aide" class="form-text">PDF, JPG ou PNG — 5 Mo maximum par fichier. Maximum 20 fichiers par ajout.</div>
+                    <button type="submit" class="btn btn-primary mt-2">Ajouter les pièces justificatives</button>
+                </form>
+            @endif
+        </div>
+    </div>
+
     @unless($estImpute)
     <div class="card border-0 shadow-sm">
         <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
@@ -83,11 +104,6 @@
                     </div>
                     @endforeach
                 </div>
-                <div class="border rounded p-3 mb-3">
-                    <label class="form-label fw-bold">Pièce justificative @if($pieceObligatoire)<span class="text-danger">*</span>@endif</label>
-                    <input type="file" name="piece_justificative" class="form-control" accept=".pdf,.jpg,.jpeg,.png" @required($pieceObligatoire)>
-                    <small class="text-muted">Cette pièce unique sera liée à toutes les lignes par leur même référence.</small>
-                </div>
                 <small class="text-muted d-block">Chaque ligne ajoutée correspond à une contrepartie existante, dans le sens inverse de l’écriture affichée.</small>
                 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mt-4">
                     <span id="etatEquilibre" class="text-danger small fw-semibold">Saisissez les montants pour équilibrer l’écriture.</span>
@@ -107,6 +123,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const addButton = document.getElementById('ajouterImputation');
     const validateButton = document.getElementById('validerImputation');
     const balanceState = document.getElementById('etatEquilibre');
+    const pieceRequired = @json($pieceObligatoire && !$pieceExiste);
     if (!container || !addButton || !validateButton || !balanceState) return;
     const max = Number(container.dataset.max || 1);
     const expected = Number(container.dataset.expected || 0);
@@ -126,7 +143,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }, 0);
         const difference = Math.abs(expected - total);
         const balanced = expected > 0 && difference <= 0.005;
-        validateButton.disabled = !balanced;
+        const pieceReady = !pieceRequired;
+        validateButton.disabled = !balanced || !pieceReady;
         balanceState.classList.toggle('text-danger', !balanced);
         balanceState.classList.toggle('text-success', balanced);
         balanceState.textContent = balanced

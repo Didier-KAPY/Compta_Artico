@@ -168,6 +168,8 @@ class ParametreController extends Controller
             'telephone' => 'required',
             'forme_juridique' => 'required',
             'numero_identification_fiscal' => 'required',
+            'rccm' => 'nullable|string|max:255',
+            'id_nat' => 'nullable|string|max:255',
             'logo' => 'nullable|image|max:2048',
             'cachet' => 'nullable|image|max:2048',
         ]);
@@ -183,6 +185,8 @@ class ParametreController extends Controller
         $entreprise->telephone = $request->telephone;
         $entreprise->forme_juridique = $request->forme_juridique;
         $entreprise->numero_identification_fiscal = $request->numero_identification_fiscal;
+        $entreprise->rccm = $request->input('rccm');
+        $entreprise->id_nat = $request->input('id_nat');
 
         // LOGO
 

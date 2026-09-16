@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\BRC;
 use App\Models\EcritureComptable;
 use App\Models\EntreeCaisse;
+use App\Models\EtatBesoin;
 use App\Models\JournalType;
 use App\Models\Journaux;
 use App\Models\ListeDesComptes;
@@ -281,6 +282,9 @@ class WorkflowComptableTest extends TestCase
 
         $this->actingAs($user)->get(route('ecritures.liste'))
             ->assertOk()
+            ->assertDontSee('Écriture récente 2');
+        $this->get(route('ecritures.liste', ['statut' => 'Validé']))
+            ->assertOk()
             ->assertSeeInOrder(['Écriture récente 2', 'Écriture récente 1', 'Ancienne écriture']);
     }
 
@@ -300,9 +304,33 @@ class WorkflowComptableTest extends TestCase
             ->assertSessionHasErrors('piece_justificative');
         $this->assertSame('En attente', $ecriture->fresh()->statut);
 
+        Storage::disk('public')->put('etat-besoins/pieces/facture-etat.pdf', '%PDF-1.4 test');
+        $etat = EtatBesoin::create([
+            'user_id' => $user->id, 'numero' => 'EB-PIECE-ECRITURE', 'date' => now()->toDateString(),
+            'service' => 'Finance', 'demandeur' => 'Bénéficiaire', 'motif' => 'Test',
+            'montant_estime' => 100, 'monnaie' => 'CDF', 'statut' => 'Validé',
+            'piece_justificative' => 'etat-besoins/pieces/facture-etat.pdf',
+            'piece_justificative_nom' => 'Facture état.pdf',
+        ]);
+        $sortie = SortieCaisse::create([
+            'user_id' => $user->id, 'etat_besoin_id' => $etat->id, 'numero' => 'BSC-TEST-JUSTIFICATIF',
+            'date' => now()->toDateString(), 'beneficiaire' => 'Bénéficiaire', 'motif' => 'Test',
+            'montant' => 100, 'monnaie' => 'CDF', 'statut' => 'En attente', 'type' => 'Caisse',
+        ]);
+        $journal->update(['sortie_caisse_id' => $sortie->id]);
+
+        $this->actingAs($user)->get(route('ecritures.show', $ecriture))
+            ->assertOk()
+            ->assertSee('Pièce justificative liée')
+            ->assertSee('Facture état.pdf')
+            ->assertDontSee('name="piece_justificative"', false)
+            ->assertSee(route('ecritures.piece', $ecriture), false);
+        $this->actingAs($user)->get(route('ecritures.piece', $ecriture))
+            ->assertOk()
+            ->assertHeader('content-disposition', 'inline; filename="Facture état.pdf"');
+
         $this->actingAs($user)->post(route('ecritures.valider', $ecriture), [
             'liste_des_comptes_id' => $compte->id,
-            'piece_justificative' => UploadedFile::fake()->create('facture.pdf', 100, 'application/pdf'),
         ])->assertRedirect()->assertSessionHas('success');
 
         $ecriture->refresh();
@@ -313,12 +341,12 @@ class WorkflowComptableTest extends TestCase
 
         $this->actingAs($user)->get(route('ecritures.liste'))
             ->assertOk()
-            ->assertSee('Imputation')
+            ->assertDontSee(route('ecritures.show', $ecriture), false)
             ->assertDontSee(route('ecritures.piece', $ecriture), false);
 
         $this->actingAs($user)->get(route('ecritures.piece', $ecriture))
             ->assertOk()
-            ->assertHeader('content-disposition', 'inline; filename="'.basename($ecriture->piece_justificative).'"');
+            ->assertHeader('content-disposition', 'inline; filename="Facture état.pdf"');
     }
 
     public function test_validated_journal_is_imputed_then_moved_to_validated_entries(): void
@@ -390,9 +418,56 @@ class WorkflowComptableTest extends TestCase
         $this->assertSame('Validé', $seconde->fresh()->statut);
         $this->assertSame($user->id, $seconde->fresh()->valide_par);
     }
+    public function test_finances_can_append_multiple_documents(): void
+    {
+        Storage::fake('public');
+        [$user, $journal, $compte] = $this->contexte('Chargé des finances');
+        $ecriture = $this->ecriture($user, $journal, $compte);
+        $this->actingAs($user)->get(route('ecritures.show', $ecriture))
+            ->assertOk()->assertSee('name="pieces_justificatives[]"', false);
+        $this->post(route('ecritures.piece.store', $ecriture), [
+            'piece_justificative' => UploadedFile::fake()->create('facture.pdf', 100, 'application/pdf'),
+        ])->assertRedirect()->assertSessionHas('success');
+        $path = $ecriture->fresh()->piece_justificative;
+        Storage::disk('public')->assertExists($path);
+        $this->assertSame('En attente', $ecriture->fresh()->statut);
+        $this->get(route('ecritures.show', $ecriture))->assertOk()
+            ->assertSee('name="pieces_justificatives[]"', false);
+        $this->post(route('ecritures.piece.store', $ecriture), [
+            'pieces_justificatives' => [
+                UploadedFile::fake()->create('autre.pdf', 100, 'application/pdf'),
+                UploadedFile::fake()->create('recu.pdf', 100, 'application/pdf'),
+            ],
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame($path, $ecriture->fresh()->piece_justificative);
+        $this->assertCount(3, $ecriture->fresh()->pieces_justificatives);
+        $this->get(route('ecritures.show', $ecriture))->assertOk()->assertSee('autre.pdf')->assertSee('recu.pdf');
+        foreach ($ecriture->fresh()->pieces_justificatives as $piece) {
+            Storage::disk('public')->assertExists($piece['path']);
+            $this->get(route('ecritures.piece', ['id' => $ecriture->id, 'piece' => hash('sha256', $piece['path'])]))->assertOk();
+        }
+        $this->get(route('ecritures.piece', ['id' => $ecriture->id, 'piece' => 'inconnue']))->assertNotFound();
+    }
+
+    public function test_entries_default_to_pending_across_all_dates_with_optional_filters(): void
+    {
+        [$user, $journal, $compte] = $this->contexte('Chargé des finances');
+        $today = $this->ecriture($user, $journal, $compte);
+        $old = $this->ecriture($user, $journal, $compte);
+        $old->update(['date' => today()->subDay()]);
+        $validated = $this->ecriture($user, $journal, $compte);
+        $validated->update(['statut' => 'Validé']);
+        $this->actingAs($user)->get(route('ecritures.liste'))->assertOk()
+            ->assertViewHas('ecritures', fn ($rows) => $rows->pluck('id')->all() === [$today->id, $old->id]);
+        $this->get(route('ecritures.liste', ['date_debut' => today()->toDateString(), 'date_fin' => today()->toDateString()]))->assertOk()
+            ->assertViewHas('ecritures', fn ($rows) => $rows->pluck('id')->all() === [$today->id]);
+        $this->get(route('ecritures.liste', ['date_debut' => '', 'date_fin' => '', 'statut' => '']))
+            ->assertOk()->assertViewHas('ecritures', fn ($rows) => $rows->total() === 3);
+    }
+
     private function contexte(string $roleName, string $journalStatus = 'En attente'): array
     {
-        $role = Role::create(['designation' => $roleName]);
+        $role = Role::firstOrCreate(['designation' => $roleName]);
         $user = User::create([
             'nom' => 'Test',
             'prenom' => $roleName,

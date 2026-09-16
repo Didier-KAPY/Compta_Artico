@@ -10,22 +10,17 @@
 @foreach($paies as $paie)
 <section class="payslip-page">
     @if(!in_array($paie->statut,['Validée','Payée'],true))<div class="draft">BROUILLON</div>@endif
-    <div class="header">@if($entreprise->logo && file_exists(public_path('storage/'.$entreprise->logo)))<img class="logo" src="{{public_path('storage/'.$entreprise->logo)}}">@endif<h1>BULLETIN DE PAIE</h1><strong>{{$entreprise->nom_entreprise}}</strong><div class="muted">{{$entreprise->adresse}} · {{$entreprise->telephone}}</div>@if($paie->reference_paiement)<div style="margin-top:8px"><strong>Référence : {{$paie->reference_paiement}}</strong></div>@endif</div>
+    <div class="header">@if($entreprise->logo && file_exists(public_path('storage/'.$entreprise->logo)))<img class="logo" src="{{public_path('storage/'.$entreprise->logo)}}">@endif<h1>BULLETIN DE PAIE</h1><strong>{{$entreprise->nom_entreprise}}@include('partials.entreprise-identifiants')</strong><div class="muted">{{$entreprise->adresse}} · {{$entreprise->telephone}}</div>@if($paie->reference_paiement)<div style="margin-top:8px"><strong>Référence : {{$paie->reference_paiement}}</strong></div>@endif</div>
     <table class="grid"><tr><td><strong>Employé :</strong> {{$paie->employe->nom}} {{$paie->employe->postnom}} {{$paie->employe->prenom}}</td><td><strong>Matricule :</strong> {{$paie->employe->matricule}}</td></tr><tr><td><strong>Direction :</strong> {{$paie->employe->departement?->designation??'—'}}</td><td><strong>Fonction :</strong> {{$paie->employe->fonction?->designation??'—'}}</td></tr><tr><td><strong>Période :</strong> {{str_pad($paie->mois,2,'0',STR_PAD_LEFT)}}/{{$paie->annee}}</td><td><strong>Devise :</strong> {{$paie->monnaie}}</td></tr></table>
     <h2>DÉTAIL DE LA RÉMUNÉRATION</h2><p class="muted">Retenues, taxes et cotisations appliquées : <strong>{{$paie->appliquer_retenues?'Oui':'Non'}}</strong> · Retenue sur absence : <strong>{{$paie->appliquer_retenue_absence?'Oui':'Non'}}</strong></p>
     <table class="pay"><thead><tr><th>Rubrique</th><th class="amount">Gains</th><th class="amount">Retenues</th></tr></thead><tbody>
         <tr><td>Salaire de base</td><td class="amount">{{number_format($paie->salaire_base,2,',',' ')}}</td><td></td></tr>
-        @if($paie->lignes->isNotEmpty())
-            @foreach($paie->lignes as $ligne)<tr><td>{{$ligne->libelle}} @if($ligne->taux)<small>({{number_format($ligne->taux,2,',',' ')}} %)</small>@endif</td><td class="amount">{{$ligne->type==='Gain'?number_format($ligne->montant,2,',',' '):''}}</td><td class="amount">{{$ligne->type!=='Gain'?number_format($ligne->montant,2,',',' '):''}}</td></tr>@endforeach
-        @else
-            @if((float)$paie->primes>0)<tr><td>Primes et indemnités</td><td class="amount">{{number_format($paie->primes,2,',',' ')}}</td><td></td></tr>@endif
-            @if((float)$paie->retenues>0)<tr><td>Autres retenues</td><td></td><td class="amount">{{number_format($paie->retenues,2,',',' ')}}</td></tr>@endif
-        @endif
-        <tr class="total"><td>TOTAUX</td><td class="amount">{{number_format($paie->calculerTotalGains(),2,',',' ')}}</td><td class="amount">{{number_format((float)$paie->retenues+(float)$paie->total_taxes+(float)$paie->total_cotisations,2,',',' ')}}</td></tr>
+        @include('ressources_humaines.paie._rubriques_bulletin')
+<tr class="total"><td>TOTAUX</td><td class="amount">{{number_format($paie->calculerTotalGains(),2,',',' ')}}</td><td class="amount">{{$paie->calculerTotalRetenues() ? number_format($paie->calculerTotalRetenues(),2,',',' ') : '—'}}</td></tr>
     </tbody></table>
     <div class="net">NET À PAYER <span class="right">{{number_format($paie->net,2,',',' ')}} {{$paie->monnaie}}</span></div>
     <h2>INFORMATIONS DE PAIEMENT</h2><table class="pay"><tbody><tr><td><strong>Statut</strong></td><td>{{$paie->statut}}</td></tr><tr><td><strong>Date de paiement</strong></td><td>{{$paie->date_paiement?->format('d/m/Y')??'—'}}</td></tr><tr><td><strong>Mode de paiement</strong></td><td>{{$paie->mode_paiement??'—'}}</td></tr><tr><td><strong>Référence automatique</strong></td><td><strong>{{$paie->reference_paiement??'—'}}</strong></td></tr></tbody></table>
-    <table style="width:100%;margin-top:38px"><tr><td style="width:50%;text-align:center">Signature de l’employé<br><br><br>____________________________</td><td style="width:50%;text-align:center">Responsable habilité<br><br><br>____________________________</td></tr></table>
+    @include('ressources_humaines.paie._signatures')
     <div class="footer">Document confidentiel — Bulletin {{ $loop->iteration }} sur {{ $loop->count }} — Généré le {{now()->format('d/m/Y à H:i')}}.</div>
 </section>
 @endforeach

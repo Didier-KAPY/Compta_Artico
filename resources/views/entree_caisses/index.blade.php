@@ -97,6 +97,7 @@
                                 <th>Validé par</th>
                             @endif
                             <th>Date</th>
+                            <th>Nom / partenaire</th>
                             <th>Motif</th>
                             <th class="text-end">Montant</th>
                             <th>Monnaie</th>
@@ -109,6 +110,7 @@
 
                         @forelse($entrees as $entree)
 
+                        @php $journalRecu = $entree->journaux->sortBy('id')->first(fn($journal) => $journal->description !== 'TVA') ?? $entree->journaux->sortBy('id')->first(); @endphp
                         <tr>
 
                             <td><strong>{{ $entree->numero }}</strong></td>
@@ -119,6 +121,8 @@
                             <td>
                                 {{ \Carbon\Carbon::parse($entree->date)->format('d/m/Y') }}
                             </td>
+
+                            <td>{{ $entree->nom_partenaire ?: '—' }}</td>
 
                             <td>
                                 {{ $entree->motif }}
@@ -183,6 +187,13 @@
                                                 <i class="bi bi-file-earmark-pdf me-2"></i>Télécharger PDF
                                             </a>
                                         </li>
+                                        @if($journalRecu)
+                                        <li>
+                                            <a class="dropdown-item" href="{{ route('journaux.recu', $journalRecu) }}" target="_blank">
+                                                <i class="bi bi-receipt me-2"></i>Reçu
+                                            </a>
+                                        </li>
+                                        @endif
 
                                         @can('manageEntreeCaisse')
                                         <li>
@@ -211,6 +222,8 @@
                             @endif
 
                             <td>{{ \Carbon\Carbon::parse($entree->date)->format('d/m/Y') }}</td>
+
+                            <td>{{ $entree->nom_partenaire ?: '—' }}</td>
 
                             <td>
                                 TVA
@@ -247,7 +260,7 @@
                         @empty
 
                         <tr>
-                            <td colspan="{{ $isSuperAdmin ? 8 : 7 }}" class="text-center text-muted py-4">
+                            <td colspan="{{ $isSuperAdmin ? 9 : 8 }}" class="text-center text-muted py-4">
                                 Aucune entrée de caisse trouvée
                             </td>
                         </tr>
@@ -266,7 +279,9 @@
 
     <!-- PAGINATION -->
     <div class="mt-3 d-flex justify-content-center">
-        {{ $entrees->links() }}
+        @if($entrees instanceof \Illuminate\Contracts\Pagination\Paginator)
+            {{ $entrees->links() }}
+        @endif
     </div>
 
 </div>

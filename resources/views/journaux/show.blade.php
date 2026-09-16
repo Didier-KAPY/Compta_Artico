@@ -103,7 +103,7 @@
                     </a>
                 @endif
                 <div class="d-flex flex-wrap align-items-center gap-2">
-                    <span class="text-muted">{{ basename($piecePath) }}</span>
+                    <span class="text-muted">{{ $pieceNom }}</span>
                     <a href="{{ $pieceUrl }}" target="_blank" class="btn btn-primary btn-sm">
                         <i class="bi bi-eye me-1"></i>Consulter la pièce
                     </a>
@@ -349,6 +349,29 @@
 
                     <!-- Informations journal -->
 
+                    @php
+                        $bonSortie = $journal->sortieCaisse;
+                        $montantTraitement = (float) $journal->montant_ttc;
+                        if ($montantTraitement <= 0) {
+                            $montantTraitement = $journal->monnaie === 'USD'
+                                ? max((float) $journal->entrees_usd, (float) $journal->sorties_usd)
+                                : max((float) $journal->entrees_cdf, (float) $journal->sorties_cdf);
+                        }
+                    @endphp
+                    <div class="alert alert-success" id="montant-traitement-journal">
+                        <strong>{{ $bonSortie?->taux_conversion ? 'Montant converti à traiter' : 'Montant à traiter' }} :</strong>
+                        <span class="fs-4 d-block">{{ number_format($montantTraitement, 2, ',', ' ') }} {{ $journal->monnaie }}</span>
+                        @if($bonSortie?->taux_conversion)
+                            @if($bonSortie->etatBesoin)
+                                <div>Montant de l’état de besoins : {{ number_format($bonSortie->etatBesoin->montant_estime, 2, ',', ' ') }} {{ $bonSortie->etatBesoin->monnaie }}</div>
+                            @endif
+                            <div>Taux utilisé sur le bon : 1 USD = {{ number_format($bonSortie->taux_conversion, 2, ',', ' ') }} CDF ({{ $bonSortie->date_taux_conversion }}).</div>
+                            @if(round($montantTraitement, 2) !== round((float) $bonSortie->montant, 2))
+                                <div>Total converti du bon, TVA comprise : {{ number_format($bonSortie->montant, 2, ',', ' ') }} {{ $bonSortie->monnaie }}</div>
+                            @endif
+                        @endif
+                    </div>
+
                     <div class="alert alert-info">
 
 
@@ -382,7 +405,7 @@
                             <input type="text"
                                    name="nom_partenaire"
                                    id="nom_partenaire"
-                                   value="{{ old('nom_partenaire', $journal->nom_partenaire) }}"
+                                   value="{{ old('nom_partenaire', $beneficiaireTraitement) }}"
                                    class="form-control @error('nom_partenaire') is-invalid @enderror"
                                    maxlength="255">
                             @error('nom_partenaire')<div class="invalid-feedback">{{ $message }}</div>@enderror
@@ -392,7 +415,7 @@
                             <input type="tel"
                                    name="telephone_partenaire"
                                    id="telephone_partenaire"
-                                   value="{{ old('telephone_partenaire', $journal->telephone_partenaire) }}"
+                                   value="{{ old('telephone_partenaire', $telephoneTraitement) }}"
                                    class="form-control @error('telephone_partenaire') is-invalid @enderror"
                                    maxlength="50">
                             @error('telephone_partenaire')<div class="invalid-feedback">{{ $message }}</div>@enderror

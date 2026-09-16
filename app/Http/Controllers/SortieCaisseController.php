@@ -33,17 +33,20 @@ class SortieCaisseController extends Controller
 {
     $query = $this->sortiesFiltrees($request);
 
-    $sorties = $query
-        ->latest()
-        ->paginate(10)
-        ->withQueryString();
+    $query->latest();
+    $sorties = $request->hasAny(['numero', 'date_debut', 'date_fin', 'statut'])
+        ? $query->get()
+        : $query->paginate(10)->withQueryString();
 
     return view('sortie_caisses.index', compact('sorties'));
 }
 
     private function sortiesFiltrees(Request $request)
     {
+        $statutFiltre = $request->input('statut', 'En attente');
+
         return SortieCaisse::with(['etatBesoin', 'user', 'validateur'])
+            ->when(filled($statutFiltre), fn ($query) => $query->where('statut', $statutFiltre))
             ->when($request->filled('numero'), fn ($query) => $query->where('numero', 'like', '%'.$request->numero.'%'))
             ->when($request->filled('date_debut'), fn ($query) => $query->whereDate('date', '>=', $request->date_debut))
             ->when($request->filled('date_fin'), fn ($query) => $query->whereDate('date', '<=', $request->date_fin));
@@ -267,9 +270,45 @@ public function telechargerPdf($id)
 
 public function valider(Request $request, $id, FinancialDocumentService $documents, DocumentNumberService $numbers, BudgetService $budgets)
 {
+    $request->validate([
+        'convertir_traitement' => 'nullable|boolean',
+    ]);
     try {
         DB::transaction(function () use ($request, $id, $budgets, $numbers) {
             $sortie = SortieCaisse::with('lignesCloture')->lockForUpdate()->findOrFail($id);
+            $journalDejaValide = $this->journauxDuBon($sortie)->get()->contains(fn ($journal) => $this->statutEstValide($journal->statut));
+            if ($request->boolean('convertir_traitement')) {
+                $montant = (string) ($sortie->etatBesoin?->montant_estime ?? $sortie->montant);
+                $monnaie = $sortie->etatBesoin?->monnaie ?? $sortie->monnaie;
+                $sortie->montant_origine_conversion = $montant;
+                $sortie->monnaie_origine_conversion = $monnaie;
+                $tauxConversion = null;
+                if ($request->boolean('convertir_traitement')) {
+                    if ($sortie->statut === 'Validé' || $journalDejaValide) {
+                        throw ValidationException::withMessages(['conversion' => 'Ce bon ou son journal est déjà validé.']);
+                    }
+                    $conversion = app(\App\Services\SortieConversionService::class);
+                    $tauxConversion = $conversion->taux($sortie);
+                    if (! $tauxConversion || (float) $tauxConversion->taux_de_change <= 0) {
+                        throw ValidationException::withMessages(['conversion' => 'Aucun taux de change valide enregistré.']);
+                    }
+                    $montant = $conversion->convertir($montant, $monnaie, $tauxConversion);
+                    $monnaie = $monnaie === 'USD' ? 'CDF' : 'USD';
+                }
+                if (! $sortie->etat_besoin_id || $sortie->origine === 'cloture') {
+                    throw ValidationException::withMessages(['somme_disponible' => 'Ce montant se renseigne sur un bon lié à un état de besoins.']);
+                }
+                if (($sortie->statut === 'Validé' || $journalDejaValide) && (! \Brick\Math\BigDecimal::of($montant)->isEqualTo($sortie->montant) || $monnaie !== $sortie->monnaie)) {
+                    throw ValidationException::withMessages(['somme_disponible' => 'Le montant ne peut plus être modifié après validation du bon ou du journal.']);
+                }
+                $ht = $sortie->appliquer_tva ? (string) \Brick\Math\BigDecimal::of($montant)->dividedBy(\Brick\Math\BigDecimal::of($sortie->taux_tva)->dividedBy(100)->plus(1), 18, \Brick\Math\RoundingMode::DOWN) : $montant;
+                $sortie->fill(['montant' => $montant, 'monnaie' => $monnaie, 'montant_ht' => $ht, 'montant_tva' => (string) \Brick\Math\BigDecimal::of($montant)->minus($ht)]);
+                if ($sortie->isDirty(['montant', 'monnaie'])) {
+                    $sortie->taux_conversion = $tauxConversion?->taux_de_change;
+                    $sortie->date_taux_conversion = $tauxConversion ? ($tauxConversion->date_taux ?? $tauxConversion->created_at)->toDateString() : null;
+                }
+                $sortie->save();
+            }
             $typeBon = mb_strtoupper(trim((string) $request->input('type_bon', $sortie->type_bon)));
             if (! in_array($typeBon, ['BSC', 'BSB', 'BSM'], true)) {
                 throw ValidationException::withMessages([
@@ -292,14 +331,23 @@ public function valider(Request $request, $id, FinancialDocumentService $documen
             $budgets->realiserSortie($sortie);
             if ($sortie->origine === 'cloture') return;
 
+            // Une ancienne incohérence peut laisser le bon en attente alors que son
+            // journal est déjà validé. Dans ce cas, valider seulement le bon évite
+            // de rétrograder le journal comptable vers « En attente ».
+            if ($this->journauxDuBon($sortie)->get()->contains(
+                fn ($journal) => $this->statutEstValide($journal->statut)
+            )) {
+                return;
+            }
+
             $nature = match ($sortie->type_bon) { 'BSM'=>'mobile_money', 'BSB'=>'banque', default=>'caisse' };
             $journalType = JournalType::with('compte')->where('est_tresorerie', true)
                 ->where('nature', $nature)->where('monnaie', $sortie->monnaie)
                 ->whereNotNull('liste_des_comptes_id')->first();
             if (! $journalType?->compte) throw ValidationException::withMessages(['journal'=>'Aucun journal '.$nature.' n’est configuré en '.$sortie->monnaie.'.']);
             $mode = match ($sortie->type_bon) { 'BSM'=>'mobile_money', 'BSB'=>'banque', default=>'espèces' };
-            $tva = $sortie->appliquer_tva ? round((float)$sortie->montant_tva, 2) : 0;
-            $principal = $tva > 0 ? round((float)$sortie->montant_ht, 2) : round((float)$sortie->montant, 2);
+            $tva = $sortie->appliquer_tva ? $sortie->montant_tva : 0;
+            $principal = $tva > 0 ? $sortie->montant_ht : $sortie->montant;
             $base = ['user_id'=>auth()->id(),'journal_type_id'=>$journalType->id,'reference'=>$sortie->numero,
                 'date'=>$sortie->date,'monnaie'=>$sortie->monnaie,'mode_paiement'=>$mode,'statut'=>'En attente',
                 'date_validation'=>null,'valide_par'=>null,'entrees_cdf'=>0,'entrees_usd'=>0];

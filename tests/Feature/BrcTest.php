@@ -275,6 +275,173 @@ class BrcTest extends TestCase
         $this->assertSame(250.0, (float) $ligne->fresh()->montant);
     }
 
+    public function test_cash_imputations_update_treasury_statement_and_dashboard_in_original_currency(): void
+    {
+        $this->travelTo('2026-09-09 12:00:00');
+        [$user, $od, , $other] = $this->contexte('Admin');
+        $cash = ListeDesComptes::create(['user_id' => $user->id, 'compte' => '571100', 'designation' => 'Caisse', 'nature' => 'Actif']);
+        $type = JournalType::create(['user_id' => $user->id, 'code' => 'CAI', 'libelle' => 'Caisse', 'liste_des_comptes_id' => $cash->id, 'nature' => 'caisse', 'monnaie' => 'CDF', 'est_tresorerie' => true]);
+        // Two journal types on the same account must not duplicate the BRC.
+        JournalType::create(['user_id' => $user->id, 'code' => 'CAI2', 'libelle' => 'Caisse bis', 'liste_des_comptes_id' => $cash->id, 'nature' => 'caisse', 'monnaie' => 'CDF', 'est_tresorerie' => true]);
+        TauxDeChange::create(['user_id' => $user->id, 'taux_de_change' => 2800, 'date_taux' => '2026-09-01']);
+        foreach ([['2026-08-31', 'credit', 'CDF', 100], ['2026-09-02', 'debit', 'CDF', 30], ['2026-09-03', 'credit', 'USD', 20]] as [$date, $sens, $currency, $amount]) {
+            $this->actingAs($user)->post(route('brc.store'), [
+                'date' => $date, 'journal_type_id' => $od->id, 'monnaie' => $currency, 'sens' => $sens,
+                'lignes' => [
+                    ['compte_id' => $cash->id, 'libelle' => 'Correction caisse', 'montant' => $amount],
+                    ['compte_id' => $other->id, 'libelle' => 'Sans effet caisse', 'montant' => 500],
+                ],
+            ])->assertSessionHasNoErrors()->assertRedirect();
+        }
+        $period = ['date_debut' => '2026-09-01', 'date_fin' => '2026-09-09', 'journal_type_id' => $type->id];
+        $this->get(route('journaux.tresorerie', $period))->assertOk()->assertViewHas('totaux', fn ($t) => $t['caisse_cdf'] == 70 && $t['caisse_usd'] == 20 && $t['cdf_sortie'] == 30);
+        $this->get(route('journaux.releve', $period))->assertOk()
+            ->assertViewHas('ouverture', fn ($o) => $o->cdf == 100)
+            ->assertViewHas('totaux', fn ($t) => $t['solde_cdf'] == 70 && $t['solde_usd'] == 20);
+        $dashboard = app(\App\Services\DashboardService::class)->getData($user);
+        $this->assertEquals(70, $dashboard['cash']['balance_cdf']);
+        $this->assertEquals(20, $dashboard['treasury_situation']['totals']['caisse_usd']);
+        foreach (['tresorerie', 'releve'] as $report) {
+            $this->get(route('exports.periode', $period + ['rapport' => $report, 'format' => 'excel']))
+                ->assertOk()->assertSee('30,00')->assertSee('20,00');
+        }
+        $this->assertDatabaseCount('journaux', 3);
+        $this->assertDatabaseCount('ecritures_comptables', 9);
+
+        // Closing BRCs summarize existing movements; deleted and pending BRCs
+        // must likewise not contribute to available cash.
+        $brcs = BRC::orderBy('id')->get();
+        $brcs[0]->update(['origine' => 'cloture']);
+        $brcs[1]->update(['statut' => 'En attente']);
+        $brcs[2]->delete();
+        $this->get(route('journaux.tresorerie', $period))->assertOk()
+            ->assertViewHas('totaux', fn ($t) => $t['caisse_cdf'] == 0 && $t['caisse_usd'] == 0);
+        $brcs[2]->restore();
+        $this->get(route('journaux.tresorerie', $period))->assertOk()
+            ->assertViewHas('totaux', fn ($t) => $t['caisse_usd'] == 20);
+        $brcs[2]->lignes()->where('liste_des_comptes_id', $cash->id)->update(['liste_des_comptes_id' => $other->id]);
+        $this->get(route('journaux.tresorerie', $period))->assertOk()
+            ->assertViewHas('totaux', fn ($t) => $t['caisse_usd'] == 0);
+    }
+
+    public function test_brc_debit_of_mobile_account_increases_its_linked_usd_balance(): void
+    {
+        $this->travelTo('2026-09-09 12:00:00');
+        [$user, $od, $account, $partner] = $this->contexte('Admin');
+        $account->update(['compte' => '55221', 'designation' => 'Monnaie électronique - téléphone portable (Dollar USD)']);
+        $partner->update(['compte' => '46211', 'designation' => 'Actionnaires, comptes courants']);
+        $mobile = JournalType::create([
+            'user_id' => $user->id, 'code' => 'MOBUSD', 'libelle' => 'Mobile USD',
+            'liste_des_comptes_id' => $account->id, 'nature' => 'mobile_money',
+            'monnaie' => 'USD', 'est_tresorerie' => true,
+        ]);
+        TauxDeChange::create(['user_id' => $user->id, 'taux_de_change' => 2800, 'date_taux' => '2026-08-01']);
+        $this->actingAs($user)->post(route('brc.store'), [
+            'date' => '2026-08-01', 'journal_type_id' => $od->id,
+            'monnaie' => 'USD', 'sens' => 'debit', 'mode_paiement' => 'espèces',
+            'lignes' => [['compte_id' => $partner->id, 'libelle' => 'DETTES DE L’entreprise vis-à-vis de l’associé', 'montant' => 4480]],
+        ])->assertSessionHasNoErrors()->assertRedirect();
+        $period = ['date_debut' => '2026-08-01', 'date_fin' => '2026-08-31', 'journal_type_id' => $mobile->id];
+        $this->get(route('journaux.tresorerie', $period))->assertOk()
+            ->assertViewHas('totaux', fn ($t) => $t['mobile_usd'] == 4480 && $t['caisse_usd'] == 0 && $t['usd_entree'] == 4480);
+        $this->get(route('journaux.releve', $period))->assertOk()->assertSee('55221')
+            ->assertViewHas('totaux', fn ($t) => $t['solde_usd'] == 4480);
+        $dashboard = app(\App\Services\DashboardService::class)->getData($user);
+        $this->assertEquals(4480, $dashboard['cash']['balance_usd']);
+        $this->assertEquals(4480, $dashboard['treasury_situation']['totals']['mobile_usd']);
+        $this->get(route('exports.periode', $period + ['rapport' => 'releve', 'format' => 'excel']))
+            ->assertOk()->assertSee('4 480,00')->assertSee('55221');
+    }
+
+    public function test_validated_transfer_counterpart_is_counted_once_with_fees_and_historical_rate(): void
+    {
+        $this->travelTo('2026-09-09 12:00:00');
+        [$user, $od, $mobileAccount, $fee] = $this->contexte('Admin');
+        $cashAccount = ListeDesComptes::create(['user_id'=>$user->id, 'compte'=>'57121', 'designation'=>'Caisse USD', 'nature'=>'Actif']);
+        $mobile = JournalType::create(['user_id'=>$user->id, 'code'=>'MOB', 'libelle'=>'Mobile', 'liste_des_comptes_id'=>$mobileAccount->id, 'nature'=>'mobile_money', 'monnaie'=>'USD', 'est_tresorerie'=>true]);
+        $cash = JournalType::create(['user_id'=>$user->id, 'code'=>'CAI', 'libelle'=>'Caisse', 'liste_des_comptes_id'=>$cashAccount->id, 'nature'=>'caisse', 'monnaie'=>'USD', 'est_tresorerie'=>true]);
+        $journal = Journaux::create(['user_id'=>$user->id, 'journal_type_id'=>$mobile->id, 'date'=>'2026-09-01', 'reference'=>'BSM-26090001', 'description'=>'Retrait avec frais', 'monnaie'=>'USD', 'montant_ttc'=>35, 'sorties_usd'=>35, 'statut'=>'Validé']);
+        foreach ([[$mobileAccount,0,78750],[$cashAccount,69750,0],[$fee,9000,0]] as [$account,$debit,$credit]) {
+            EcritureComptable::create(['user_id'=>$user->id, 'journal_id'=>$journal->id, 'liste_des_comptes_id'=>$account->id, 'date'=>$journal->date, 'piece'=>$journal->reference, 'libelle'=>'Retrait avec frais', 'debit_cdf'=>$debit, 'credit_cdf'=>$credit, 'statut'=>'Validé']);
+        }
+        TauxDeChange::create(['user_id'=>$user->id, 'taux_de_change'=>3000, 'date_taux'=>'2026-09-09']);
+        $period = ['date_debut'=>'2026-09-01','date_fin'=>'2026-09-09','journal_type_id'=>$cash->id];
+        $this->actingAs($user)->get(route('journaux.tresorerie',$period))->assertOk()
+            ->assertViewHas('totaux',fn($t)=>$t['caisse_usd']==31 && $t['mobile_usd']==-35 && $t['usd_solde']==-4);
+        $this->get(route('journaux.releve',$period))->assertOk()
+            ->assertViewHas('totaux',fn($t)=>$t['solde_usd']==31);
+        $this->get(route('exports.periode',$period+['rapport'=>'releve','format'=>'excel']))->assertOk()->assertSee('31,00');
+        $data = app(\App\Services\DashboardService::class)->getData($user);
+        $this->assertEquals(31,$data['treasury_situation']['totals']['caisse_usd']);
+        $this->assertEquals(-4,$data['cash']['balance_usd']);
+        $counterpart = EcritureComptable::where('liste_des_comptes_id',$cashAccount->id)->firstOrFail();
+        $counterpart->update(['statut'=>'En attente']);
+        $this->get(route('journaux.tresorerie',$period))->assertOk()->assertViewHas('totaux',fn($t)=>$t['caisse_usd']==0 && $t['mobile_usd']==-35);
+        $counterpart->update(['statut'=>'Validé']);
+        $counterpart->delete();
+        $this->get(route('journaux.tresorerie',$period))->assertOk()->assertViewHas('totaux',fn($t)=>$t['caisse_usd']==0);
+        $counterpart->restore();
+        // The same accounts must be recognized even in a non-treasury journal.
+        $journal->update(['journal_type_id'=>$od->id, 'monnaie'=>'CDF', 'sorties_usd'=>0]);
+        $this->get(route('journaux.tresorerie',$period))->assertOk()
+            ->assertViewHas('totaux',fn($t)=>$t['caisse_cdf']==69750 && $t['mobile_cdf']==-78750 && $t['cdf_solde']==-9000);
+        $journal->delete();
+        $this->get(route('journaux.tresorerie',$period))->assertOk()
+            ->assertViewHas('totaux',fn($t)=>$t['caisse_cdf']==0 && $t['mobile_cdf']==0);
+    }
+
+    public function test_brc_can_move_multiple_treasury_accounts_from_a_treasury_journal(): void
+    {
+        $this->travelTo('2026-09-09 12:00:00');
+        [$user, $source, $sourceAccount, $other] = $this->contexte('Admin');
+        $source->update(['est_tresorerie'=>true, 'nature'=>'banque', 'monnaie'=>'CDF']);
+        $accounts = [];
+        foreach (['caisse'=>'57111', 'mobile_money'=>'55211'] as $nature=>$code) {
+            $account = ListeDesComptes::create(['user_id'=>$user->id,'compte'=>$code,'designation'=>$nature,'nature'=>'Actif']);
+            JournalType::create(['user_id'=>$user->id,'code'=>$code,'libelle'=>$nature,'liste_des_comptes_id'=>$account->id,'nature'=>$nature,'monnaie'=>'CDF','est_tresorerie'=>true]);
+            $accounts[] = $account;
+        }
+        $this->actingAs($user)->get(route('brc.create'))->assertOk()
+            ->assertViewHas('journaux', fn($types)=>$types->contains('id',$source->id));
+        $this->post(route('brc.store'),[
+            'date'=>'2026-09-01','journal_type_id'=>$source->id,'monnaie'=>'CDF','sens'=>'credit',
+            'lignes'=>[
+                ['compte_id'=>$accounts[0]->id,'libelle'=>'Vers caisse','montant'=>60],
+                ['compte_id'=>$accounts[1]->id,'libelle'=>'Vers mobile','montant'=>30],
+                ['compte_id'=>$other->id,'libelle'=>'Autre contrepartie','montant'=>10],
+            ],
+        ])->assertSessionHasNoErrors()->assertRedirect();
+        $period = ['date_debut'=>'2026-09-01','date_fin'=>'2026-09-09'];
+        $this->get(route('journaux.tresorerie',$period))->assertOk()
+            ->assertViewHas('totaux',fn($t)=>$t['banque_cdf']==-100 && $t['caisse_cdf']==60 && $t['mobile_cdf']==30 && $t['cdf_solde']==-10);
+        $this->get(route('journaux.releve',$period))->assertOk()
+            ->assertViewHas('journaux',fn($rows)=>$rows->total()==3);
+        $this->assertDatabaseCount('journaux',1);
+        $this->assertDatabaseCount('ecritures_comptables',4);
+    }
+
+    public function test_totaux_od_separent_les_devises_dans_la_page_et_les_exports(): void
+    {
+        [$user, $type, , $compte] = $this->contexte();
+        TauxDeChange::create(['user_id' => $user->id, 'taux_de_change' => 2500, 'date_taux' => '2026-08-04']);
+        foreach (['CDF' => 250, 'USD' => 10] as $monnaie => $montant) {
+            $this->actingAs($user)->post(route('brc.store'), [
+                'date' => '2026-08-04', 'journal_type_id' => $type->id,
+                'monnaie' => $monnaie, 'sens' => 'credit',
+                'lignes' => [['compte_id' => $compte->id, 'libelle' => 'Test totaux', 'montant' => $montant]],
+            ])->assertSessionHasNoErrors()->assertRedirect();
+        }
+        $filtres = ['date_debut' => '2026-08-04', 'date_fin' => '2026-08-04'];
+        $this->get(route('comptabilite.imputation-compte', $filtres))->assertOk()
+            ->assertSee('Totaux de la page — CDF')->assertSee('Totaux de la page — USD');
+        $this->get(route('exports.periode', ['rapport' => 'operations-diverses', 'format' => 'excel'] + $filtres))
+            ->assertOk()->assertDownload()
+            ->assertSee('<td>Totaux — CDF</td><td>250,00</td><td>250,00</td><td>CDF</td>', false)
+            ->assertSee('<td>Totaux — USD</td><td>10,00</td><td>10,00</td><td>USD</td>', false);
+        $this->get(route('exports.periode', ['rapport' => 'operations-diverses', 'format' => 'pdf'] + $filtres))
+            ->assertOk()->assertDownload();
+    }
+
     private function contexte(string $roleDesignation = 'Comptable'): array
     {
         $role = Role::firstOrCreate(['designation' => $roleDesignation]);

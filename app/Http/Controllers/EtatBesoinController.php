@@ -36,8 +36,14 @@ class EtatBesoinController extends Controller
         'departement'
     ]);
 
+        $statutFiltre = $request->input('statut', 'En attente');
+        if (filled($statutFiltre)) {
+            $query->where('statut', $statutFiltre);
+        }
+
     $this->limiterAuDepartement($query);
-    $peutVoirTout = auth()->user()->hasRole(['Super Admin', 'Admin', 'Gérant', 'Gerant']);
+    $peutVoirTout = auth()->user()->hasRole(['Super Admin', 'Admin', 'Gérant', 'Gerant'])
+        || $this->estChargeFinances(auth()->user());
     if ($peutVoirTout && $request->filled('departement_id')) {
         $query->where('departement_id', $request->departement_id);
     }
@@ -82,10 +88,10 @@ class EtatBesoinController extends Controller
 
 
 
-    $etatBesoins = $query
-        ->latest()
-        ->paginate(10)
-        ->withQueryString();
+    $query->latest();
+    $etatBesoins = $request->hasAny(['numero', 'date_debut', 'date_fin', 'statut', 'departement_id'])
+        ? $query->get()
+        : $query->paginate(10)->withQueryString();
 
 
     $departements = $peutVoirTout ? Departement::orderBy('designation')->get() : collect();
@@ -257,13 +263,25 @@ class EtatBesoinController extends Controller
             ->download('etat-de-besoin-'.$nom.'.pdf');
     }
 
+    public function ajouterPieceJustificative(Request $request, $id)
+    {
+        $etat = $this->etatAccessible($id);
+        app(\App\Services\PiecesJustificativesService::class)->ajouter($request, $etat, 'etat-besoins/pieces', 'pdf,jpg,jpeg,png,doc,docx', 10240);
+        return back()->with('success', 'Pièces justificatives ajoutées avec succès.');
+    }
+
+    public function pieceJustificative(Request $request, $id)
+    {
+        $etat = $this->etatAccessible($id);
+        return app(\App\Services\PiecesJustificativesService::class)->consulter($request, $etat);
+    }
     /**
      * EDIT
      */
     public function edit(string $id)
     {
         $etat = $this->etatAccessible($id, ['lignes', 'departement']);
-        abort_if($etat->statut !== 'En attente' && ! $this->estGestionnaire(request()->user()), 403);
+        abort_if($etat->statut !== 'En attente', 403, 'Cet état de besoin est verrouillé après validation. Seule la pièce justificative peut encore être ajoutée.');
         $this->verifierBonSortieNonValide($etat);
 
         $departements = Departement::orderBy('designation')->get();
@@ -286,6 +304,9 @@ class EtatBesoinController extends Controller
 
     public function update(Request $request, string $id)
     {
+        $etat = $this->etatAccessible($id);
+        abort_if($etat->statut !== 'En attente', 403, 'Cet état de besoin est verrouillé après validation. Seule la pièce justificative peut encore être ajoutée.');
+
         $request->validate([
             'departement_id' => 'required|exists:departements,id',
             'demandeur' => 'required|string|max:255',
@@ -299,8 +320,6 @@ class EtatBesoinController extends Controller
             'prix_unitaire.*' => 'required|numeric|min:0.01',
         ]);
 
-        $etat = $this->etatAccessible($id);
-        abort_if($etat->statut !== 'En attente' && ! $this->estGestionnaire($request->user()), 403);
         $this->verifierBonSortieNonValide($etat);
         $departement = Departement::findOrFail($request->departement_id);
 
@@ -382,6 +401,7 @@ public function valider(Request $request, $id, FinancialDocumentService $documen
 {
     $etatAutorisation = $this->etatAccessible($id);
     Gate::authorize('valider', $etatAutorisation);
+    abort_if($etatAutorisation->statut !== 'En attente', 403, 'Cet état de besoin est verrouillé après validation. Seule la pièce justificative peut encore être ajoutée.');
 
     $request->validate([
         'observation' => 'required|string',
@@ -525,7 +545,26 @@ public function reouvrir(Request $request, $id, WorkflowComptableService $workfl
 private function limiterAuDepartement($query): void
 {
     $user = auth()->user();
-    if ($user->hasRole(['Super Admin', 'Admin', 'Gérant', 'Gerant'])) {
+    if ($user->hasRole(['Super Admin', 'Admin', 'Gérant', 'Gerant']) || $this->estChargeFinances($user)) {
+        return;
+    }
+
+    if ($user->hasRole('Directeur Technique')) {
+        $departementsFinanciers = Departement::all(['id', 'designation'])
+            ->filter(fn ($departement) => in_array(
+                \Illuminate\Support\Str::lower(\Illuminate\Support\Str::ascii(trim($departement->designation))),
+                ['direction financiere'], true
+            ))->pluck('id');
+        $query->where(function ($query) use ($departementsFinanciers) {
+            $query->whereNotNull('departement_id')->whereNotIn('departement_id', $departementsFinanciers)
+                ->orWhere(function ($legacy) {
+                    $legacy->whereNull('departement_id')->where(function ($service) {
+                        $service->whereNull('service')->orWhereRaw("LOWER(TRIM(service)) NOT IN (?, ?)", [
+                            'direction financiere', 'direction financière',
+                        ]);
+                    });
+                });
+        });
         return;
     }
 
@@ -572,5 +611,12 @@ private function verifierBonSortieNonValide(EtatBesoin $etat): void
 private function estGestionnaire($user): bool
 {
     return $user->hasRole(['Super Admin', 'Admin', 'Gérant', 'Gerant', 'Directeur Général']);
+}
+
+private function estChargeFinances($user): bool
+{
+    return in_array(mb_strtolower(trim((string) $user->role?->designation)), [
+        'chargé des finances', 'chargé de finance', 'charge de finance', 'charger de finance',
+    ], true);
 }
 }

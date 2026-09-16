@@ -12,6 +12,7 @@ use App\Services\RhSyntheseMensuelleService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -138,6 +139,40 @@ class QrAttendanceTest extends TestCase
 
         $this->actingAs($admin)->get('/parametres/ressources-humaines/presences/scanner,')
             ->assertRedirect(route('parametres.rh.presences.scanner'));
+    }
+
+    public function test_le_scanner_affiche_la_photo_du_compte_utilisateur_de_employe(): void
+    {
+        Storage::fake('public');
+        [$admin, $employe] = $this->contexte();
+        Storage::disk('public')->put('profils/jean-kabeya.jpg', 'photo');
+        $utilisateur = User::create([
+            'nom' => 'Kabeya',
+            'prenom' => 'Jean',
+            'email' => Str::random(8).'@test.local',
+            'password' => bcrypt('password'),
+            'role_id' => $admin->role_id,
+            'statut' => 'Actif',
+            'password_default' => false,
+            'photo' => 'profils/jean-kabeya.jpg',
+        ]);
+        $employe->update(['user_id' => $utilisateur->id, 'photo' => 'profils/photo-rh-supprimee.jpg']);
+        Carbon::setTestNow('2026-09-07 08:00:00');
+
+        $this->actingAs($admin)
+            ->postJson(route('parametres.rh.presences.scan'), ['code' => $this->code($employe)])
+            ->assertOk()
+            ->assertJsonPath('employe.photo', route('parametres.rh.presences.photo', $employe, false));
+
+        $this->get(route('parametres.rh.presences.photo', $employe))
+            ->assertOk()
+            ->assertContent('photo');
+
+        $employe->update(['photo' => 'profils/employe.jpg']);
+        Storage::disk('public')->put('profils/employe.jpg', 'photo employe');
+        $this->get(route('parametres.rh.presences.photo', $employe))
+            ->assertOk()
+            ->assertContent('photo employe');
     }
 
     public function test_une_presence_en_brouillon_est_comptee_dans_la_synthese(): void

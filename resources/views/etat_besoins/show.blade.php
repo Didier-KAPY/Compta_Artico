@@ -47,6 +47,7 @@
 
         <div class="d-flex align-items-center gap-2">
             @can('deleteFinancialDocument')
+            @if($etat->statut === 'En attente' || $estGestionnaire)
                 <button type="button"
                         class="btn btn-danger btn-sm"
                         data-bs-toggle="modal"
@@ -54,6 +55,7 @@
                     <i class="bi bi-trash me-1"></i>
                     Supprimer
                 </button>
+            @endif
             @endcan
 
             <a href="{{ route('etat-besoins.index') }}"
@@ -67,10 +69,12 @@
 
     @include('partials.document-navigation')
 
-    @include('partials.financial-delete-modal', [
-        'documentType' => 'État de besoin', 'documentReference' => $etat->numero,
-        'documentStatus' => $etat->statut, 'deleteRoute' => route('etat-besoins.destroy', $etat),
-    ])
+    @if($etat->statut === 'En attente' || $estGestionnaire)
+        @include('partials.financial-delete-modal', [
+            'documentType' => 'État de besoin', 'documentReference' => $etat->numero,
+            'documentStatus' => $etat->statut, 'deleteRoute' => route('etat-besoins.destroy', $etat),
+        ])
+    @endif
 
 
 
@@ -238,6 +242,25 @@
 
 
 
+    <div class="card shadow-sm border-0 mb-3">
+        <div class="card-header bg-light fw-bold"><i class="bi bi-paperclip me-2"></i>Pièce justificative</div>
+        <div class="card-body">
+            @include('partials.pieces-justificatives', ['document' => $etat, 'pieceRoute' => 'etat-besoins.piece-justificative.show'])
+            @can('consultEtatBesoin')
+            <form method="POST" enctype="multipart/form-data" action="{{ route('etat-besoins.piece-justificative.store', $etat) }}" class="row g-2 align-items-end">
+                @csrf
+                <div class="col-md-9">
+                    <label for="piece_justificative" class="form-label">Ajouter une pièce ou plusieurs pièces justificatives</label>
+                    <input id="piece_justificative" type="file" name="pieces_justificatives[]" multiple class="form-control @error('piece_justificative') is-invalid @enderror" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" required>
+                    @error('piece_justificative')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    <div class="form-text">PDF, JPG, PNG, DOC ou DOCX — 10 Mo maximum par fichier. Maximum 20 fichiers par ajout.</div>
+                </div>
+                <div class="col-md-3 d-grid"><button class="btn btn-primary"><i class="bi bi-upload me-1"></i>Ajouter les pièces</button></div>
+            </form>
+            @endcan
+        </div>
+    </div>
+
     <!-- LIGNES -->
 
 
@@ -352,18 +375,7 @@
 
 <!-- TRAITEMENT -->
 
-@if(
-    !$bonSortieValide
-    &&
-    ($etat->statut == 'En attente'
-    ||
-    (
-        in_array($etat->statut, ['Validé', 'Rejeté'])
-        &&
-        $estGestionnaire
-    )
-    )
-)
+@if(!$bonSortieValide && $etat->statut === 'En attente')
 
 
 <div class="card shadow-lg border-0 mt-4">
@@ -382,20 +394,6 @@
     <div class="card-body">
 
 
-        @if($etat->statut == 'Validé')
-
-            <div class="alert alert-success">
-
-                <i class="bi bi-check-circle-fill me-2"></i>
-
-                Cet état de besoin est déjà validé.
-                Vous pouvez le remettre en attente.
-
-            </div>
-
-
-        @else
-
             <div class="alert alert-warning">
 
                 <i class="bi bi-exclamation-triangle-fill me-2"></i>
@@ -405,16 +403,13 @@
             </div>
 
 
-        @endif
-
-
 
 
         <div class="text-end">
 
 
             @can('manageEtatBesoin')
-            @if($etat->statut == 'En attente' || $estGestionnaire)
+            @if($etat->statut == 'En attente')
                 <a href="{{ route('etat-besoins.edit',$etat->id) }}"
                    class="btn btn-warning">
 
@@ -571,22 +566,6 @@
                     </button>
                     @endunless
 
-                    @if($etat->statut == 'Validé')
-
-                        @unless($validationSeulement)
-                        <button type="submit"
-                                name="action"
-                                value="attente"
-                                class="btn btn-warning">
-
-                            <i class="bi bi-arrow-counterclockwise me-1"></i>
-                            Remettre en attente
-
-                        </button>
-                        @endunless
-
-                    @else
-
                         <button type="submit"
                                 name="action"
                                 value="valider"
@@ -596,8 +575,6 @@
                             Valider
 
                         </button>
-
-                    @endif
 
                 </div>
 
@@ -656,7 +633,7 @@
 
         <p class="text-muted">
 
-            {{ $bonSortieValide ? 'Remettez d’abord le bon de sortie en attente. Statut actuel :' : 'Statut actuel :' }}
+            {{ $etat->statut === 'Validé' ? 'Document verrouillé après validation. Seul l’ajout de la pièce justificative reste autorisé. Statut actuel :' : ($bonSortieValide ? 'Remettez d’abord le bon de sortie en attente. Statut actuel :' : 'Statut actuel :') }}
 
             <strong>
                 {{ $etat->statut }}

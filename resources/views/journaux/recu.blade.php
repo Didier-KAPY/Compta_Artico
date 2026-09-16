@@ -116,7 +116,7 @@
             <img src="{{ ($isPdf ?? false) ? public_path('storage/'.$entreprise->logo) : asset('storage/'.$entreprise->logo) }}" class="logo" alt="Logo">
         @endif
         <div class="bold company-name">
-            {{ $entreprise->nom_entreprise ?? 'DOXA SERVICES' }}
+            {{ $entreprise->nom_entreprise ?? 'DOXA SERVICES' }}@include('partials.entreprise-identifiants')
         </div>
         @if($entreprise?->slogan)<div class="slogan">{{ $entreprise->slogan }}</div>@endif
         <div>

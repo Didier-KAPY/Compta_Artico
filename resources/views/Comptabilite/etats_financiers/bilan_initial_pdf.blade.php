@@ -28,7 +28,7 @@
         @if($entreprise?->logo && file_exists(public_path('storage/'.$entreprise->logo)))
             <img class="logo" src="{{ public_path('storage/'.$entreprise->logo) }}" alt="Logo">
         @endif
-        <div class="company">{{ $entreprise?->nom_entreprise ?? 'COMPTA ARTICO' }}</div>
+        <div class="company">{{ $entreprise?->nom_entreprise ?? 'COMPTA ARTICO' }}@include('partials.entreprise-identifiants')</div>
         @if($entreprise?->slogan)<div class="slogan">{{ $entreprise->slogan }}</div>@endif
         @if($entreprise?->adresse || $entreprise?->telephone)
             <div class="contact">{{ $entreprise?->adresse }} @if($entreprise?->telephone) — Tél. {{ $entreprise->telephone }} @endif</div>
@@ -47,7 +47,7 @@
             @foreach($etats['bilan'][$sens] as $section)
                 <tr class="section"><td colspan="2">{{ $section['label'] }}</td><td class="right">{{ number_format($section['total_actuel'], 2, ',', ' ') }}</td></tr>
                 @foreach($section['lignes'] as $ligne)
-                    <tr><td>{{ $ligne['code'] }}</td><td>{{ $ligne['label'] }}</td><td class="right">{{ number_format(abs((float) $ligne['actuel']), 2, ',', ' ') }}</td></tr>
+                    <tr><td>{{ $ligne['code'] }}</td><td>{{ $ligne['label'] }}</td><td class="right {{ (float) $ligne['actuel'] < 0 ? 'bad' : '' }}">{{ number_format((float) $ligne['actuel'], 2, ',', ' ') }}</td></tr>
                 @endforeach
             @endforeach
             <tr class="total"><td colspan="2">TOTAL {{ $titre }}</td><td class="right">{{ number_format($etats['bilan']['total_'.$sens], 2, ',', ' ') }}</td></tr>

@@ -21,11 +21,29 @@
     @if(session('error'))<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>{{ session('error') }}</div>@endif
     @if($errors->any())<div class="alert alert-danger"><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 
+    <div class="mb-2">
+        <h5 class="fw-bold mb-1">Montants des comptes liés</h5>
+        <p class="text-muted small mb-0">Tous les mouvements validés, sur tout l’historique.</p>
+    </div>
+    <div class="row g-3 mb-4">
+        @foreach(['entrees' => 'Total des entrées', 'sorties' => 'Total des sorties', 'solde' => 'Solde des comptes'] as $cle => $libelle)
+            <div class="col-md-4"><div class="summary-card">
+                <small>{{ $libelle }}</small>
+                @foreach(['CDF', 'USD'] as $monnaie)
+                    <strong class="d-block mt-1">{{ number_format($montantsComptes[$monnaie][$cle], 2, ',', ' ') }} <span class="summary-currency">{{ $monnaie }}</span></strong>
+                @endforeach
+            </div></div>
+        @endforeach
+    </div>
+
     <div class="row g-3 mb-4">
         <div class="col-sm-6 col-xl-3"><div class="summary-card"><small>En attente</small><strong>{{ $totaux['nombre'] }}</strong></div></div>
-        <div class="col-sm-6 col-xl-3"><div class="summary-card"><small>Total TTC</small><strong>{{ number_format($totaux['ttc'], 2, ',', ' ') }}</strong></div></div>
-        <div class="col-sm-6 col-xl-3"><div class="summary-card"><small>Total HT</small><strong>{{ number_format($totaux['ht'], 2, ',', ' ') }}</strong></div></div>
-        <div class="col-sm-6 col-xl-3"><div class="summary-card"><small>Total TVA</small><strong>{{ number_format($totaux['tva'], 2, ',', ' ') }}</strong></div></div>
+        @foreach(['ttc' => 'Total TTC', 'ht' => 'Total HT', 'tva' => 'Total TVA'] as $cle => $libelle)
+        <div class="col-sm-6 col-xl-3"><div class="summary-card"><small>{{ $libelle }} — validé</small>
+            <strong class="d-block">{{ number_format($totaux['CDF'][$cle], 2, ',', ' ') }} <span class="summary-currency">CDF</span></strong>
+            <strong class="d-block mt-1">{{ number_format($totaux['USD'][$cle], 2, ',', ' ') }} <span class="summary-currency">USD</span></strong>
+        </div></div>
+        @endforeach
     </div>
 
     <div class="card border-0 shadow-sm mb-4">
@@ -34,7 +52,16 @@
                 <div class="col-md-4"><label class="form-label">Référence</label><input type="text" name="reference" value="{{ request('reference') }}" class="form-control" placeholder="Rechercher un numéro de bon"></div>
                 <div class="col-md-3"><label class="form-label">Date début</label><input type="date" name="date_debut" value="{{ request('date_debut') }}" class="form-control"></div>
                 <div class="col-md-3"><label class="form-label">Date fin</label><input type="date" name="date_fin" value="{{ request('date_fin') }}" class="form-control"></div>
-                <div class="col-md-2 d-grid"><button class="btn journal-button"><i class="bi bi-search me-1"></i>Filtrer</button></div>
+                <div class="col-md-3">
+    <label class="form-label" for="statut">Statut</label>
+    <select name="statut" id="statut" class="form-select">
+        <option value="" @selected(!filled(request('statut', 'En attente')))>Tous les statuts</option>
+        @foreach(['En attente', 'Validé', 'Rejeté'] as $statutOption)
+            <option value="{{ $statutOption }}" @selected(request('statut', 'En attente') === $statutOption)>{{ $statutOption }}</option>
+        @endforeach
+    </select>
+</div>
+<div class="col-md-2 d-grid"><button class="btn journal-button"><i class="bi bi-search me-1"></i>Filtrer</button></div>
             </form>
         </div>
     </div>
@@ -61,6 +88,12 @@
                 </thead>
                 <tbody>
                     @forelse($journaux as $journal)
+                        @php
+                            $prefixeReference = mb_strtoupper(mb_substr(trim((string) $journal->reference), 0, 3));
+                            $estBonSortie = filled($journal->sortie_caisse_id)
+                                || in_array($journal->sortieCaisse?->type_bon, ['BSC', 'BSM', 'BSB'], true)
+                                || in_array($prefixeReference, ['BSC', 'BSM', 'BSB'], true);
+                        @endphp
                         <tr>
                             <td><strong>{{ $journal->reference ?: '—' }}</strong></td>
                             @if($afficherValidateur)<td>{{ trim(($journal->validateur?->prenom ?? '').' '.($journal->validateur?->nom ?? '')) ?: 'Non validé' }}</td>@endif
@@ -96,8 +129,10 @@
                                     <button class="btn btn-sm btn-light border dropdown-toggle" type="button" data-bs-toggle="dropdown">Actions</button>
                                     <ul class="dropdown-menu dropdown-menu-end">
                                         <li><a class="dropdown-item" href="{{ route($showRouteNom ?? 'journaux.show', $journal) }}"><i class="bi bi-eye me-2"></i>Voir</a></li>
+                                        @unless($estBonSortie)
                                         <li><a class="dropdown-item" href="{{ route('journaux.recu', $journal) }}" target="_blank"><i class="bi bi-printer me-2"></i>Imprimer le reçu</a></li>
                                         <li><a class="dropdown-item" href="{{ route('journaux.recu.pdf', $journal) }}"><i class="bi bi-file-earmark-arrow-down me-2"></i>Télécharger le reçu</a></li>
+                                        @endunless
                                     </ul>
                                 </div>
                             </td>
@@ -114,6 +149,6 @@
 </div>
 
 <style>
-.journal-waiting .page-kicker{display:block;color:var(--journal-color);font-size:.72rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:.25rem}.journal-color{color:var(--journal-color)}.journal-waiting .summary-card{height:100%;padding:1rem 1.15rem;background:#fff;border:1px solid #e7ebf0;border-left:4px solid var(--journal-color);border-radius:12px;box-shadow:0 4px 15px rgba(15,23,42,.06)}.journal-waiting .summary-card small{display:block;color:#6b7280;margin-bottom:.35rem}.journal-waiting .summary-card strong{font-size:1.25rem}.journal-header{background:var(--journal-color)}.journal-button{background:var(--journal-color);border-color:var(--journal-color);color:#fff}.journal-button:hover{background:var(--journal-color);border-color:var(--journal-color);color:#fff;filter:brightness(.9)}
+.journal-waiting .page-kicker{display:block;color:var(--journal-color);font-size:.72rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:.25rem}.journal-color{color:var(--journal-color)}.journal-waiting .summary-card{height:100%;padding:1rem 1.15rem;background:#fff;border:1px solid #e7ebf0;border-left:4px solid var(--journal-color);border-radius:12px;box-shadow:0 4px 15px rgba(15,23,42,.06)}.journal-waiting .summary-card small{display:block;color:#6b7280;margin-bottom:.35rem}.journal-waiting .summary-card strong{font-size:1.15rem}.journal-waiting .summary-currency{font-size:.72rem;color:#6b7280}.journal-header{background:var(--journal-color)}.journal-button{background:var(--journal-color);border-color:var(--journal-color);color:#fff}.journal-button:hover{background:var(--journal-color);border-color:var(--journal-color);color:#fff;filter:brightness(.9)}
 </style>
 @endsection

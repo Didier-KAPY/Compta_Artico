@@ -16,7 +16,7 @@ class JournalNatureFormTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_chaque_page_affiche_les_journaux_en_attente_et_valides_de_sa_nature(): void
+    public function test_chaque_page_filtre_la_liste_et_totalise_uniquement_les_valides_sans_filtres(): void
     {
         [$user, $types] = $this->contexte();
 
@@ -31,6 +31,7 @@ class JournalNatureFormTest extends TestCase
                 'description' => 'Journal '.$nature,
                 'monnaie' => 'CDF',
                 'montant_ttc' => 116,
+                'entrees_cdf' => 116,
                 'montant_ht' => 100,
                 'taux_tva' => 16,
                 'montant_tva' => 16,
@@ -44,9 +45,25 @@ class JournalNatureFormTest extends TestCase
                 'description' => 'Journal validé '.$nature,
                 'monnaie' => 'CDF',
                 'montant_ttc' => 50,
+                'entrees_cdf' => 50,
                 'montant_ht' => 50,
                 'statut' => 'Validé',
                 'valide_par' => $user->id,
+            ]);
+            Journaux::create([
+                'user_id' => $user->id,
+                'journal_type_id' => $types[$route]->id,
+                'liste_des_comptes_id' => $types[$route]->liste_des_comptes_id,
+                'reference' => 'USD-'.strtoupper($route),
+                'date' => now(),
+                'description' => 'Journal USD '.$nature,
+                'monnaie' => 'USD',
+                'montant_ttc' => 23.20,
+                'sorties_usd' => 23.20,
+                'montant_ht' => 20,
+                'taux_tva' => 16,
+                'montant_tva' => 3.20,
+                'statut' => 'Validé',
             ]);
         }
 
@@ -58,17 +75,35 @@ class JournalNatureFormTest extends TestCase
                 ->assertSee('Total TTC')
                 ->assertSee('Total HT')
                 ->assertSee('Total TVA')
+                ->assertSee('CDF')
+                ->assertSee('USD')
                 ->assertSee('ATTENTE-'.strtoupper($route))
-                ->assertSee('VALIDE-'.strtoupper($route))
+                ->assertDontSee('VALIDE-'.strtoupper($route))
                 ->assertSee('Partenaire '.strtoupper($route))
                 ->assertViewHas('totaux', fn ($totaux) =>
-                    (float) $totaux['ht'] === 150.0
-                    && (float) $totaux['tva'] === 16.0
-                    && (float) $totaux['ttc'] === 116.0
+                    (float) $totaux['CDF']['ht'] === 50.0
+                    && (float) $totaux['CDF']['tva'] === 0.0
+                    && (float) $totaux['CDF']['ttc'] === 0.0
+                    && (float) $totaux['USD']['ht'] === 20.0
+                    && (float) $totaux['USD']['tva'] === 3.2
+                    && (float) $totaux['USD']['ttc'] === 23.2
                 )
-                ->assertViewHas('journaux', fn ($journaux) => $journaux->count() === 2
-                    && $journaux->pluck('reference')->contains('ATTENTE-'.strtoupper($route))
-                    && $journaux->pluck('reference')->contains('VALIDE-'.strtoupper($route)));
+                ->assertViewHas('montantsComptes', fn ($montants) =>
+                    $montants['CDF'] === ['entrees' => 50.0, 'sorties' => 0.0, 'solde' => 50.0]
+                    && $montants['USD'] === ['entrees' => 0.0, 'sorties' => 23.2, 'solde' => -23.2])
+                ->assertViewHas('journaux', fn ($journaux) => $journaux->count() === 1
+                    && $journaux->pluck('reference')->contains('ATTENTE-'.strtoupper($route)));
+
+            foreach ([['statut' => 'Validé'], ['statut' => ''], [
+                'reference' => 'INTROUVABLE',
+                'date_debut' => '2000-01-01',
+                'date_fin' => '2000-01-02',
+            ]] as $filtres) {
+                $this->get(route('journaux.create.'.$route, $filtres))
+                    ->assertOk()
+                    ->assertViewHas('totaux', $response->viewData('totaux'))
+                    ->assertViewHas('montantsComptes', $response->viewData('montantsComptes'));
+            }
         }
 
         $roleComptable = Role::create(['designation' => 'Comptable']);
@@ -164,6 +199,52 @@ class JournalNatureFormTest extends TestCase
         ]);
         $this->assertDatabaseCount('entree_caisses', 1);
         $this->assertSame(EntreeCaisse::firstOrFail()->id, Journaux::firstOrFail()->entree_caisse_id);
+    }
+
+    public function test_les_recus_ne_sont_pas_affiches_pour_les_bons_de_sortie(): void
+    {
+        [$user, $types] = $this->contexte();
+
+        foreach (['caisse' => 'BSC', 'banque' => 'BSB', 'mobile' => 'BSM'] as $route => $prefixe) {
+            $journal = Journaux::create([
+                'user_id' => $user->id,
+                'journal_type_id' => $types[$route]->id,
+                'liste_des_comptes_id' => $types[$route]->liste_des_comptes_id,
+                'reference' => $prefixe.'-TEST',
+                'date' => '2026-09-09',
+                'description' => 'Bon de sortie',
+                'monnaie' => 'CDF',
+                'montant_ttc' => 100,
+                'montant_ht' => 100,
+                'statut' => 'En attente',
+            ]);
+
+            $this->actingAs($user)->get(route('journaux.create.'.$route))
+                ->assertOk()
+                ->assertSee($journal->reference)
+                ->assertDontSee(route('journaux.recu', $journal), false)
+                ->assertDontSee(route('journaux.recu.pdf', $journal), false)
+                ->assertDontSee('Imprimer le reçu')
+                ->assertDontSee('Télécharger le reçu');
+        }
+
+        $journalOrdinaire = Journaux::create([
+            'user_id' => $user->id,
+            'journal_type_id' => $types['caisse']->id,
+            'liste_des_comptes_id' => $types['caisse']->liste_des_comptes_id,
+            'reference' => 'CAI-TEST',
+            'date' => '2026-09-09',
+            'description' => 'Journal ordinaire',
+            'monnaie' => 'CDF',
+            'montant_ttc' => 100,
+            'montant_ht' => 100,
+            'statut' => 'En attente',
+        ]);
+
+        $this->actingAs($user)->get(route('journaux.create.caisse'))
+            ->assertOk()
+            ->assertSee(route('journaux.recu', $journalOrdinaire), false)
+            ->assertSee(route('journaux.recu.pdf', $journalOrdinaire), false);
     }
 
     private function contexte(): array

@@ -113,6 +113,10 @@ class EntreeCaisseWaitingTest extends TestCase
 
         $this->actingAs($user)->get(route('entree-caisses.create'))
             ->assertOk()
+            ->assertSee('name="nom_partenaire"', false)
+            ->assertSee('name="telephone_partenaire"', false)
+            ->assertSee('name="adresse_partenaire"', false)
+            ->assertSee('name="mode_paiement"', false)
             ->assertSee('Type de bon')
             ->assertSee('BEM')
             ->assertSee('BEB')
@@ -157,6 +161,10 @@ class EntreeCaisseWaitingTest extends TestCase
         [$user, $entree] = $this->contexte('Comptable', 1);
         $entree->update([
             'type_bon' => 'BEC',
+            'nom_partenaire' => 'Client recette',
+            'telephone_partenaire' => '0990000000',
+            'adresse_partenaire' => 'Kinshasa',
+            'mode_paiement' => 'espèces',
             'appliquer_tva' => true,
             'taux_tva' => 16,
             'montant_ht' => 86.21,
@@ -202,6 +210,11 @@ class EntreeCaisseWaitingTest extends TestCase
             'statut' => 'En attente',
         ]);
         $this->assertSame(2, Journaux::where('entree_caisse_id', $entree->id)->count());
+        $this->actingAs($user)->get(route('entree-caisses.index'))
+            ->assertOk()
+            ->assertSee('Nom / partenaire')
+            ->assertSee('Client recette')
+            ->assertSee('Reçu');
     }
 
     public function test_tva_from_usd_entry_is_displayed_in_usd_entries(): void
@@ -413,6 +426,24 @@ class EntreeCaisseWaitingTest extends TestCase
         $this->assertSoftDeleted($journal);
     }
 
+    public function test_gerant_consulte_les_deux_bons_sans_bouton_de_traitement(): void
+    {
+        foreach (['Gérant', 'Gerant'] as $index => $role) {
+            [$user, $entree] = $this->contexte($role, 80 + $index);
+            $sortie = \App\Models\SortieCaisse::create([
+                'user_id' => $user->id, 'numero' => 'BSC-GERANT-'.$index, 'date' => today(),
+                'beneficiaire' => 'Test', 'motif' => 'Test', 'montant' => 100,
+                'monnaie' => 'CDF', 'statut' => 'En attente',
+            ]);
+            $this->actingAs($user)->get(route('entree-caisses.show', $entree))->assertOk()
+                ->assertSee($entree->numero)->assertDontSee("Traiter l'entrée")
+                ->assertDontSee('id="modalTraitement'.$entree->id.'"', false);
+            $this->get(route('sortie-caisses.show', $sortie, false).'?ouvrir_validation=1')->assertOk()
+                ->assertSee($sortie->numero)->assertDontSee('Traiter le bon')
+                ->assertDontSee('id="modalTraitement"', false);
+        }
+    }
+
     private function contexte(string $designation, int $index, ?string $statutJournal = null): array
     {
         $role = Role::create(['designation' => $designation]);
@@ -464,4 +495,3 @@ class EntreeCaisseWaitingTest extends TestCase
         return [$user, $entree, $journal];
     }
 }
-

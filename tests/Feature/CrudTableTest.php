@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Journaux;
 use App\Models\JournalType;
+use App\Models\EtatBesoin;
 use App\Models\Role;
 use App\Models\SortieCaisse;
 use App\Models\User;
@@ -112,6 +113,84 @@ class CrudTableTest extends TestCase
         $this->get(route('journaux.piece', $journal))
             ->assertOk()
             ->assertHeader('content-disposition', 'inline; filename="justificatif.pdf"');
+    }
+
+    public function test_journal_caisse_affiche_la_piece_de_etat_de_besoin_lie(): void
+    {
+        Storage::fake('public');
+        $this->user->forceFill(['telephone' => '0990000001'])->save();
+        Storage::disk('public')->put('etat-besoins/pieces/facture.pdf', '%PDF-1.4 test');
+        $etat = EtatBesoin::create([
+            'user_id' => $this->user->id, 'numero' => 'EB-TEST', 'date' => now()->toDateString(),
+            'service' => 'Finance', 'demandeur' => 'Test', 'motif' => 'Test',
+            'monnaie' => 'CDF', 'statut' => 'Validé',
+            'piece_justificative' => 'etat-besoins/pieces/facture.pdf',
+            'piece_justificative_nom' => 'Facture fournisseur.pdf',
+        ]);
+        $sortie = SortieCaisse::create([
+            'user_id' => $this->user->id, 'etat_besoin_id' => $etat->id,
+            'numero' => 'BSC-TEST', 'date' => now()->toDateString(), 'beneficiaire' => 'Bénéficiaire caisse',
+            'motif' => 'Test', 'montant' => 100, 'monnaie' => 'CDF', 'statut' => 'En attente', 'type' => 'Caisse',
+        ]);
+        $journalType = JournalType::create([
+            'user_id' => $this->user->id, 'code' => 'CAI', 'libelle' => 'Caisse',
+            'nature' => 'caisse', 'est_tresorerie' => true,
+        ]);
+        $journal = Journaux::create([
+            'user_id' => $this->user->id, 'journal_type_id' => $journalType->id,
+            'sortie_caisse_id' => $sortie->id, 'reference' => 'BSC-TEST',
+            'date' => now()->toDateString(), 'statut' => 'En attente',
+        ]);
+
+        $this->get(route('journaux.show.caisse', $journal))
+            ->assertOk()
+            ->assertSee('Facture fournisseur.pdf')
+            ->assertSee('value="Bénéficiaire caisse"', false)
+            ->assertSee('value="0990000001"', false)
+            ->assertSee(route('journaux.piece', $journal), false);
+
+        $this->get(route('journaux.piece', $journal))
+            ->assertOk()
+            ->assertHeader('content-disposition', 'inline; filename="Facture fournisseur.pdf"');
+    }
+
+    public function test_les_journaux_banque_et_mobile_affichent_la_piece_de_etat_de_besoin_lie(): void
+    {
+        Storage::fake('public');
+        $this->user->forceFill(['telephone' => '0990000002'])->save();
+        Storage::disk('public')->put('etat-besoins/pieces/facture.pdf', '%PDF-1.4 test');
+        $etat = EtatBesoin::create([
+            'user_id' => $this->user->id, 'numero' => 'EB-BM', 'date' => now()->toDateString(),
+            'service' => 'Finance', 'demandeur' => 'Test', 'motif' => 'Test',
+            'monnaie' => 'CDF', 'statut' => 'Validé',
+            'piece_justificative' => 'etat-besoins/pieces/facture.pdf',
+            'piece_justificative_nom' => 'Facture fournisseur.pdf',
+        ]);
+
+        foreach (['banque' => ['BSB', 'banque'], 'mobile' => ['BSM', 'mobile_money']] as $route => [$prefixe, $nature]) {
+            $sortie = SortieCaisse::create([
+                'user_id' => $this->user->id, 'etat_besoin_id' => $etat->id,
+                'numero' => $prefixe.'-TEST', 'date' => now()->toDateString(), 'beneficiaire' => 'Bénéficiaire '.$route,
+                'motif' => 'Test', 'montant' => 100, 'monnaie' => 'CDF', 'statut' => 'En attente',
+                'type' => $route === 'banque' ? 'Banque' : 'Mobile Money',
+            ]);
+            $journalType = JournalType::create([
+                'user_id' => $this->user->id, 'code' => $prefixe, 'libelle' => ucfirst($route),
+                'nature' => $nature, 'est_tresorerie' => true,
+            ]);
+            $journal = Journaux::create([
+                'user_id' => $this->user->id, 'journal_type_id' => $journalType->id,
+                'sortie_caisse_id' => $sortie->id, 'reference' => $prefixe.'-TEST',
+                'date' => now()->toDateString(), 'statut' => 'En attente',
+            ]);
+
+            $this->get(route('journaux.show.'.$route, $journal))
+                ->assertOk()
+                ->assertSee('Facture fournisseur.pdf')
+                ->assertSee('value="Bénéficiaire '.$route.'"', false)
+                ->assertSee('value="0990000002"', false)
+                ->assertSee(route('journaux.piece', $journal), false);
+        }
     }
 
     private function deletionPayload(): array

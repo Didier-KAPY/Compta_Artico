@@ -48,7 +48,7 @@
 <div class="sheet">
     <div class="header">
         @if($logoData)<img class="logo" src="{{ $logoData }}" alt="Logo">@endif
-        <div class="company">{{ $entrepriseDocument?->nom_entreprise ?? 'COMPTA ARTICO' }}</div>
+        <div class="company">{{ $entrepriseDocument?->nom_entreprise ?? 'COMPTA ARTICO' }}@include('partials.entreprise-identifiants', ['entreprise'=>$entrepriseDocument])</div>
         @if($entreprise?->slogan)<div class="slogan">{{ $entreprise->slogan }}</div>@endif
         <div class="contact">{{ $entrepriseDocument?->adresse }} @if($entrepriseDocument?->telephone) — Tél. {{ $entrepriseDocument->telephone }} @endif</div>
     </div>

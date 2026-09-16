@@ -27,6 +27,10 @@ class EcritureComptableController extends Controller
  */
 public function liste(Request $request)
 {
+    $journalCible = $request->filled('journal_id') || $request->filled('journal_ids');
+    $dateDebut = $request->input('date_debut');
+    $dateFin = $request->input('date_fin');
+    $statut = $request->input('statut', $journalCible ? '' : 'En attente');
     $query = EcritureComptable::with([
         'journal',
         'compte',
@@ -40,22 +44,9 @@ public function liste(Request $request)
         $q->whereIn('journal_id', $ids);
     });
 
-    // Si aucune date n'est saisie, afficher uniquement les écritures du jour
-    if (! $request->filled('journal_id') && ! $request->filled('journal_ids')
-        && ! $request->filled('date_debut') && ! $request->filled('date_fin')) {
-
-        $query->whereDate('date', today());
-
-    } else {
-
-        if ($request->filled('date_debut')) {
-            $query->whereDate('date', '>=', $request->date_debut);
-        }
-
-        if ($request->filled('date_fin')) {
-            $query->whereDate('date', '<=', $request->date_fin);
-        }
-    }
+    $query->when(filled($dateDebut), fn ($q) => $q->whereDate('date', '>=', $dateDebut));
+    $query->when(filled($dateFin), fn ($q) => $q->whereDate('date', '<=', $dateFin));
+    $query->when(filled($statut), fn ($q) => $q->where('statut', $statut));
 
     $ecritures = $query
         ->orderBy('date', 'desc')
@@ -76,6 +67,7 @@ public function liste(Request $request)
             'totalDebitCDF',
             'totalCreditCDF',
             'equilibreCDF',
+            'dateDebut', 'dateFin', 'statut',
         )
     );
 }
@@ -122,8 +114,12 @@ public function traiterJournal(Request $request, Journaux $journal, WorkflowComp
 
     $reference = mb_strtoupper(trim((string) $journal->reference));
     $pieceObligatoire = preg_match('/^(BSC|BSB|BSM)/', $reference) === 1;
-    $pieceExistante = filled($journal->piece_justificatif)
-        || $journal->ecritures()->whereNotNull('piece_justificative')->exists();
+    $journal->loadMissing('sortieCaisse.etatBesoin');
+    $pieceExistante = collect([
+        $journal->piece_justificatif,
+        ...$journal->ecritures()->pluck('piece_justificative')->all(),
+        $journal->sortieCaisse?->etatBesoin?->piece_justificative,
+    ])->filter()->contains(fn (string $chemin) => Storage::disk('public')->exists($chemin));
 
     if ($pieceObligatoire && ! $pieceExistante && ! $request->hasFile('piece_justificative')) {
         throw ValidationException::withMessages([
@@ -185,6 +181,18 @@ public function show($id, FinancialDocumentService $documents)
         ->get();
     $comptes = ListeDesComptes::orderBy('compte')->get();
     $pieceObligatoire = preg_match('/^(BSC|BSB|BSM)/', $reference) === 1;
+    $etatBesoin = $journal?->sortieCaisse?->etatBesoin;
+    $pieceJustificative = collect([
+        $ecriture->piece_justificative,
+        ...$ecrituresReference->pluck('piece_justificative')->all(),
+        $journal?->piece_justificatif,
+        $etatBesoin?->piece_justificative,
+    ])->filter()->first(fn (string $chemin) => Storage::disk('public')->exists($chemin));
+    $pieceExiste = filled($pieceJustificative);
+    $pieceNom = $etatBesoin && $pieceJustificative === $etatBesoin->piece_justificative
+        ? ($etatBesoin->piece_justificative_nom ?: basename($pieceJustificative))
+        : ($pieceJustificative ? basename($pieceJustificative) : null);
+    $pieceUrl = $pieceExiste ? route('ecritures.piece', $ecriture) : null;
     $estImpute = $ecrituresReference->isNotEmpty()
         && $ecrituresReference->every(fn ($ligne) => $ligne->statut === 'Validé');
     $ligneAuDebit = (float) $ecriture->debit_cdf > 0;
@@ -196,7 +204,7 @@ public function show($id, FinancialDocumentService $documents)
     $bon = $journal?->entreeCaisse ?? $journal?->sortieCaisse;
     $montantTva = (float) ($bon?->montant_tva ?? 0);
     if ($montantTva > 0 && mb_strtoupper((string) $bon?->monnaie) === 'USD') {
-        $montantTva *= (float) (TauxDeChange::latest()->value('taux_de_change') ?? 0);
+        $montantTva *= (float) ($bon?->taux_conversion ?? TauxDeChange::latest()->value('taux_de_change') ?? 0);
     }
     $montantTresorerie = max(
         (float) $ecriture->debit_cdf,
@@ -207,7 +215,7 @@ public function show($id, FinancialDocumentService $documents)
 
     return view('Comptabilite.ecritures.show', compact(
         'ecriture', 'ecrituresReference', 'lignesOpposees', 'comptes',
-        'pieceObligatoire', 'estImpute', 'montantTva', 'montantContrepartie',
+        'pieceObligatoire', 'pieceExiste', 'pieceNom', 'pieceUrl', 'estImpute', 'montantTva', 'montantContrepartie',
         'montantTotalAImputer',
         'suppressionDependencies', 'documentLinks'
     ));
@@ -236,7 +244,7 @@ public function valider(Request $request, $id)
     }
 
     $alreadyValidated = DB::transaction(function () use ($request, $id, $imputations): bool {
-        $ecriture = EcritureComptable::query()->lockForUpdate()->findOrFail($id);
+        $ecriture = EcritureComptable::with('journal.sortieCaisse.etatBesoin')->lockForUpdate()->findOrFail($id);
         $reference = mb_strtoupper(trim((string) $ecriture->piece));
         $ecritures = EcritureComptable::query()
             ->when($reference !== '',
@@ -287,9 +295,11 @@ public function valider(Request $request, $id)
         $pieceObligatoire = preg_match('/^(BSC|BSB|BSM)/', $reference) === 1;
         $fichierCommun = $request->file('piece_justificative')
             ?? $request->file('imputations.0.piece_justificative');
-        $pieceExistanteGroupe = $ecritures
-            ->first(fn ($ligne) => filled($ligne->piece_justificative))
-            ?->piece_justificative;
+        $pieceExistanteGroupe = collect([
+            ...$ecritures->pluck('piece_justificative')->all(),
+            $ecriture->journal?->piece_justificatif,
+            $ecriture->journal?->sortieCaisse?->etatBesoin?->piece_justificative,
+        ])->filter()->first(fn (string $chemin) => Storage::disk('public')->exists($chemin));
         if ($pieceObligatoire && ! $pieceExistanteGroupe && ! $fichierCommun) {
             throw ValidationException::withMessages([
                 'piece_justificative' => 'Une pièce justificative est obligatoire pour cette imputation BSC, BSB ou BSM.',
@@ -348,22 +358,24 @@ public function valider(Request $request, $id)
     return back()->with('success', 'Imputation enregistrée : les contreparties et la TVA sont maintenant visibles.');
 }
 
-    public function pieceJustificative($id)
+    public function ajouterPieceJustificative(Request $request, $id)
     {
-        Gate::authorize('viewAccountingReports');
+        $role = mb_strtolower(trim((string) $request->user()?->role?->designation));
+        abort_unless($request->user()?->isSuperAdmin() || in_array($role, [
+            'chargé des finances', 'chargé de finance', 'charge de finance', 'charger de finance',
+        ], true), 403);
 
         $ecriture = EcritureComptable::findOrFail($id);
-        $chemin = $ecriture->piece_justificative;
-        abort_unless(filled($chemin) && Storage::disk('public')->exists($chemin), 404, 'Pièce justificative introuvable.');
-
-        $nom = basename($chemin);
-
-        return response()->file(Storage::disk('public')->path($chemin), [
-            'Content-Type' => Storage::disk('public')->mimeType($chemin) ?: 'application/octet-stream',
-            'Content-Disposition' => 'inline; filename="'.$nom.'"',
-        ]);
+        app(\App\Services\PiecesJustificativesService::class)->ajouter($request, $ecriture, 'ecritures/pieces', 'pdf,jpg,jpeg,png', 5120);
+        return back()->with('success', 'Pièces justificatives ajoutées avec succès.');
     }
 
+    public function pieceJustificative(Request $request, $id)
+    {
+        Gate::authorize('viewAccountingReports');
+        $ecriture = EcritureComptable::findOrFail($id);
+        return app(\App\Services\PiecesJustificativesService::class)->consulter($request, $ecriture);
+    }
     public function reouvrir($id, WorkflowComptableService $workflow)
     {
         $ecriture = EcritureComptable::findOrFail($id);

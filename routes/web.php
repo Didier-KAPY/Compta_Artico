@@ -88,6 +88,7 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
             Route::get('/presences', [RhPresenceController::class, 'index'])->middleware('can:viewAttendance')->name('presences');
             Route::get('/presences/excel', [RhPresenceController::class, 'exportExcel'])->middleware('can:viewAttendance')->name('presences.excel');
             Route::get('/presences/scanner', [QrAttendanceController::class, 'scanner'])->middleware('can:manageAttendance')->name('presences.scanner');
+            Route::get('/presences/scanner/photo/{employe}', [QrAttendanceController::class, 'photo'])->middleware('can:manageAttendance')->name('presences.photo');
             Route::get('/presences/scanner,', fn () => redirect()->route('parametres.rh.presences.scanner'))->middleware('can:manageAttendance');
             Route::post('/presences/scanner', [QrAttendanceController::class, 'scan'])->middleware(['can:manageAttendance', 'throttle:60,1'])->name('presences.scan');
             Route::get('/conges', [RessourceHumaineController::class, 'conges'])->middleware('can:viewTeamLeaves')->name('conges');
@@ -352,6 +353,12 @@ Route::middleware(['auth', 'force.password.change', 'accounting.open'])->group(f
     Route::get('/etat-besoins/{id}/pdf', [EtatBesoinController::class, 'telechargerPdf'])
         ->middleware('can:viewEtatBesoinDetail')
         ->name('etat-besoins.pdf');
+    Route::post('/etat-besoins/{id}/piece-justificative', [EtatBesoinController::class, 'ajouterPieceJustificative'])
+        ->middleware('can:consultEtatBesoin')
+        ->name('etat-besoins.piece-justificative.store');
+    Route::get('/etat-besoins/{id}/piece-justificative', [EtatBesoinController::class, 'pieceJustificative'])
+        ->middleware('can:consultEtatBesoin')
+        ->name('etat-besoins.piece-justificative.show');
     Route::resource('etat-besoins', EtatBesoinController::class)
         ->only(['index']);
     Route::resource('etat-besoins', EtatBesoinController::class)
@@ -359,7 +366,7 @@ Route::middleware(['auth', 'force.password.change', 'accounting.open'])->group(f
         ->middleware('can:createEtatBesoin');
     Route::resource('etat-besoins', EtatBesoinController::class)
         ->only(['show'])
-        ->middleware('can:viewEtatBesoinDetail');
+        ->middleware('can:consultEtatBesoin');
     Route::resource('etat-besoins', EtatBesoinController::class)
         ->only(['edit', 'update'])
         ->middleware('can:manageEtatBesoin');
@@ -367,7 +374,7 @@ Route::middleware(['auth', 'force.password.change', 'accounting.open'])->group(f
         ->middleware('can:deleteFinancialDocument')
         ->name('etat-besoins.destroy');
     Route::post('/etat-besoins/{id}/valider', [EtatBesoinController::class, 'valider'])
-        ->middleware('role:Super Admin,Admin,Gérant,Gerant,Directeur Général,Comptable')
+        ->middleware('can:validateEtatBesoin')
         ->name('etat-besoins.valider');
     Route::patch('/etat-besoins/{id}/reouvrir', [EtatBesoinController::class, 'reouvrir'])
         ->middleware('role:Super Admin')->name('etat-besoins.reouvrir');
@@ -385,7 +392,7 @@ Route::middleware(['auth', 'force.password.change', 'accounting.open'])->group(f
     Route::delete('/sortie-caisses/{sortie_caiss}', [SortieCaisseController::class, 'destroy'])
         ->middleware('can:deleteFinancialDocument')->name('sortie-caisses.destroy');
     Route::post('/sortie-caisses/{id}/valider', [SortieCaisseController::class, 'valider'])
-        ->middleware('role:Super Admin,Admin,Directeur Général')
+        ->middleware('role:Super Admin,Admin,Directeur Général,Chargé des finances')
         ->name('sortie-caisses.valider');
     Route::post('/sortie-caisses/{id}/rejeter', [SortieCaisseController::class, 'rejeter'])
         ->middleware('role:Super Admin,Admin,Directeur Général')
@@ -573,6 +580,9 @@ Route::middleware(['auth', 'force.password.change', 'accounting.open'])->group(f
     Route::get('/ecritures/{id}/piece-justificative', [EcritureComptableController::class, 'pieceJustificative'])
         ->middleware(['feature:accounting', 'role:Super Admin,Admin,Directeur Général,DAF,Comptable'])
         ->name('ecritures.piece');
+    Route::post('/ecritures/{id}/piece-justificative', [EcritureComptableController::class, 'ajouterPieceJustificative'])
+        ->middleware(['feature:accounting', 'role:Super Admin,Comptable,Chargé des finances,Chargé de finance,Charger de finance'])
+        ->name('ecritures.piece.store');
     Route::patch('/ecritures/{id}/reouvrir', [EcritureComptableController::class, 'reouvrir'])
         ->middleware(['feature:accounting', 'role:Super Admin'])
         ->name('ecritures.reouvrir');

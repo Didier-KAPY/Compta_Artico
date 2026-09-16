@@ -40,7 +40,7 @@
                         type="date"
                         name="date_debut"
                         class="form-control"
-                        value="{{ request('date_debut') }}">
+                        value="{{ $dateDebut }}">
                 </div>
                 <div class="col-md-3">
                     <label class="form-label fw-bold">
@@ -50,7 +50,16 @@
                         type="date"
                         name="date_fin"
                         class="form-control"
-                        value="{{ request('date_fin') }}">
+                        value="{{ $dateFin }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="statut" class="form-label fw-bold">Statut</label>
+                    <select id="statut" name="statut" class="form-select">
+                        <option value="" @selected(!$statut)>Tous les statuts</option>
+                        @foreach(['En attente', 'Validé', 'Rejeté'] as $option)
+                            <option value="{{ $option }}" @selected($statut === $option)>{{ $option }}</option>
+                        @endforeach
+                    </select>
                 </div>
                 <div class="col-md-3 d-flex align-items-end">
                     <button

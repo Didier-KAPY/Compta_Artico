@@ -66,7 +66,7 @@ class BRCController extends Controller
         abort_unless(request()->user()?->isSuperAdmin(), 403);
 
         $brc->load(['lignes.compte', 'journalType.compte']);
-        $journaux = JournalType::with('compte')->where('est_tresorerie', false)->orderBy('code')->get();
+        $journaux = JournalType::with('compte')->whereNotNull('liste_des_comptes_id')->orderBy('code')->get();
         $comptes = ListeDesComptes::orderBy('compte')->get();
 
         return view('BRC.edit', compact('brc', 'journaux', 'comptes'));
@@ -182,7 +182,7 @@ class BRCController extends Controller
     public function create()
     {
         $journaux = JournalType::with('compte')
-            ->where('est_tresorerie', false)->orderBy('code')->get();
+            ->whereNotNull('liste_des_comptes_id')->orderBy('code')->get();
         $comptes = ListeDesComptes::orderBy('compte')->get();
         $taux = TauxDeChange::latest()->first();
 

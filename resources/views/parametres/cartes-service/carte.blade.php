@@ -101,7 +101,7 @@
     <div class="service-card sc-front">
         <div class="sc-header">
             @if($logoData)<img class="sc-logo" src="{{ $logoData }}" alt="Logo">@else<span class="sc-logo-fallback">{{ mb_substr($entreprise?->nom_entreprise ?? 'E', 0, 1) }}</span>@endif
-            <div class="sc-company"><strong>{{ $entreprise?->nom_entreprise ?? 'Entreprise' }}</strong><small>{{ $entreprise?->adresse }}</small><small>@if($entreprise?->telephone)Tél. {{ $entreprise->telephone }}@endif</small></div>
+            <div class="sc-company"><strong>{{ $entreprise?->nom_entreprise ?? 'Entreprise' }}@include('partials.entreprise-identifiants')</strong><small>{{ $entreprise?->adresse }}</small><small>@if($entreprise?->telephone)Tél. {{ $entreprise->telephone }}@endif</small></div>
             <div class="sc-title">Carte de service</div>
         </div>
         <div class="sc-accent"></div>
@@ -135,7 +135,7 @@
     <div class="service-card sc-back">
         <div class="sc-back-header">
             @if($logoData)<img class="sc-back-logo" src="{{ $logoData }}" alt="Logo">@endif
-            <div class="sc-back-company">{{ $entreprise?->nom_entreprise ?? 'Entreprise' }}</div>
+            <div class="sc-back-company">{{ $entreprise?->nom_entreprise ?? 'Entreprise' }}@include('partials.entreprise-identifiants')</div>
         </div>
         <div class="sc-back-body">
             <div class="sc-back-title">Pointage du personnel</div>

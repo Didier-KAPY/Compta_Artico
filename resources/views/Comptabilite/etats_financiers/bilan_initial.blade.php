@@ -18,7 +18,7 @@
         @if($entreprise?->logo)
             <img class="archive-logo" src="{{ asset('storage/'.$entreprise->logo) }}" alt="Logo {{ $entreprise->nom_entreprise ?? 'Artico' }}">
         @endif
-        <div class="archive-company">{{ $entreprise?->nom_entreprise ?? 'COMPTA ARTICO' }}</div>
+        <div class="archive-company">{{ $entreprise?->nom_entreprise ?? 'COMPTA ARTICO' }}@include('partials.entreprise-identifiants')</div>
         @if($entreprise?->slogan)<div class="archive-slogan">{{ $entreprise->slogan }}</div>@endif
         @if($entreprise?->adresse || $entreprise?->telephone)
             <div class="archive-contact">{{ $entreprise?->adresse }} @if($entreprise?->telephone) — Tél. {{ $entreprise->telephone }} @endif</div>
@@ -48,7 +48,7 @@
                                 <tr>
                                     <td>{{ $ligne['code'] }}</td>
                                     <td>{{ $ligne['label'] }}</td>
-                                    <td class="text-end">{{ number_format(abs((float) $ligne['actuel']), 2, ',', ' ') }}</td>
+                                    <td class="text-end {{ (float) $ligne['actuel'] < 0 ? 'text-danger fw-bold' : '' }}">{{ number_format((float) $ligne['actuel'], 2, ',', ' ') }}</td>
                                 </tr>
                             @endforeach
                         @endforeach

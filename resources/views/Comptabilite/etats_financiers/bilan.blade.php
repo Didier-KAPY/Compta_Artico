@@ -3,13 +3,23 @@
 <div class="container-fluid financial-report">
     <div class="d-flex justify-content-end mb-2 no-print">@include('partials.period-export-buttons', ['rapport'=>'bilan','exportParams'=>['date_debut'=>$dateDebut,'date_fin'=>$dateFin],'showPdf'=>false])</div>
     <div class="d-flex justify-content-between mb-2 no-print"><a href="{{ route('comptabilite.etats-financiers.index', request()->query()) }}" class="btn btn-outline-secondary">Retour</a><div><button onclick="window.print()" class="btn btn-secondary">Imprimer</button> <a href="{{ route('comptabilite.etats-financiers.bilan-pdf', request()->query()) }}" class="btn btn-danger">PDF</a></div></div>
-    <header class="text-center mb-3"><h4>{{ $entreprise?->nom_entreprise ?? 'Entreprise' }}</h4>@if($entreprise?->adresse)<div>{{ $entreprise->adresse }}</div>@endif<h2>Bilan final</h2><div>Du {{ \Carbon\Carbon::parse($dateDebut)->format('d/m/Y') }} au {{ \Carbon\Carbon::parse($dateFin)->format('d/m/Y') }} — Devise de présentation : Franc congolais (CDF)</div></header>
+    <header class="text-center mb-3"><h4>{{ $entreprise?->nom_entreprise ?? 'Entreprise' }}@include('partials.entreprise-identifiants')</h4>@if($entreprise?->adresse)<div>{{ $entreprise->adresse }}</div>@endif<h2>Bilan final</h2><div>Du {{ \Carbon\Carbon::parse($dateDebut)->format('d/m/Y') }} au {{ \Carbon\Carbon::parse($dateFin)->format('d/m/Y') }} — Devise de présentation : Franc congolais (CDF)</div></header>
     @if(session('success'))<div class="alert alert-success no-print">{{ session('success') }}</div>@endif
     <form method="GET" class="row g-2 mb-3 no-print"><div class="col-4"><input type="date" name="date_debut" value="{{ $dateDebut }}" class="form-control"></div><div class="col-4"><input type="date" name="date_fin" value="{{ $dateFin }}" class="form-control"></div><div class="col-2"><button class="btn btn-primary">Actualiser</button></div></form>
     @if($archiveMode ?? false)
         <div class="alert alert-secondary no-print"><strong>{{ $bilanInitial->libelle }}</strong> — Bilan initial archivé le {{ $bilanInitial->created_at->format('d/m/Y') }}</div>
     @elseif($bilanInitial)
-        <div class="mb-3 no-print"><a href="{{ route('comptabilite.etats-financiers.bilan-initial', $bilanInitial) }}" class="btn btn-success">Consulter le bilan initial</a> <span class="text-muted ms-2">Archivé le {{ $bilanInitial->created_at->format('d/m/Y') }}</span></div>
+        <div class="card border-success shadow-sm mb-3 no-print">
+            <div class="card-body d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+                <div>
+                    <div class="text-success fw-bold text-uppercase mb-1">Bilan d’ouverture</div>
+                    <strong>{{ $bilanInitial->libelle }}</strong>
+                    <div class="text-muted small">Archivé le {{ $bilanInitial->created_at->format('d/m/Y') }}</div>
+                    <div class="mt-2">Actif : <b>{{ number_format($bilanInitial->total_actif, 2, ',', ' ') }} CDF</b> · Passif : <b>{{ number_format($bilanInitial->total_passif, 2, ',', ' ') }} CDF</b></div>
+                </div>
+                <a href="{{ route('comptabilite.etats-financiers.bilan-initial', $bilanInitial) }}" class="btn btn-success text-nowrap"><i class="bi bi-eye me-1"></i>Afficher le bilan d’ouverture</a>
+            </div>
+        </div>
     @else
         <form method="POST" action="{{ route('comptabilite.etats-financiers.bilan-archiver') }}" class="row g-2 mb-3 no-print">
             @csrf
@@ -28,7 +38,7 @@
         <div class="col-12"><table class="table table-bordered table-sm"><thead class="table-dark"><tr><th colspan="3">{{ $titre }}</th></tr><tr><th>Réf.</th><th>Libellé</th><th>Exercice N</th></tr></thead><tbody>
         @foreach($etats['bilan'][$sens] as $section)
             <tr class="table-secondary fw-bold"><td colspan="2">{{ $section['label'] }}</td><td class="text-end">{{ number_format($section['total_actuel'],2,',',' ') }}</td></tr>
-            @foreach($section['lignes'] as $ligne)<tr><td>{{ $ligne['code'] }}</td><td>{{ $ligne['label'] }}</td><td class="text-end">{{ number_format(abs((float) $ligne['actuel']),2,',',' ') }}</td></tr>@endforeach
+            @foreach($section['lignes'] as $ligne)<tr><td>{{ $ligne['code'] }}</td><td>{{ $ligne['label'] }}</td><td class="text-end {{ (float) $ligne['actuel'] < 0 ? 'text-danger fw-bold' : '' }}">{{ number_format((float) $ligne['actuel'],2,',',' ') }}</td></tr>@endforeach
         @endforeach
         </tbody><tfoot class="table-dark fw-bold"><tr><td colspan="2">TOTAL {{ $titre }}</td><td class="text-end">{{ number_format($etats['bilan']['total_'.$sens],2,',',' ') }}</td></tr></tfoot></table></div>
     @endforeach

@@ -25,8 +25,6 @@ class EtatFinancierController extends Controller
     {
         $donnees = $this->donnees($request);
         $donnees['bilanInitial'] = BilanInitial::query()
-            ->whereDate('date_debut', $donnees['dateDebut'])
-            ->whereDate('date_fin', $donnees['dateFin'])
             ->latest('id')
             ->first();
 
@@ -120,7 +118,7 @@ class EtatFinancierController extends Controller
     }
     public function compteResultat(Request $request)
     {
-        return view('Comptabilite.etats_financiers.compte_resultat', $this->donnees($request));
+        return view('Comptabilite.etats_financiers.compte_resultat', $this->donnees($request, true));
     }
 
     public function bilanPdf(Request $request)
@@ -132,18 +130,30 @@ class EtatFinancierController extends Controller
 
     public function compteResultatPdf(Request $request)
     {
-        return Pdf::loadView('Comptabilite.etats_financiers.compte_resultat_pdf', $this->donnees($request))
+        return Pdf::loadView('Comptabilite.etats_financiers.compte_resultat_pdf', $this->donnees($request, true))
             ->setPaper('a4', 'landscape')
             ->download('compte-resultat.pdf');
     }
 
-    private function donnees(Request $request): array
+    private function donnees(Request $request, bool $compteResultat = false): array
     {
         $filtres = $this->filtres($request);
         $etats = $this->service->generer(
             CarbonImmutable::parse($filtres['dateDebut']),
             CarbonImmutable::parse($filtres['dateFin'])
         );
+
+        if ($compteResultat) {
+            foreach ($etats['compte_resultat'] as &$section) {
+                if (isset($section['lignes'])) {
+                    $section['lignes'] = array_values(array_filter(
+                        $section['lignes'],
+                        fn (array $ligne): bool => round((float) $ligne['actuel'], 2) != 0.0
+                    ));
+                }
+            }
+            unset($section);
+        }
 
         return $filtres + [
             'etats' => $etats,

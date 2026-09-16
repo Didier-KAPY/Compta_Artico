@@ -1,5 +1,5 @@
 <table border="1">
-    <tr><th colspan="4" style="font-size:18px">{{ $entreprise?->nom_entreprise ?? 'COMPTA ARTICO' }}</th></tr>
+    <tr><th colspan="4" style="font-size:18px">{{ $entreprise?->nom_entreprise ?? 'COMPTA ARTICO' }}@include('partials.entreprise-identifiants')</th></tr>
     <tr><th colspan="4" style="font-size:16px">BON DE RÉGULARISATION COMPTABLE</th></tr>
     <tr><th>Référence</th><td>{{ $brc->reference }}</td><th>Date</th><td>{{ $brc->date?->format('d/m/Y') }}</td></tr>
     <tr><th>Journal</th><td>{{ $brc->journalType?->code }} — {{ $brc->journalType?->libelle }}</td><th>Statut</th><td>{{ $brc->statut }}</td></tr>

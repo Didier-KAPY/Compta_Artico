@@ -23,10 +23,13 @@ class EtatBesoin extends Model
         'observation',
         'valide_par',
         'date_validation',
+        'piece_justificative',
+        'pieces_justificatives',
+        'piece_justificative_nom',
         'motif_suppression', 'supprime_par', 'restaure_par', 'restaure_le',
     ];
 
-    protected $casts = ['date' => 'date', 'date_validation' => 'datetime', 'restaure_le' => 'datetime'];
+    protected $casts = ['pieces_justificatives' => 'array', 'date' => 'date', 'date_validation' => 'datetime', 'restaure_le' => 'datetime'];
 
     /**
      * Relation avec l'utilisateur

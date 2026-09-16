@@ -112,6 +112,9 @@
 
 
                 <div class="row g-3">
+                    @foreach(['rccm'=>'RCCM', 'id_nat'=>'ID NAT'] as $champ=>$libelle)
+                    <div class="col-md-6"><label class="form-label fw-bold" for="{{ $champ }}">{{ $libelle }}</label><input class="form-control" id="{{ $champ }}" name="{{ $champ }}" maxlength="255" value="{{ old($champ, $entreprise?->$champ) }}">@error($champ)<div class="text-danger">{{ $message }}</div>@enderror</div>
+                    @endforeach
 
 
 

@@ -81,6 +81,32 @@
                     </div>
                     <input type="hidden" id="taux_tva" value="{{ $tauxTva }}">
 
+                    <div class="col-12"><h6 class="fw-bold text-primary mb-0">Partenaire et paiement</h6></div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Nom / partenaire</label>
+                        <input type="text" name="nom_partenaire" value="{{ old('nom_partenaire') }}" class="form-control @error('nom_partenaire') is-invalid @enderror" required>
+                        @error('nom_partenaire')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Téléphone</label>
+                        <input type="text" name="telephone_partenaire" value="{{ old('telephone_partenaire') }}" class="form-control @error('telephone_partenaire') is-invalid @enderror" required>
+                        @error('telephone_partenaire')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Adresse</label>
+                        <input type="text" name="adresse_partenaire" value="{{ old('adresse_partenaire') }}" class="form-control @error('adresse_partenaire') is-invalid @enderror" required>
+                        @error('adresse_partenaire')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Mode de paiement</label>
+                        <select name="mode_paiement" class="form-select @error('mode_paiement') is-invalid @enderror" required>
+                            <option value="espèces" @selected(old('mode_paiement') === 'espèces')>Espèces</option>
+                            <option value="banque" @selected(old('mode_paiement') === 'banque')>Banque</option>
+                            <option value="mobile_money" @selected(old('mode_paiement', 'mobile_money') === 'mobile_money')>Mobile Money</option>
+                        </select>
+                        @error('mode_paiement')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+
                     <!-- <div class="col-md-4 mb-3">
                         <label>Type de transaction</label>
                         <select name="type" class="form-select" required>

@@ -12,11 +12,80 @@ use App\Models\Role;
 use App\Models\SortieCaisse;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class EtatBesoinManagementTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_plusieurs_pieces_sont_ajoutees_sans_remplacer_les_anciennes(): void
+    {
+        Storage::fake('public');
+        $user = $this->user(Role::firstOrCreate(['designation' => 'Super Admin']), 90);
+        $etat = $this->etat($user, Departement::create(['designation' => 'Achats']), 'EB-MULTI', 'En attente');
+        Storage::disk('public')->put('ancienne.pdf', 'ancienne');
+        $etat->update(['piece_justificative' => 'ancienne.pdf', 'piece_justificative_nom' => 'Ancienne facture.pdf']);
+        $this->actingAs($user)->post(route('etat-besoins.piece-justificative.store', $etat), [
+            'pieces_justificatives' => [
+                UploadedFile::fake()->create('facture.pdf', 100, 'application/pdf'),
+                UploadedFile::fake()->create('recu.pdf', 100, 'application/pdf'),
+            ],
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame('ancienne.pdf', $etat->fresh()->piece_justificative);
+        Storage::disk('public')->assertExists('ancienne.pdf');
+        $this->assertCount(2, $etat->fresh()->pieces_justificatives);
+        $this->get(route('etat-besoins.show', $etat))->assertOk()->assertSee('Ancienne facture.pdf')->assertSee('facture.pdf')->assertSee('recu.pdf');
+        foreach ($etat->fresh()->pieces_justificatives as $piece) {
+            $this->get(route('etat-besoins.piece-justificative.show', ['id' => $etat->id, 'piece' => hash('sha256', $piece['path']), 'telecharger' => 1]))->assertOk()->assertDownload($piece['nom']);
+        }
+        $this->get(route('etat-besoins.piece-justificative.show', ['id' => $etat->id, 'piece' => 'inconnue']))->assertNotFound();
+        $this->post(route('etat-besoins.piece-justificative.store', $etat), [
+            'pieces_justificatives' => [
+                UploadedFile::fake()->create('valide.pdf', 100, 'application/pdf'),
+                UploadedFile::fake()->create('script.php', 1, 'text/plain'),
+            ],
+        ])->assertSessionHasErrors('pieces_justificatives.1');
+        $this->assertCount(2, $etat->fresh()->pieces_justificatives);
+    }
+
+    public function test_une_piece_justificative_peut_etre_ajoutee_et_consultee(): void
+    {
+        Storage::fake('public');
+        $role = Role::firstOrCreate(['designation' => 'Super Admin']);
+        $user = $this->user($role, 50);
+        $departement = Departement::create(['designation' => 'Achats']);
+        $etat = $this->etat($user, $departement, 'EB-PIECE', 'En attente');
+
+        $this->actingAs($user)->get(route('etat-besoins.show', $etat))
+            ->assertOk()
+            ->assertSee('Ajouter une pièce')
+            ->assertSee('name="pieces_justificatives[]"', false);
+
+        $this->actingAs($user)->post(route('etat-besoins.piece-justificative.store', $etat), [
+            'piece_justificative' => UploadedFile::fake()->create('facture.pdf', 100, 'application/pdf'),
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $etat->refresh();
+        $this->assertSame('facture.pdf', $etat->piece_justificative_nom);
+        Storage::disk('public')->assertExists($etat->piece_justificative);
+
+        $sortie = $this->sortie($user, $etat, 'BSC-PIECE', 'En attente');
+        $this->actingAs($user)->get(route('sortie-caisses.show', $sortie))
+            ->assertOk()
+            ->assertSee('Pièce justificative de l’état de besoin')
+            ->assertSee('facture.pdf');
+
+        $this->actingAs($user)->get(route('etat-besoins.show', $etat))
+            ->assertOk()
+            ->assertSee('facture.pdf')
+            ->assertSee('Consulter')
+            ->assertSee('Télécharger');
+        $this->actingAs($user)->get(route('etat-besoins.piece-justificative.show', $etat))
+            ->assertOk()
+            ->assertHeader('content-disposition', 'inline; filename="facture.pdf"');
+    }
 
     public function test_management_roles_can_only_view_and_validate_an_etat(): void
     {
@@ -63,6 +132,28 @@ class EtatBesoinManagementTest extends TestCase
         $this->actingAs($user)->patch(route('etat-besoins.reouvrir', $etat))->assertRedirect();
         $this->assertSame('En attente', $etat->fresh()->statut);
         $this->assertSoftDeleted($sortie);
+    }
+
+    public function test_un_etat_valide_sans_piece_est_verrouille_sauf_pour_ajouter_la_piece(): void
+    {
+        $role = Role::create(['designation' => 'Super Admin']);
+        $user = $this->user($role, 24);
+        $departement = Departement::create(['designation' => 'Administration']);
+        $etat = $this->etat($user, $departement, 'EB-VERROUILLE', 'Validé');
+
+        $this->actingAs($user)->get(route('etat-besoins.show', $etat))
+            ->assertOk()
+            ->assertSee('Document verrouillé après validation')
+            ->assertSee('name="pieces_justificatives[]"', false)
+            ->assertDontSee(route('etat-besoins.edit', $etat), false)
+            ->assertSee('id="modalSuppressionDocument"', false)
+            ->assertDontSee(route('etat-besoins.valider', $etat), false);
+
+        $this->actingAs($user)->get(route('etat-besoins.edit', $etat))->assertForbidden();
+        $this->actingAs($user)->put(route('etat-besoins.update', $etat), [])->assertForbidden();
+        $this->actingAs($user)->post(route('etat-besoins.valider', $etat), [
+            'observation' => 'Nouvelle validation', 'action' => 'valider', 'monnaie' => 'CDF',
+        ])->assertForbidden();
     }
 
     public function test_super_admin_can_delete_an_etat_and_its_entire_accounting_chain(): void

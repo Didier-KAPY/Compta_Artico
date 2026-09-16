@@ -34,6 +34,7 @@ class EcritureComptable extends Model
         'piece',
 
         'piece_justificative',
+        'pieces_justificatives',
 
         'libelle',
 
@@ -51,7 +52,7 @@ class EcritureComptable extends Model
 
 
 
-    protected $casts = [
+    protected $casts = ['pieces_justificatives' => 'array', 
 
         'date' => 'date',
 

@@ -17,6 +17,7 @@ class EntreeCaisse extends Model
         'nom_partenaire',
         'telephone_partenaire',
         'adresse_partenaire',
+        'mode_paiement',
         'type',
         'montant',
         'appliquer_tva',

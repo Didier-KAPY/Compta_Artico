@@ -92,21 +92,21 @@ class Journaux extends Model
 
         'date_validation' => 'datetime',
 
-        'montant_ht' => 'decimal:2',
+        'montant_ht' => 'decimal:18',
 
         'taux_tva' => 'decimal:2',
 
-        'montant_tva' => 'decimal:2',
+        'montant_tva' => 'decimal:18',
 
-        'montant_ttc' => 'decimal:2',
+        'montant_ttc' => 'decimal:18',
 
         'entrees_cdf' => 'decimal:2',
 
-        'sorties_cdf' => 'decimal:2',
+        'sorties_cdf' => 'decimal:18',
 
         'entrees_usd' => 'decimal:2',
 
-        'sorties_usd' => 'decimal:2',
+        'sorties_usd' => 'decimal:18',
         'restaure_le' => 'datetime',
         'regroupe_le' => 'datetime',
 

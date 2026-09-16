@@ -10,7 +10,8 @@
 $role = strtolower(auth()->user()->role?->designation ?? '');
 
 $isSuperAdmin = $role == 'super admin';
-$showActions = ! auth()->user()->isAccounting();
+$canValidateSortie = in_array($role, ['chargé des finances', 'chargé de finance', 'charge de finance', 'charger de finance'], true);
+$showActions = ! auth()->user()->isAccounting() || $canValidateSortie;
 $canCreateSortie = auth()->user()->isSuperAdmin() || auth()->user()->isManagement() || in_array($role, ['caissier', 'caissière', 'trésorier', 'trésorière'], true);
 $canManageSortie = auth()->user()->isSuperAdmin() || auth()->user()->isManagement();
 
@@ -131,6 +132,15 @@ Date fin
 
 
 
+<div class="col-md-3">
+    <label class="form-label" for="statut">Statut</label>
+    <select name="statut" id="statut" class="form-select">
+        <option value="" @selected(!filled(request('statut', 'En attente')))>Tous les statuts</option>
+        @foreach(['En attente', 'Validé', 'Rejeté'] as $statutOption)
+            <option value="{{ $statutOption }}" @selected(request('statut', 'En attente') === $statutOption)>{{ $statutOption }}</option>
+        @endforeach
+    </select>
+</div>
 <div class="col-md-2 d-flex align-items-end">
 
 
@@ -289,6 +299,9 @@ Actions
 @if($index === 0)
 <div class="dropdown"><button class="btn btn-sm btn-light border dropdown-toggle" type="button" data-bs-toggle="dropdown">Actions</button><ul class="dropdown-menu">
 <li><a class="dropdown-item" href="{{ route('sortie-caisses.show',$sortie->id) }}">👁 Voir</a></li>
+@if($canValidateSortie && $sortie->statut === 'En attente')
+<li><a class="dropdown-item text-success fw-semibold" href="{{ route('sortie-caisses.show', $sortie->id) }}?ouvrir_validation=1"><i class="bi bi-check-circle me-2"></i>Valider</a></li>
+@endif
 <li><a class="dropdown-item" href="{{ route('sortie-caisses.imprimer', $sortie->id) }}" target="_blank"><i class="bi bi-printer me-2"></i>Imprimer</a></li>
 <li><a class="dropdown-item" href="{{ route('sortie-caisses.pdf', $sortie->id) }}"><i class="bi bi-file-earmark-pdf me-2"></i>Télécharger PDF</a></li>
 @if($canManageSortie && $sortie->statut !== 'Validé')<li><a class="dropdown-item" href="{{ route('sortie-caisses.edit', $sortie->id) }}"><i class="bi bi-pencil-square me-2"></i>Modifier</a></li>@endif
@@ -346,7 +359,9 @@ Aucune sortie de caisse trouvée
 <div class="d-flex justify-content-center">
 
 
+@if($sorties instanceof \Illuminate\Contracts\Pagination\Paginator)
 {{ $sorties->links() }}
+@endif
 
 
 </div>

@@ -66,6 +66,14 @@ class AppServiceProvider extends ServiceProvider
             'Super Admin', 'DAF', 'Comptable',
         ]));
 
+        Gate::define('validateEtatBesoin', function (User $user): bool {
+            $role = mb_strtolower(trim((string) $user->role?->designation));
+
+            return $user->isSuperAdmin() || in_array($role, [
+                'admin', 'gérant', 'gerant', 'directeur général', 'comptable',
+            ], true);
+        });
+
         Gate::define('deleteEtatBesoin', fn (User $user): bool => $user->isSuperAdmin() || $user->isManagement());
         Gate::define('deleteFinancialDocument', fn (User $user): bool => $user->isSuperAdmin() || $user->isManagement());
         Gate::define('restoreFinancialDocument', fn (User $user): bool => $user->isSuperAdmin());
@@ -91,6 +99,8 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('viewEtatBesoinDetail', fn (User $user): bool => ! $user->hasRole([
             'Chef de Service', 'Chef de Département', 'Directeur Technique',
         ]));
+        Gate::define('consultEtatBesoin', fn (User $user): bool =>
+            $user->can('viewEtatBesoinDetail') || $user->hasRole('Directeur Technique'));
 
         Gate::define('manageEntreeCaisse', fn (User $user): bool => $user->hasRole([
             'Super Admin', 'DAF', 'Comptable', 'Caissier', 'Caissière', 'Trésorier', 'Trésorière',

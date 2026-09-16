@@ -33,9 +33,8 @@ class ProfileNotificationService
             }
 
             $enAttente = (clone $query)->where('statut', 'En attente')->count();
-            $valides = (clone $query)->where('statut', 'Validé')->count();
 
-            if ($enAttente === 0 && $valides === 0) {
+            if ($enAttente === 0) {
                 return;
             }
 
@@ -45,11 +44,10 @@ class ProfileNotificationService
                 'icon' => $icon,
                 'url' => $url,
                 'en_attente' => $enAttente,
-                'valides' => $valides,
             ]);
 
             (clone $query)
-                ->whereIn('statut', ['En attente', 'Validé'])
+                ->where('statut', 'En attente')
                 ->latest('updated_at')
                 ->limit(10)
                 ->get()
@@ -101,7 +99,7 @@ class ProfileNotificationService
 
         return [
             'en_attente' => $modules->sum('en_attente'),
-            'valides' => $modules->sum('valides'),
+            'valides' => 0,
             'modules' => $modules->values(),
             'items' => $items->sortByDesc('date')->take(30)->values(),
         ];

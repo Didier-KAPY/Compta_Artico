@@ -41,7 +41,7 @@ class DashboardService
         }
 
         if ($sections['cash']) {
-            $totals = Journaux::query()
+            $totals = app(\App\Services\TreasuryMovementService::class)->query()
                 ->where('statut', 'Validé')
                 ->whereHas('journalType', fn ($query) => $query->where('est_tresorerie', true))
                 ->whereDate('date', '<=', now()->toDateString())
@@ -62,7 +62,7 @@ class DashboardService
         }
 
         if ($sections['treasury_situation']) {
-            $positions = Journaux::query()
+            $positions = app(\App\Services\TreasuryMovementService::class)->query()
                 ->select('journal_type_id')
                 ->selectRaw('COALESCE(SUM(entrees_cdf), 0) AS entree_cdf')
                 ->selectRaw('COALESCE(SUM(sorties_cdf), 0) AS sortie_cdf')
@@ -164,6 +164,7 @@ class DashboardService
     private function sectionsFor(string $role): array
     {
         $admin = in_array($role, ['super admin', 'admin', 'directeur général', 'gérant', 'gerant'], true);
+        $chargeFinances = in_array($role, ['chargé des finances', 'chargé de finance', 'charge de finance', 'charger de finance'], true);
         $cashier = in_array($role, ['caissier', 'caissière', 'trésorier', 'trésorière'], true);
         $accounting = in_array($role, [
             'daf', 'comptable', 'chargé des finances',
@@ -174,8 +175,8 @@ class DashboardService
 
         return [
             'statistics' => $admin || $department || $accounting,
-            'cash' => $admin || $cashier,
-            'treasury_situation' => $management,
+            'cash' => $admin || $cashier || $chargeFinances,
+            'treasury_situation' => $management || $chargeFinances,
             'charts' => $admin || $cashier || $accounting,
             'validations' => $admin || $cashier || $accounting || $department,
             'operations' => $admin || $cashier || $accounting,

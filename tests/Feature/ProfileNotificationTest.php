@@ -12,7 +12,7 @@ class ProfileNotificationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_profile_displays_pending_and_validated_notifications(): void
+    public function test_profile_displays_only_pending_notifications(): void
     {
         $admin = $this->userWithRole('Admin', 'admin-notifications@test.local');
         $creator = $this->userWithRole('Chef de Service', 'creator-notifications@test.local');
@@ -27,9 +27,8 @@ class ProfileNotificationTest extends TestCase
             ->assertSee('Notifications')
             ->assertDontSee('Notifications de suivi')
             ->assertSee('1 en attente')
-            ->assertSee('1 validé')
             ->assertSee('EB-ATTENTE-001')
-            ->assertSee('EB-VALIDE-001');
+            ->assertDontSee('EB-VALIDE-001');
     }
 
     public function test_standard_user_only_sees_own_profile_notifications(): void

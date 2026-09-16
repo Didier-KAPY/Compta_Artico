@@ -32,6 +32,7 @@
         </div>
     </div>
     @php
+        $totauxParMonnaie = [];
         $montantOriginal = function ($journal, $ecriture, $brc) {
             if (! $brc) return max((float) $ecriture->debit_cdf, (float) $ecriture->credit_cdf);
             if ((int) $ecriture->liste_des_comptes_id === (int) $brc->journalType?->liste_des_comptes_id) return (float) $brc->total;
@@ -45,11 +46,15 @@
             <thead class="table-dark"><tr><th>Date BRC</th><th>Validé par</th><th>Référence BRC</th><th>Compte débit</th><th>Compte crédit</th><th>Libellé</th><th class="text-end">Montant débit</th><th class="text-end">Montant crédit</th><th>Monnaie</th><th>Statut</th><th class="text-center">Action</th></tr></thead>
             <tbody>
             @forelse($journaux as $journal)
-                @foreach($journal->ecritures as $ecriture)
+                @foreach($journal->ecritures->sortBy(fn ($ligne) => (float) $ligne->debit_cdf > 0 ? 0 : 1) as $ecriture)
                 @php
                     $brc = $journal->brcs->first();
                     $compte = trim(($ecriture->compte?->compte ?? '—').' — '.($ecriture->compte?->designation ?? ''));
                     $montant = $montantOriginal($journal, $ecriture, $brc);
+                    $monnaie = $brc?->monnaie ?? $journal->monnaie;
+                    $totauxParMonnaie[$monnaie] ??= ['debit' => 0, 'credit' => 0];
+                    $totauxParMonnaie[$monnaie]['debit'] += (float) $ecriture->debit_cdf > 0 ? round($montant, 2) : 0;
+                    $totauxParMonnaie[$monnaie]['credit'] += (float) $ecriture->credit_cdf > 0 ? round($montant, 2) : 0;
                 @endphp
                 <tr>
                     <td class="text-nowrap">{{ $brc?->date?->format('d/m/Y') ?? $ecriture->date?->format('d/m/Y') ?? $journal->date?->format('d/m/Y') }}</td>
@@ -70,8 +75,11 @@
             @endforelse
             </tbody>
             @if($journaux->isNotEmpty())
-@php($totalOriginal = $journaux->sum(fn($j) => (float) ($j->brcs->first()?->total ?? $j->ecritures->sum('debit_cdf'))))
-<tfoot class="table-light fw-bold"><tr><td colspan="6" class="text-end">Totaux de la page</td><td class="text-end">{{ number_format($totalOriginal, 2, ',', ' ') }}</td><td class="text-end">{{ number_format($totalOriginal, 2, ',', ' ') }}</td><td colspan="3"></td></tr></tfoot>
+<tfoot class="table-light fw-bold">
+    @foreach($totauxParMonnaie as $monnaie => $total)
+        <tr><td colspan="6" class="text-end">Totaux de la page — {{ $monnaie }}</td><td class="text-end">{{ number_format($total['debit'], 2, ',', ' ') }}</td><td class="text-end">{{ number_format($total['credit'], 2, ',', ' ') }}</td><td>{{ $monnaie }}</td><td colspan="2"></td></tr>
+    @endforeach
+</tfoot>
 @endif
         </table>
     </div></div>@if($journaux->hasPages())<div class="card-footer bg-white">{{ $journaux->links() }}</div>@endif</div>

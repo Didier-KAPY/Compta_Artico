@@ -20,6 +20,8 @@ class Entreprise extends Model
         'adresse',
         'forme_juridique',
         'numero_identification_fiscal',
+        'rccm',
+        'id_nat',
         'telephone',
         'logo',
         'cachet',

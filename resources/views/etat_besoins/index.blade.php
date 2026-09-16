@@ -3,15 +3,17 @@
 @section('content')
 @php
     $isSuperAdmin = auth()->user()?->hasRole('Super Admin') ?? false;
-    $canViewDetails = auth()->user()?->can('viewEtatBesoinDetail') ?? false;
+    $role = mb_strtolower(trim((string) auth()->user()?->role?->designation));
+    $isChargeFinances = in_array($role, ['chargé des finances', 'chargé de finance', 'charge de finance', 'charger de finance'], true);
+    $canViewDetails = auth()->user()?->can('consultEtatBesoin') ?? false;
 @endphp
 
 <div class="container py-4">
-    @if($canViewDetails)
+    @can('viewEtatBesoinDetail')
     <div class="d-flex justify-content-end mb-3">
         @include('partials.period-export-buttons', ['rapport' => 'etat-besoins'])
     </div>
-    @endif
+    @endcan
 
     <!-- HEADER -->
     <div class="d-flex justify-content-between align-items-center mb-3">
@@ -21,12 +23,14 @@
             États de Besoin
         </h4>
 
+        @if(! $isChargeFinances)
         @can('createEtatBesoin')
             <a href="{{ route('etat-besoins.create') }}" class="btn btn-primary">
                 <i class="bi bi-plus-circle me-1"></i>
                 Nouveau
             </a>
         @endcan
+        @endif
 
     </div>
 
@@ -72,7 +76,16 @@
                                value="{{ request('date_fin') }}">
                     </div>
 
-                    <div class="col-md-2 d-flex align-items-end">
+                    <div class="col-md-3">
+    <label class="form-label" for="statut">Statut</label>
+    <select name="statut" id="statut" class="form-select">
+        <option value="" @selected(!filled(request('statut', 'En attente')))>Tous les statuts</option>
+        @foreach(['En attente', 'Validé', 'Rejeté'] as $statutOption)
+            <option value="{{ $statutOption }}" @selected(request('statut', 'En attente') === $statutOption)>{{ $statutOption }}</option>
+        @endforeach
+    </select>
+</div>
+<div class="col-md-2 d-flex align-items-end">
 
                         <button type="submit"
                                 class="btn btn-primary w-100">
@@ -145,7 +158,15 @@
 
                         <tr>
 
-                            <td><strong>{{ $etat->numero }}</strong></td>
+                            <td>
+                                @if($isChargeFinances)
+                                    <a href="{{ route('etat-besoins.show', $etat) }}" class="fw-bold text-decoration-none" title="Voir et ajouter une pièce justificative">
+                                        {{ $etat->numero }}
+                                    </a>
+                                @else
+                                    <strong>{{ $etat->numero }}</strong>
+                                @endif
+                            </td>
                                 @if($isSuperAdmin)
 
                             <td>
@@ -210,6 +231,7 @@
                                             </a>
                                         </li>
 
+                                        @can('viewEtatBesoinDetail')
                                         <li>
                                             <a class="dropdown-item" href="{{ route('etat-besoins.imprimer', $etat->id) }}" target="_blank">
                                                 <i class="bi bi-printer me-2"></i>Imprimer
@@ -223,6 +245,7 @@
                                         </li>
 
                                         <li><hr class="dropdown-divider"></li>
+                                        @endcan
 
                                     </ul>
 
@@ -253,7 +276,9 @@
         </div>
         <div class="card-footer bg-white">
             <div class="d-flex justify-content-center">
-                {{ $etatBesoins->links() }}
+                @if($etatBesoins instanceof \Illuminate\Contracts\Pagination\Paginator)
+                    {{ $etatBesoins->links() }}
+                @endif
             </div>
         </div>
     </div>

@@ -104,7 +104,7 @@ public function tresorerie(Request $request)
     $dateDebut = $request->input('date_debut', now()->startOfMonth()->toDateString());
     $dateFin = $request->input('date_fin', now()->toDateString());
 
-    $tresorerie = Journaux::query()
+    $tresorerie = app(\App\Services\TreasuryMovementService::class)->query()
         ->select('journal_type_id')
         ->selectRaw('SUM(entrees_cdf) as entree_cdf')
         ->selectRaw('SUM(sorties_cdf) as sortie_cdf')
@@ -121,7 +121,7 @@ public function tresorerie(Request $request)
 
     // Le solde disponible inclut tous les mouvements jusqu'à la date de fin.
     // La requête ci-dessus reste limitée à la période pour alimenter le tableau.
-    $positions = Journaux::query()
+    $positions = app(\App\Services\TreasuryMovementService::class)->query()
         ->select('journal_type_id')
         ->selectRaw('SUM(entrees_cdf) as entree_cdf')
         ->selectRaw('SUM(sorties_cdf) as sortie_cdf')
@@ -203,7 +203,7 @@ public function releve(Request $request)
         ->orderBy('code')
         ->get();
 
-    $baseQuery = Journaux::query()
+    $baseQuery = app(\App\Services\TreasuryMovementService::class)->query()
         ->where('statut', 'Validé')
         ->whereHas('journalType', function ($query) {
             $query->where('est_tresorerie', true);
@@ -288,31 +288,62 @@ private function journauxEnAttenteParNature(Request $request, string $nature, st
         'date_fin' => 'nullable|date|after_or_equal:date_debut',
     ]);
 
-    $query = Journaux::with(['journalType.compte', 'user', 'validateur'])
-        ->whereHas('journalType', fn ($journalType) => $journalType->where('nature', $nature))
+    $queryNature = Journaux::query()
+        ->whereHas('journalType', fn ($journalType) => $journalType->where('nature', $nature));
+    $queryValidee = (clone $queryNature)->where('statut', 'Validé');
+
+    $query = (clone $queryNature)->with(['journalType.compte', 'user', 'validateur', 'sortieCaisse'])
         ->when($request->filled('reference'), fn ($builder) => $builder->where('reference', 'like', '%'.$request->reference.'%'))
         ->when($request->filled('date_debut'), fn ($builder) => $builder->whereDate('date', '>=', $request->date_debut))
         ->when($request->filled('date_fin'), fn ($builder) => $builder->whereDate('date', '<=', $request->date_fin));
 
+        $statutFiltre = $request->input('statut', 'En attente');
+        if (filled($statutFiltre)) {
+            $query->where('statut', $statutFiltre);
+        }
+
     // Sans TVA, le montant appartient uniquement au total HT.
     // Le TTC ne reprend que les bons réellement soumis à la TVA.
-    $queryAvecTva = (clone $query)->where(function ($builder) {
+    $queryAvecTva = (clone $queryValidee)->where(function ($builder) {
         $builder->where('montant_tva', '>', 0)
             ->orWhere('taux_tva', '>', 0)
             ->orWhereHas('entreeCaisse', fn ($entree) => $entree->where('appliquer_tva', true))
             ->orWhereHas('sortieCaisse', fn ($sortie) => $sortie->where('appliquer_tva', true));
     });
 
-    $totaux = [
-        'nombre' => (clone $query)->where('statut', 'En attente')->count(),
-        'ttc' => $queryAvecTva->sum('montant_ttc'),
-        'ht' => (clone $query)->sum('montant_ht'),
-        'tva' => (clone $query)->sum('montant_tva'),
-    ];
+    $totaux = ['nombre' => (clone $queryNature)->where('statut', 'En attente')->count()];
+    foreach (['CDF', 'USD'] as $monnaie) {
+        $totaux[$monnaie] = [
+            'ttc' => (clone $queryAvecTva)->where('monnaie', $monnaie)->sum('montant_ttc'),
+            'ht' => (clone $queryValidee)->where('monnaie', $monnaie)->sum('montant_ht'),
+            'tva' => (clone $queryValidee)->where('monnaie', $monnaie)->sum('montant_tva'),
+        ];
+    }
 
     $journaux = $query->orderByDesc('date')->orderByDesc('id')->paginate(15)->withQueryString();
 
-    return view($view, compact('journaux', 'totaux'));
+    $mouvements = app(\App\Services\TreasuryMovementService::class)->query()
+        ->where('statut', 'Validé')
+        ->whereHas('journalType', fn ($type) => $type
+            ->where('nature', $nature)
+            ->where('est_tresorerie', true)
+            ->whereNotNull('liste_des_comptes_id'))
+        ->selectRaw('COALESCE(SUM(entrees_cdf), 0) as entrees_cdf, COALESCE(SUM(sorties_cdf), 0) as sorties_cdf,
+            COALESCE(SUM(entrees_usd), 0) as entrees_usd, COALESCE(SUM(sorties_usd), 0) as sorties_usd')
+        ->first();
+
+    $montantsComptes = [];
+    foreach (['CDF' => 'cdf', 'USD' => 'usd'] as $monnaie => $suffixe) {
+        $entrees = (float) $mouvements->{'entrees_'.$suffixe};
+        $sorties = (float) $mouvements->{'sorties_'.$suffixe};
+        $montantsComptes[$monnaie] = [
+            'entrees' => $entrees,
+            'sorties' => $sorties,
+            'solde' => $entrees - $sorties,
+        ];
+    }
+
+    return view($view, compact('journaux', 'totaux', 'montantsComptes'));
 }
 
   public function store(Request $request)
@@ -987,7 +1018,7 @@ private function showParNature($id, FinancialDocumentService $documents, ?string
     $journal = Journaux::with([
         'user',
         'journalType.compte',
-        'entreeCaisse', 'sortieCaisse.etatBesoin', 'ecritures', 'brcs', 'clotureJournaliere'
+        'entreeCaisse', 'sortieCaisse.etatBesoin.user', 'ecritures', 'brcs', 'clotureJournaliere'
     ])->findOrFail($id);
     abort_if($natureAttendue !== null && $journal->journalType?->nature !== $natureAttendue, 404);
     $suppressionDependencies = $documents->dependencies($journal);
@@ -1002,10 +1033,21 @@ private function showParNature($id, FinancialDocumentService $documents, ?string
     // Dernier taux de change
     $tauxActuel = TauxDeChange::latest()->first();
 
-    $piecePath = $journal->piece_justificatif;
+    $pieceEtatBesoin = $journal->sortieCaisse?->etatBesoin?->piece_justificative;
+    $piecePath = collect([$journal->piece_justificatif, $pieceEtatBesoin])
+        ->filter()
+        ->first(fn (string $chemin) => Storage::disk('public')->exists($chemin));
     $pieceExiste = filled($piecePath) && Storage::disk('public')->exists($piecePath);
     $pieceUrl = $pieceExiste ? route('journaux.piece', $journal) : null;
     $pieceMime = $pieceExiste ? (Storage::disk('public')->mimeType($piecePath) ?: '') : '';
+    $pieceNom = filled($pieceEtatBesoin) && $piecePath === $pieceEtatBesoin
+        ? ($journal->sortieCaisse?->etatBesoin?->piece_justificative_nom ?: basename($piecePath))
+        : ($piecePath ? basename($piecePath) : null);
+    $beneficiaireTraitement = $journal->nom_partenaire
+        ?: $journal->sortieCaisse?->beneficiaire
+        ?: $journal->sortieCaisse?->etatBesoin?->demandeur;
+    $telephoneTraitement = $journal->telephone_partenaire
+        ?: $journal->sortieCaisse?->etatBesoin?->user?->telephone;
 
 
     // Lignes de l'entrée de caisse
@@ -1076,6 +1118,9 @@ private function showParNature($id, FinancialDocumentService $documents, ?string
         ,'pieceExiste'
         ,'pieceUrl'
         ,'pieceMime'
+        ,'pieceNom'
+        ,'beneficiaireTraitement'
+        ,'telephoneTraitement'
         ,'suppressionDependencies'
         ,'documentLinks'
     ));
@@ -1085,10 +1130,16 @@ public function pieceJustificative(Request $request, Journaux $journal)
 {
     Gate::authorize('manageJournaux');
 
-    $path = $journal->piece_justificatif;
+    $journal->loadMissing('sortieCaisse.etatBesoin');
+    $etat = $journal->sortieCaisse?->etatBesoin;
+    $path = collect([$journal->piece_justificatif, $etat?->piece_justificative])
+        ->filter()
+        ->first(fn (string $chemin) => Storage::disk('public')->exists($chemin));
     abort_unless(filled($path) && Storage::disk('public')->exists($path), 404, 'Pièce justificative introuvable.');
 
-    $nom = basename($path);
+    $nom = $etat && $path === $etat->piece_justificative
+        ? ($etat->piece_justificative_nom ?: basename($path))
+        : basename($path);
     if ($request->boolean('download')) {
         return Storage::disk('public')->download($path, $nom);
     }

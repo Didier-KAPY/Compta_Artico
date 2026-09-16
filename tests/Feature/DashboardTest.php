@@ -89,6 +89,22 @@ class DashboardTest extends TestCase
             ->assertDontSee('Validé par');
     }
 
+    public function test_charge_finances_voit_toutes_les_sections_du_tableau_de_bord(): void
+    {
+        foreach (['Chargé des finances', 'Chargé de finance', 'Charge de finance', 'Charger de finance'] as $index => $designation) {
+            $role = Role::firstOrCreate(['designation' => $designation]);
+            $user = User::create([
+                'nom' => 'Test', 'prenom' => 'Finances', 'email' => 'finances'.$index.'@test.local',
+                'password' => bcrypt('password'), 'role_id' => $role->id, 'password_default' => 0, 'statut' => 'Actif',
+            ]);
+            $this->actingAs($user)->get(route('dashboard'))->assertOk()
+                ->assertSee('Situation de trésorerie')->assertSee('Disponibilités par compte')
+                ->assertSee('Situation de caisse')->assertSee('Entrées vs sorties par mois')
+                ->assertSee('10 dernières opérations')
+                ->assertViewHas('sections', fn ($sections) => collect($sections)->except('needs_only')->every(fn ($visible) => $visible === true));
+        }
+    }
+
     public function test_cash_situation_only_includes_validated_treasury_movements_up_to_today(): void
     {
         $role = Role::create(['designation' => 'Admin']);

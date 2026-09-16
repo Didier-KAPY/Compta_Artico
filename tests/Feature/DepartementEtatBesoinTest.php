@@ -9,6 +9,8 @@ use App\Models\Fonction;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class DepartementEtatBesoinTest extends TestCase
@@ -36,6 +38,39 @@ class DepartementEtatBesoinTest extends TestCase
 
         $this->actingAs($admin)->get(route('etat-besoins.index'))
             ->assertOk()->assertSee('EB-DEPT-A')->assertSee('EB-DEPT-B');
+    }
+
+    public function test_charge_des_finances_voit_tous_les_etats_sans_actions_ni_validation(): void
+    {
+        Storage::fake('public');
+        [$userA, $userB, , $departementA, $departementB] = $this->contexte();
+        $etatA = $this->etat($userA, $departementA, 'EB-FINANCE-A');
+        $this->etat($userB, $departementB, 'EB-FINANCE-B');
+        $role = Role::firstOrCreate(['designation' => 'Chargé des finances']);
+        $chargeFinances = $this->user($role, $departementA, 'finances');
+
+        $this->actingAs($chargeFinances)->get(route('etat-besoins.index'))
+            ->assertOk()
+            ->assertSee('EB-FINANCE-A')
+            ->assertSee('EB-FINANCE-B')
+            ->assertSee('Statut')
+            ->assertSee(route('etat-besoins.show', $etatA), false)
+            ->assertSee('>Actions<', false)
+            ->assertDontSee('Valider');
+
+        $this->actingAs($chargeFinances)->get(route('etat-besoins.show', $etatA))
+            ->assertOk()
+            ->assertSee('name="pieces_justificatives[]"', false);
+        $this->actingAs($chargeFinances)->post(route('etat-besoins.piece-justificative.store', $etatA), [
+            'piece_justificative' => UploadedFile::fake()->create('justificatif-finance.pdf', 100, 'application/pdf'),
+        ])->assertRedirect()->assertSessionHas('success');
+        Storage::disk('public')->assertExists($etatA->fresh()->piece_justificative);
+
+        $this->actingAs($chargeFinances)->post(route('etat-besoins.valider', $etatA), [
+            'action' => 'valider',
+            'monnaie' => 'CDF',
+        ])->assertForbidden();
+        $this->assertSame('En attente', $etatA->fresh()->statut);
     }
 
     public function test_creation_affiche_tous_les_departements_et_enregistre_la_relation(): void
@@ -132,6 +167,52 @@ class DepartementEtatBesoinTest extends TestCase
         $this->assertSame('0812345678', $user->telephone);
         $this->assertSame('', (string) $user->adresse);
         $this->assertNotSame($autreRole->id, $user->role_id);
+    }
+
+    public function test_charge_technique_peut_uniquement_voir_depuis_les_actions(): void
+    {
+        Storage::fake('public');
+        [$agent, , , $departement] = $this->contexte();
+        $etat = $this->etat($agent, $departement, 'EB-TECHNIQUE');
+        $agent->update(['role_id' => Role::firstOrCreate(['designation' => 'Chargé technique'])->id]);
+        $agent->refresh();
+        $this->actingAs($agent)->get(route('etat-besoins.index'))->assertOk()
+            ->assertSee('Actions')->assertSee(route('etat-besoins.show', $etat), false)
+            ->assertDontSee(route('etat-besoins.imprimer', $etat), false)
+            ->assertDontSee(route('etat-besoins.pdf', $etat), false);
+        $this->get(route('etat-besoins.show', $etat))->assertOk()
+            ->assertSee('name="pieces_justificatives[]"', false);
+        $this->get(route('etat-besoins.pdf', $etat))->assertForbidden();
+        $this->post(route('etat-besoins.piece-justificative.store', $etat), [
+            'piece_justificative' => UploadedFile::fake()->create('justificatif-technique.pdf', 100, 'application/pdf'),
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $etat->refresh();
+        Storage::disk('public')->assertExists($etat->piece_justificative);
+        $this->get(route('etat-besoins.piece-justificative.show', $etat))->assertOk();
+    }
+
+    public function test_charge_technique_voit_tous_les_departements_sauf_la_direction_financiere(): void
+    {
+        [$agent, $autre, , $technique, $finance] = $this->contexte();
+        $agent->update(['role_id' => Role::firstOrCreate(['designation' => 'Chargé technique'])->id]);
+        $finance->update(['designation' => 'DIRECTION FINANCIERE']);
+        $generale = Departement::create(['designation' => 'DIRECTION GENERALE']);
+        $etatTechnique = $this->etat($agent, $technique, 'EB-TECH-ACCESSIBLE');
+        $etatGeneral = $this->etat($autre, $generale, 'EB-GENERAL-ACCESSIBLE');
+        $etatFinance = $this->etat($autre, $finance, 'EB-FINANCE-MASQUE');
+        $ancien = $this->etat($autre, $finance, 'EB-FINANCE-ANCIEN');
+        $ancien->update(['departement_id' => null, 'service' => 'Direction financière']);
+        $this->actingAs($agent->fresh())->get(route('etat-besoins.index'))->assertOk()
+            ->assertSee($etatTechnique->numero)->assertSee($etatGeneral->numero)
+            ->assertDontSee($etatFinance->numero)->assertDontSee($ancien->numero);
+        $this->get(route('etat-besoins.show', $etatGeneral))->assertOk();
+        foreach ([$etatFinance, $ancien] as $interdit) {
+            $this->get(route('etat-besoins.show', $interdit))->assertNotFound();
+            $this->get(route('etat-besoins.piece-justificative.show', $interdit))->assertNotFound();
+            $this->post(route('etat-besoins.piece-justificative.store', $interdit))->assertNotFound();
+        }
+        $this->get(route('etat-besoins.index', ['departement_id' => $finance->id, 'statut' => '']))
+            ->assertOk()->assertDontSee($etatFinance->numero);
     }
 
     private function contexte(): array

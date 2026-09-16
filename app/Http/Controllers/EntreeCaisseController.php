@@ -23,11 +23,17 @@ use App\Services\DocumentNumberService;
 
 class EntreeCaisseController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $entrees = EntreeCaisse::with(['user', 'validateur'])
-            ->latest()
-            ->paginate(10);
+        $query = EntreeCaisse::with(['user', 'validateur', 'journaux'])
+            ->when($request->filled('numero'), fn ($query) => $query->where('numero', 'like', '%'.$request->numero.'%'))
+            ->when($request->filled('date_debut'), fn ($query) => $query->whereDate('date', '>=', $request->date_debut))
+            ->when($request->filled('date_fin'), fn ($query) => $query->whereDate('date', '<=', $request->date_fin))
+            ->latest();
+
+        $entrees = $request->hasAny(['numero', 'date_debut', 'date_fin'])
+            ? $query->get()
+            : $query->paginate(10)->withQueryString();
 
         return view('entree_caisses.index', compact('entrees'));
     }
@@ -50,6 +56,7 @@ class EntreeCaisseController extends Controller
         'nom_partenaire' => 'nullable|string|max:255',
         'telephone_partenaire' => 'nullable|string|max:50',
         'adresse_partenaire' => 'nullable|string|max:255',
+        'mode_paiement' => 'nullable|in:espèces,banque,mobile_money',
         'appliquer_tva' => 'nullable|boolean',
         //'type' => 'required|string|in:Caisse,Banque,Monnaie électronique',
         'designation.*' => 'required|string',
@@ -88,6 +95,9 @@ class EntreeCaisseController extends Controller
             'nom_partenaire' => trim((string) $request->nom_partenaire),
             'telephone_partenaire' => filled($request->telephone_partenaire) ? trim((string) $request->telephone_partenaire) : null,
             'adresse_partenaire' => filled($request->adresse_partenaire) ? trim((string) $request->adresse_partenaire) : null,
+            'mode_paiement' => $request->input('mode_paiement', match ($typeBon) {
+                'BEM' => 'mobile_money', 'BEB' => 'banque', default => 'espèces',
+            }),
             'monnaie' => $request->monnaie,
             'type' => $typeTresorerie,
             'appliquer_tva' => $appliquerTva,
@@ -274,7 +284,7 @@ class EntreeCaisseController extends Controller
             'BEB' => 'journaux.create.banque',
             default => 'journaux.create.caisse',
         };
-        $modePaiement = match ($caisse->type_bon) {
+        $modePaiement = $caisse->mode_paiement ?: match ($caisse->type_bon) {
             'BEM' => 'mobile_money',
             'BEB' => 'banque',
             default => 'espèces',

@@ -103,7 +103,7 @@ class WorkflowComptableService
                     );
 
                     if ($montantTvaUsd > 0) {
-                        $taux = (float) (TauxDeChange::latest()->value('taux_de_change') ?? 0);
+                        $taux = (float) ($principal->sortieCaisse?->taux_conversion ?? TauxDeChange::latest()->value('taux_de_change') ?? 0);
                         if ($taux <= 0) {
                             $this->fail('Un taux de change valide est requis pour intégrer la TVA en CDF.');
                         }
@@ -118,6 +118,13 @@ class WorkflowComptableService
                             ? (float) $ecritureTresorerie->credit_cdf + $montantTvaCdf
                             : 0,
                     ]);
+                    // Use the original TTC total, not the sum of reconverted HT and TVA.
+                    $origine = $principal->sortieCaisse
+                        ? app(SortieConversionService::class)->montantComptableOrigine($principal->sortieCaisse)
+                        : null;
+                    if ($origine !== null) {
+                        $ecritureTresorerie->update(['credit_cdf' => $origine]);
+                    }
                 }
             }
 
@@ -186,7 +193,7 @@ class WorkflowComptableService
                     : ($estEntree ? (float) $locked->entrees_usd : (float) $locked->sorties_usd);
                 $taux = 0.0;
                 if ($montantUsd > 0) {
-                    $taux = (float) (TauxDeChange::latest()->value('taux_de_change') ?? 0);
+                    $taux = (float) ($locked->sortieCaisse?->taux_conversion ?? TauxDeChange::latest()->value('taux_de_change') ?? 0);
                     if ($taux <= 0) {
                         $this->fail('Un taux de change valide est requis pour comptabiliser ce journal en CDF.');
                     }
@@ -196,6 +203,16 @@ class WorkflowComptableService
                     ? ($locked->monnaie === 'CDF' ? (float) $locked->montant_ttc : 0)
                     : ($estEntree ? (float) $locked->entrees_cdf : (float) $locked->sorties_cdf);
                 $montant = $montantCdf + ($montantUsd * $taux);
+                $origine = $locked->sortieCaisse
+                    ? app(SortieConversionService::class)->montantComptableOrigine($locked->sortieCaisse)
+                    : null;
+                if ($origine !== null && ! $estTva) {
+                    $montant = $locked->sortieCaisse->appliquer_tva
+                        ? (string) \Brick\Math\BigDecimal::of($origine)->dividedBy(
+                            \Brick\Math\BigDecimal::of($locked->sortieCaisse->taux_tva)->dividedBy(100)->plus(1),
+                            2, \Brick\Math\RoundingMode::HALF_UP)
+                        : $origine;
+                }
 
                 if ($montant <= 0) {
                     $this->fail('Le montant du journal doit être supérieur à zéro.');

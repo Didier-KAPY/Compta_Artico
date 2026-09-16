@@ -68,19 +68,26 @@ class ReportExportController extends Controller
     public function operationsDiverses(Request $request, string $format)
     {
         $this->autoriser($request, ['Super Admin', 'Admin', 'Comptable']);
+        [$dateDebut, $dateFin] = $this->periode($request);
         $query = Journaux::with(['brcs.validateur', 'brcs.journalType.compte', 'brcs.lignes', 'ecritures.compte', 'validateur'])
-            ->where('statut', 'Validé')->whereHas('brcs')->whereBetween('date', $this->periode($request));
+            ->where('statut', 'Validé')->whereHas('brcs')
+            ->whereDate('date', '>=', $dateDebut)->whereDate('date', '<=', $dateFin);
 
         if ($request->filled('reference')) {
             $query->where('reference', 'like', '%'.trim((string) $request->reference).'%');
         }
 
         $rows = collect();
+        $totauxParMonnaie = [];
         foreach ($query->orderBy('date')->orderBy('id')->get() as $journal) {
             $brc = $journal->brcs->first();
-            foreach ($journal->ecritures as $ecriture) {
+            foreach ($journal->ecritures->sortBy(fn ($ligne) => (float) $ligne->debit_cdf > 0 ? 0 : 1) as $ecriture) {
                 $compte = trim(($ecriture->compte?->compte ?? '—').' — '.($ecriture->compte?->designation ?? ''));
                 $montant = $this->montantOriginalBrc($brc, $ecriture);
+                $monnaie = $brc?->monnaie ?? $journal->monnaie;
+                $totauxParMonnaie[$monnaie] ??= ['debit' => 0, 'credit' => 0];
+                $totauxParMonnaie[$monnaie]['debit'] += (float) $ecriture->debit_cdf > 0 ? round($montant, 2) : 0;
+                $totauxParMonnaie[$monnaie]['credit'] += (float) $ecriture->credit_cdf > 0 ? round($montant, 2) : 0;
                 $validateur = trim(($brc?->validateur?->prenom ?? $journal->validateur?->prenom ?? '').' '.($brc?->validateur?->nom ?? $journal->validateur?->nom ?? '')) ?: '—';
                 $rows->push([
                     $this->date($brc?->date ?? $ecriture->date ?? $journal->date), $validateur,
@@ -93,6 +100,13 @@ class ReportExportController extends Controller
                     $brc?->monnaie ?? $journal->monnaie, $ecriture->statut,
                 ]);
             }
+        }
+
+        foreach ($totauxParMonnaie as $monnaie => $total) {
+            $rows->push([
+                '', '', '', '', '', 'Totaux — '.$monnaie,
+                $this->montant($total['debit']), $this->montant($total['credit']), $monnaie, '',
+            ]);
         }
 
         return $this->telecharger($format, 'Journal des opérations diverses', 'journal-operations-diverses', [
@@ -182,7 +196,7 @@ class ReportExportController extends Controller
     {
         $this->autoriser($request, ['Super Admin', 'Admin', 'Directeur Général', 'DAF', 'Comptable', 'Caissier', 'Caissière', 'Trésorier', 'Trésorière']);
         [$debut,$fin] = $this->periode($request);
-        $records = Journaux::query()->select('journal_type_id')->selectRaw('SUM(entrees_cdf) entree_cdf, SUM(sorties_cdf) sortie_cdf, SUM(entrees_usd) entree_usd, SUM(sorties_usd) sortie_usd')->with('journalType.compte')->where('statut', 'Validé')->whereHas('journalType', fn ($q) => $q->where('est_tresorerie', true))->whereBetween('date', [$debut, $fin])->groupBy('journal_type_id')->get();
+        $records = app(\App\Services\TreasuryMovementService::class)->query()->select('journal_type_id')->selectRaw('SUM(entrees_cdf) entree_cdf, SUM(sorties_cdf) sortie_cdf, SUM(entrees_usd) entree_usd, SUM(sorties_usd) sortie_usd')->with('journalType.compte')->where('statut', 'Validé')->whereHas('journalType', fn ($q) => $q->where('est_tresorerie', true))->whereBetween('date', [$debut, $fin])->groupBy('journal_type_id')->get();
         $headers = ['Journal', 'Compte', 'Désignation', 'Nature', 'Entrées CDF', 'Sorties CDF', 'Solde CDF', 'Entrées USD', 'Sorties USD', 'Solde USD'];
         $rows = $records->map(fn ($i) => [$i->journalType?->code ?? '-', $i->journalType?->compte?->compte ?? '-', $i->journalType?->compte?->designation ?? '-', ucfirst(str_replace('_', ' ', $i->journalType?->nature ?? '-')), $this->montant($i->entree_cdf), $this->montant($i->sortie_cdf), $this->montant($i->entree_cdf - $i->sortie_cdf), $this->montant($i->entree_usd), $this->montant($i->sortie_usd), $this->montant($i->entree_usd - $i->sortie_usd)]);
 
@@ -193,7 +207,7 @@ class ReportExportController extends Controller
     {
         $this->autoriser($request, ['Super Admin', 'Admin', 'Directeur Général', 'DAF', 'Comptable', 'Caissier', 'Caissière', 'Trésorier', 'Trésorière']);
         [$debut,$fin] = $this->periode($request);
-        $base = Journaux::query()->where('statut', 'Validé')->whereHas('journalType', fn ($q) => $q->where('est_tresorerie', true))->when($request->filled('journal_type_id'), fn ($q) => $q->where('journal_type_id', $request->integer('journal_type_id')));
+        $base = app(\App\Services\TreasuryMovementService::class)->query()->where('statut', 'Validé')->whereHas('journalType', fn ($q) => $q->where('est_tresorerie', true))->when($request->filled('journal_type_id'), fn ($q) => $q->where('journal_type_id', $request->integer('journal_type_id')));
         $ouv = (clone $base)->whereDate('date', '<', $debut)->selectRaw('COALESCE(SUM(entrees_cdf),0)-COALESCE(SUM(sorties_cdf),0) cdf, COALESCE(SUM(entrees_usd),0)-COALESCE(SUM(sorties_usd),0) usd')->first();
         $records = (clone $base)->with(['journalType.compte', 'compte'])->whereBetween('date', [$debut, $fin])->orderBy('date')->orderBy('id')->get();
         $cdf = (float) $ouv->cdf;
