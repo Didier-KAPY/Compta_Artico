@@ -206,7 +206,9 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
         ->middleware('role:Super Admin')->group(function () {
             Route::get('/', [SauvegardeController::class, 'index'])->name('index');
             Route::post('/', [SauvegardeController::class, 'store'])->name('store');
+            Route::post('/exporter-dossier', [SauvegardeController::class, 'exportPackage'])->name('export-package');
             Route::post('/importer', [SauvegardeController::class, 'import'])->name('import');
+            Route::post('/importer-dossier', [SauvegardeController::class, 'importPackage'])->name('import-package');
             Route::get('/{fichier}', [SauvegardeController::class, 'download'])->name('download');
             Route::post('/restaurer/base', [SauvegardeController::class, 'restore'])->name('restore');
         });
