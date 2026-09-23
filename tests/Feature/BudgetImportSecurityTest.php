@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\SauvegardeController;
 use App\Models\Budget;
 use App\Models\ListeDesComptes;
 use App\Models\Role;
@@ -9,6 +10,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class BudgetImportSecurityTest extends TestCase
@@ -63,6 +65,22 @@ class BudgetImportSecurityTest extends TestCase
             'password' => 'incorrect',
             'confirmation' => '1',
         ])->assertSessionHasErrors('password');
+    }
+
+    public function test_la_restauration_pdo_execute_un_fichier_sql_sans_client_systeme(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'restore-test-');
+        file_put_contents($path, "-- sauvegarde de test\nCREATE TABLE import_restore_test (id INTEGER PRIMARY KEY, libelle VARCHAR(100));\nINSERT INTO import_restore_test (id, libelle) VALUES (1, 'Valeur; conservée');\n");
+
+        try {
+            $method = new \ReflectionMethod(SauvegardeController::class, 'restoreWithPdo');
+            $method->invoke(new SauvegardeController(), $path);
+
+            $this->assertSame('Valeur; conservée', DB::table('import_restore_test')->value('libelle'));
+        } finally {
+            DB::statement('DROP TABLE IF EXISTS import_restore_test');
+            @unlink($path);
+        }
     }
 
     public function test_ecrans_administratifs_sont_rendus_et_connexion_est_limitee(): void

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use ZipArchive;
@@ -211,7 +212,12 @@ class SauvegardeController extends Controller
                 $this->connectionArguments($db),
                 [$db['database']],
             ), null, $this->processEnvironment((string) $db['password']), $stream, 300);
-            $process->mustRun();
+            try {
+                $process->mustRun();
+            } catch (Throwable $exception) {
+                report($exception);
+                $this->restoreWithPdo(Storage::disk('local')->path('backups/'.$filename));
+            }
         } finally {
             if (is_resource($stream)) {
                 fclose($stream);
@@ -230,7 +236,12 @@ class SauvegardeController extends Controller
                 $this->connectionArguments($db),
                 [$db['database']],
             ), null, $this->processEnvironment((string) $db['password']), $stream, 300);
-            $process->mustRun();
+            try {
+                $process->mustRun();
+            } catch (Throwable $exception) {
+                report($exception);
+                $this->restoreWithPdo($path);
+            }
         } finally {
             if (is_resource($stream)) fclose($stream);
         }
@@ -263,6 +274,94 @@ class SauvegardeController extends Controller
         }
 
         return $arguments;
+    }
+
+    private function restoreWithPdo(string $path): void
+    {
+        $handle = fopen($path, 'rb');
+        abort_unless(is_resource($handle), 422, 'Le fichier SQL ne peut pas être lu.');
+
+        $pdo = DB::connection()->getPdo();
+        $statement = '';
+        $delimiter = ';';
+        $quote = null;
+        $escaped = false;
+        $blockComment = false;
+
+        try {
+            while (($line = fgets($handle)) !== false) {
+                if ($quote === null && ! $blockComment && trim($statement) === ''
+                    && preg_match('/^\s*DELIMITER\s+(\S+)\s*$/i', $line, $match)) {
+                    $delimiter = $match[1];
+                    $statement = '';
+                    continue;
+                }
+
+                $length = strlen($line);
+                for ($index = 0; $index < $length; $index++) {
+                    $character = $line[$index];
+                    $next = $index + 1 < $length ? $line[$index + 1] : null;
+
+                    if ($blockComment) {
+                        $statement .= $character;
+                        if ($character === '*' && $next === '/') {
+                            $statement .= '/';
+                            $index++;
+                            $blockComment = false;
+                        }
+                        continue;
+                    }
+
+                    if ($quote !== null) {
+                        $statement .= $character;
+                        if ($escaped) {
+                            $escaped = false;
+                        } elseif ($character === '\\') {
+                            $escaped = true;
+                        } elseif ($character === $quote) {
+                            if ($next === $quote) {
+                                $statement .= $next;
+                                $index++;
+                            } else {
+                                $quote = null;
+                            }
+                        }
+                        continue;
+                    }
+
+                    if ($character === '/' && $next === '*') {
+                        $statement .= '/*';
+                        $index++;
+                        $blockComment = true;
+                        continue;
+                    }
+                    if ($character === '#' || ($character === '-' && $next === '-' && preg_match('/\s/', $line[$index + 2] ?? ' '))) {
+                        $statement .= substr($line, $index);
+                        break;
+                    }
+                    if (in_array($character, ["'", '"', '`'], true)) {
+                        $quote = $character;
+                        $statement .= $character;
+                        continue;
+                    }
+
+                    $statement .= $character;
+                    if ($delimiter !== '' && str_ends_with($statement, $delimiter)) {
+                        $sql = trim(substr($statement, 0, -strlen($delimiter)));
+                        $statement = '';
+                        if ($sql !== '') {
+                            $pdo->exec($sql);
+                        }
+                    }
+                }
+            }
+
+            if (trim($statement) !== '') {
+                $pdo->exec(trim($statement));
+            }
+        } finally {
+            fclose($handle);
+        }
     }
 
     private function processEnvironment(string $password): array
