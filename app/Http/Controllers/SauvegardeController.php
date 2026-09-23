@@ -7,6 +7,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use ZipArchive;
 use Symfony\Component\Process\Process;
@@ -140,6 +141,94 @@ class SauvegardeController extends Controller
         }
 
         return back()->with('success', 'Base importée et restaurée depuis '.$upload->getClientOriginalName().'.');
+    }
+
+    public function initChunkedImport(Request $request)
+    {
+        $data = $request->validate([
+            'nom' => ['required', 'string', 'max:255', 'regex:/\.sql$/i'],
+            'taille' => ['required', 'integer', 'min:1', 'max:104857600'],
+            'nombre_blocs' => ['required', 'integer', 'min:1', 'max:100'],
+        ]);
+        $uploadId = (string) Str::uuid();
+        $directory = 'backup-imports/'.$request->user()->id.'/'.$uploadId;
+        Storage::disk('local')->put($directory.'/metadata.json', json_encode([
+            'user_id' => $request->user()->id,
+            'nom' => basename($data['nom']),
+            'taille' => (int) $data['taille'],
+            'nombre_blocs' => (int) $data['nombre_blocs'],
+            'created_at' => now()->toIso8601String(),
+        ], JSON_THROW_ON_ERROR));
+
+        return response()->json(['upload_id' => $uploadId]);
+    }
+
+    public function storeImportChunk(Request $request)
+    {
+        $data = $request->validate([
+            'upload_id' => ['required', 'uuid'],
+            'index' => ['required', 'integer', 'min:0'],
+            'bloc' => ['required', 'file', 'max:5120'],
+        ]);
+        [$directory, $metadata] = $this->chunkMetadata($request, $data['upload_id']);
+        abort_if((int) $data['index'] >= $metadata['nombre_blocs'], 422, 'Numéro de bloc invalide.');
+        $data['bloc']->storeAs($directory, sprintf('bloc-%05d.part', $data['index']), 'local');
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function finishChunkedImport(Request $request)
+    {
+        $data = $request->validate([
+            'upload_id' => ['required', 'uuid'],
+            'password' => ['required', 'string'],
+            'confirmation' => ['accepted'],
+        ]);
+        if (! Hash::check($data['password'], $request->user()->password)) {
+            throw ValidationException::withMessages(['password' => 'Mot de passe incorrect.']);
+        }
+        [$directory, $metadata] = $this->chunkMetadata($request, $data['upload_id']);
+        Storage::disk('local')->makeDirectory('backups');
+        $filename = 'importe-'.now()->format('Ymd-His').'-'.substr(sha1($metadata['nom']), 0, 8).'.sql';
+        $destination = fopen(Storage::disk('local')->path('backups/'.$filename), 'wb');
+        abort_unless(is_resource($destination), 500, 'Impossible de créer le fichier SQL assemblé.');
+
+        try {
+            for ($index = 0; $index < $metadata['nombre_blocs']; $index++) {
+                $chunk = $directory.'/'.sprintf('bloc-%05d.part', $index);
+                abort_unless(Storage::disk('local')->exists($chunk), 422, 'Un bloc du fichier est manquant. Relancez l’import.');
+                $source = fopen(Storage::disk('local')->path($chunk), 'rb');
+                abort_unless(is_resource($source), 422, 'Un bloc du fichier est illisible.');
+                stream_copy_to_stream($source, $destination);
+                fclose($source);
+            }
+        } finally {
+            fclose($destination);
+        }
+
+        abort_unless(Storage::disk('local')->size('backups/'.$filename) === $metadata['taille'], 422, 'Le fichier assemblé est incomplet. Relancez l’import.');
+        Storage::disk('local')->deleteDirectory($directory);
+        try {
+            $this->restoreFile($filename);
+        } catch (Throwable $exception) {
+            report($exception);
+            throw ValidationException::withMessages([
+                'fichier' => 'La restauration MySQL a échoué. Le fichier assemblé est conservé sous le nom '.$filename.'.',
+            ]);
+        }
+
+        return response()->json(['message' => 'Base importée et restaurée depuis '.$metadata['nom'].'.']);
+    }
+
+    private function chunkMetadata(Request $request, string $uploadId): array
+    {
+        abort_unless(Str::isUuid($uploadId), 404);
+        $directory = 'backup-imports/'.$request->user()->id.'/'.$uploadId;
+        abort_unless(Storage::disk('local')->exists($directory.'/metadata.json'), 404);
+        $metadata = json_decode(Storage::disk('local')->get($directory.'/metadata.json'), true, flags: JSON_THROW_ON_ERROR);
+        abort_unless(($metadata['user_id'] ?? null) === $request->user()->id, 403);
+
+        return [$directory, $metadata];
     }
 
     public function importPackage(Request $request)

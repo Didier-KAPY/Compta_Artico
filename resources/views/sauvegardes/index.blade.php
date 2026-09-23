@@ -17,10 +17,12 @@
         </div></div></div>
         <div class="col-lg-6"><div class="card border-danger-subtle shadow-sm h-100"><div class="card-body p-4">
             <div class="d-flex align-items-start gap-3 mb-3"><span class="rounded-circle bg-danger-subtle text-danger p-3"><i class="bi bi-database-up fs-4"></i></span><div><h5 class="mb-1">Importer une base</h5><p class="text-muted mb-0">Le fichier SQL remplacera les données actuelles. Taille maximale : 100 Mo.</p></div></div>
-            <form method="POST" enctype="multipart/form-data" action="{{ route('parametres.sauvegardes.import') }}" data-confirm="Cette importation remplacera les données actuelles. Continuer ?">@csrf
+            <form id="databaseImportForm" method="POST" enctype="multipart/form-data" action="{{ route('parametres.sauvegardes.import') }}" data-no-loading>@csrf
                 <div class="mb-3"><label for="fichierImport" class="form-label">Fichier SQL</label><input id="fichierImport" type="file" name="fichier" accept=".sql,application/sql,text/plain" class="form-control @error('fichier') is-invalid @enderror" required>@error('fichier')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
                 <div class="mb-3"><label for="passwordImport" class="form-label">Votre mot de passe</label><input id="passwordImport" type="password" name="password" class="form-control @error('password') is-invalid @enderror" autocomplete="current-password" required>@error('password')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
                 <div class="form-check mb-3"><input id="confirmationImport" class="form-check-input" type="checkbox" name="confirmation" value="1" required><label class="form-check-label" for="confirmationImport">Je confirme le remplacement de la base actuelle.</label></div>
+                <div id="databaseImportProgress" class="progress mb-3 d-none" role="progressbar" aria-label="Progression de l'import"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width:0%">0 %</div></div>
+                <div id="databaseImportMessage" class="alert d-none"></div>
                 <button class="btn btn-danger" data-loading-text="Import en cours..."><i class="bi bi-upload me-1"></i>Importer et restaurer</button>
             </form>
             <hr>
@@ -38,4 +40,56 @@
         @empty<tr><td colspan="3" class="text-center text-muted py-5"><i class="bi bi-database-x d-block fs-2 mb-2"></i>Aucune sauvegarde disponible.</td></tr>@endforelse
     </tbody></table></div></div>
 </div>
+<script>
+document.getElementById('databaseImportForm')?.addEventListener('submit', async function (event) {
+    event.preventDefault();
+    if (!window.confirm('Cette importation remplacera les données actuelles. Continuer ?')) return;
+    const form = this;
+    const file = form.querySelector('[name="fichier"]').files[0];
+    const password = form.querySelector('[name="password"]').value;
+    const confirmation = form.querySelector('[name="confirmation"]').checked;
+    const token = form.querySelector('[name="_token"]').value;
+    const progress = document.getElementById('databaseImportProgress');
+    const bar = progress.querySelector('.progress-bar');
+    const message = document.getElementById('databaseImportMessage');
+    const button = form.querySelector('button[type="submit"], button:not([type])');
+    if (!file || !password || !confirmation) return;
+    if (!file.name.toLowerCase().endsWith('.sql')) return showError('Le fichier doit être au format .sql.');
+    if (file.size > 104857600) return showError('Le fichier dépasse la limite de 100 Mo.');
+
+    const chunkSize = 4 * 1024 * 1024;
+    const total = Math.ceil(file.size / chunkSize);
+    button.disabled = true;
+    progress.classList.remove('d-none');
+    message.classList.add('d-none');
+
+    try {
+        const started = await send('{{ route('parametres.sauvegardes.import.init') }}', values({nom:file.name, taille:file.size, nombre_blocs:total}));
+        for (let index = 0; index < total; index++) {
+            const payload = values({upload_id:started.upload_id, index:index});
+            payload.append('bloc', file.slice(index * chunkSize, Math.min(file.size, (index + 1) * chunkSize)), 'bloc.part');
+            await send('{{ route('parametres.sauvegardes.import.chunk') }}', payload);
+            const percent = Math.round(((index + 1) / total) * 90);
+            bar.style.width = percent + '%'; bar.textContent = percent + ' %';
+        }
+        bar.style.width = '95%'; bar.textContent = 'Restauration de la base…';
+        const finished = await send('{{ route('parametres.sauvegardes.import.finish') }}', values({upload_id:started.upload_id, password:password, confirmation:'1'}));
+        bar.style.width = '100%'; bar.textContent = '100 %';
+        message.className = 'alert alert-success'; message.textContent = finished.message;
+        window.setTimeout(() => window.location.assign('{{ route('parametres.sauvegardes.index') }}'), 1500);
+    } catch (error) {
+        showError(error.message || 'L’import a échoué.');
+        button.disabled = false;
+    }
+
+    function values(items) { const data = new FormData(); data.append('_token', token); Object.entries(items).forEach(([key,value]) => data.append(key,value)); return data; }
+    async function send(url, data) {
+        const response = await fetch(url, {method:'POST', body:data, headers:{'Accept':'application/json','X-CSRF-TOKEN':token}});
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.message || Object.values(result.errors || {}).flat()[0] || 'Erreur serveur (' + response.status + ').');
+        return result;
+    }
+    function showError(text) { message.className = 'alert alert-danger'; message.textContent = text; }
+});
+</script>
 @endsection

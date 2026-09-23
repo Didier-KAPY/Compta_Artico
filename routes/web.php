@@ -208,6 +208,9 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
             Route::post('/', [SauvegardeController::class, 'store'])->name('store');
             Route::post('/exporter-dossier', [SauvegardeController::class, 'exportPackage'])->name('export-package');
             Route::post('/importer', [SauvegardeController::class, 'import'])->name('import');
+            Route::post('/importer/initier', [SauvegardeController::class, 'initChunkedImport'])->name('import.init');
+            Route::post('/importer/bloc', [SauvegardeController::class, 'storeImportChunk'])->name('import.chunk');
+            Route::post('/importer/finaliser', [SauvegardeController::class, 'finishChunkedImport'])->name('import.finish');
             Route::post('/importer-dossier', [SauvegardeController::class, 'importPackage'])->name('import-package');
             Route::get('/{fichier}', [SauvegardeController::class, 'download'])->name('download');
             Route::post('/restaurer/base', [SauvegardeController::class, 'restore'])->name('restore');

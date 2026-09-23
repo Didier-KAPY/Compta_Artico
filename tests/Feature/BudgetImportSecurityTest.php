@@ -11,6 +11,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class BudgetImportSecurityTest extends TestCase
@@ -81,6 +82,26 @@ class BudgetImportSecurityTest extends TestCase
             DB::statement('DROP TABLE IF EXISTS import_restore_test');
             @unlink($path);
         }
+    }
+
+    public function test_un_gros_fichier_sql_peut_etre_envoye_par_blocs(): void
+    {
+        Storage::fake('local');
+        $user = $this->admin();
+        $started = $this->actingAs($user)->postJson(route('parametres.sauvegardes.import.init'), [
+            'nom' => 'grande-base.sql',
+            'taille' => 101911566,
+            'nombre_blocs' => 25,
+        ])->assertOk();
+        $uploadId = $started->json('upload_id');
+
+        $this->post(route('parametres.sauvegardes.import.chunk'), [
+            'upload_id' => $uploadId,
+            'index' => 0,
+            'bloc' => UploadedFile::fake()->create('bloc.part', 4096),
+        ], ['Accept' => 'application/json'])->assertOk();
+
+        Storage::disk('local')->assertExists('backup-imports/'.$user->id.'/'.$uploadId.'/bloc-00000.part');
     }
 
     public function test_ecrans_administratifs_sont_rendus_et_connexion_est_limitee(): void
