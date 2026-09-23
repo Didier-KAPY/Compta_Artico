@@ -391,7 +391,7 @@ class BalanceController extends Controller
 
 
         return view(
-            'comptabilite.balance.index',
+            'Comptabilite.balance.index',
             compact(
                 'balance',
                 'dateDebut',

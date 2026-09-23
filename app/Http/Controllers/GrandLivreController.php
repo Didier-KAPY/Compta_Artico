@@ -121,7 +121,7 @@ class GrandLivreController extends Controller
     }
 
     return view(
-        'comptabilite.grandlivre.index',
+        'Comptabilite.grandlivre.index',
         compact(
             'ecritures',
             'comptes',

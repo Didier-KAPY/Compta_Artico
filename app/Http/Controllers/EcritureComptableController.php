@@ -75,7 +75,7 @@ public function liste(Request $request)
     $equilibreCDF = abs($totalDebitCDF - $totalCreditCDF);
 
     return view(
-        'comptabilite.ecritures.liste',
+        'Comptabilite.ecritures.liste',
         compact(
             'ecritures',
             'totalDebitCDF',
