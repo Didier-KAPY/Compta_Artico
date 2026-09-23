@@ -27,7 +27,7 @@
                 <div class="profile-cover"></div>
                 <div class="card-body text-center px-4 pb-4" style="margin-top:-68px">
                     @if($user->photo)
-                        <img src="{{ asset('storage/'.$user->photo) }}" alt="Photo de {{ $user->prenom }}" class="profile-avatar rounded-circle shadow-sm">
+                        <img src="{{ route('profil.photo', [], false) }}" alt="Photo de {{ $user->prenom }}" class="profile-avatar rounded-circle shadow-sm">
                     @else
                         <div class="profile-initials rounded-circle shadow-sm d-inline-flex align-items-center justify-content-center fw-bold">{{ mb_strtoupper(mb_substr($user->prenom ?? '', 0, 1).mb_substr($user->nom ?? '', 0, 1)) }}</div>
                     @endif
@@ -63,7 +63,7 @@
                             <div class="col-12">
                                 <label class="form-label fw-semibold">Logo de l’entreprise</label>
                                 @if($entreprise?->logo)
-                                    <div class="mb-2"><img src="{{ asset('storage/'.$entreprise->logo) }}" alt="Logo de l’entreprise" style="max-width:180px;max-height:120px;object-fit:contain"></div>
+                                    <div class="mb-2"><img src="{{ route('profil.logo', [], false) }}" alt="Logo de l’entreprise" style="max-width:180px;max-height:120px;object-fit:contain"></div>
                                 @endif
                                 <input type="file" name="logo" accept="image/png,image/jpeg,.png,.jpg,.jpeg" class="form-control @error('logo') is-invalid @enderror" @disabled(!$entreprise)>
                                 @error('logo')<div class="invalid-feedback">{{ $message }}</div>@enderror

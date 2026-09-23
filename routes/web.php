@@ -45,6 +45,8 @@ Route::post('/', [AuthController::class, 'handlelogin'])->name('handlelogin');
 Route::get('/login/succes', [AuthController::class, 'loginSucces'])->name('login.succes');
 
 Route::middleware(['auth', 'force.password.change'])->group(function () {
+    Route::get('/profil/photo', [ProfilController::class, 'photo'])->name('profil.photo');
+    Route::get('/profil/logo', [ProfilController::class, 'logo'])->name('profil.logo');
     Route::get('/profil', [ProfilController::class, 'index'])
         ->name('profil.index');
     Route::post('/profil/update', [ProfilController::class, 'update'])

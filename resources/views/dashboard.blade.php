@@ -6,7 +6,7 @@
         <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
             <div class="d-flex align-items-center gap-3">
                 @if($user->photo)
-                    <img src="{{ asset('storage/'.$user->photo) }}" class="welcome-avatar" alt="Photo de {{ $user->prenom }}">
+                    <img src="{{ route('profil.photo', [], false) }}" class="welcome-avatar" alt="Photo de {{ $user->prenom }}">
                 @else
                     <div class="welcome-avatar avatar-fallback"><i class="bi bi-person"></i></div>
                 @endif

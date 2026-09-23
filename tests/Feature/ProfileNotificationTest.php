@@ -12,6 +12,36 @@ class ProfileNotificationTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_profile_images_are_served_without_a_public_storage_link(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('public');
+        $image = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=');
+        $disk = \Illuminate\Support\Facades\Storage::disk('public');
+        $disk->put('photos/profile.png', $image);
+        $disk->put('logos/company.png', $image);
+        $user = $this->userWithRole('Admin', 'images@test.local');
+        $user->update(['photo' => 'photos/profile.png']);
+        \App\Models\Entreprise::create([
+            'user_id' => $user->id,
+            'nom_entreprise' => 'Test',
+            'logo' => 'logos/company.png',
+        ]);
+
+        $this->get('/profil/photo')->assertRedirect(route('login'));
+        $this->get('/profil/logo')->assertRedirect(route('login'));
+        $this->actingAs($user);
+        foreach (['/profil/photo', '/profil/logo'] as $url) {
+            $this->get($url)->assertOk()->assertHeader('Content-Type', 'image/png')->assertContent($image);
+        }
+        $this->get(route('profil.index'))->assertOk()
+            ->assertSee('src="/profil/photo"', false)
+            ->assertSee('src="/profil/logo"', false);
+
+        $disk->delete(['photos/profile.png', 'logos/company.png']);
+        $this->get('/profil/photo')->assertNotFound();
+        $this->get('/profil/logo')->assertNotFound();
+    }
+
     public function test_profile_saves_postnom(): void
     {
         $user = $this->userWithRole('Admin', 'postnom@test.local');

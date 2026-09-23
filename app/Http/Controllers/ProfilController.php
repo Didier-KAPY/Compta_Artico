@@ -17,6 +17,27 @@ use App\Models\Entreprise;
 
 class ProfilController extends Controller
 {
+    public function photo()
+    {
+        return $this->imageResponse(Auth::user()->photo);
+    }
+
+    public function logo()
+    {
+        return $this->imageResponse(Entreprise::first()?->logo);
+    }
+
+    private function imageResponse(?string $path)
+    {
+        $disk = Storage::disk('public');
+        abort_unless($path && $disk->exists($path), 404);
+
+        return response($disk->get($path), 200, [
+            'Content-Type' => $disk->mimeType($path) ?: 'application/octet-stream',
+            'Cache-Control' => 'private, no-store, max-age=0',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
 
 
     public function index()

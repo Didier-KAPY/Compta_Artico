@@ -70,7 +70,7 @@
 
                     @if($entreprise?->logo)
 
-                        <img src="{{ asset('storage/'.$entreprise->logo) }}"
+                        <img src="{{ route('profil.logo', [], false) }}"
                              class="rounded-circle shadow"
                              style="width:120px;height:120px;object-fit:cover;">
 

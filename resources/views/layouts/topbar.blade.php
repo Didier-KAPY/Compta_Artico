@@ -19,7 +19,7 @@
             <a href="{{ $user?->hasRole(['Directeur Technique', 'Chef de Service', 'Chef de Département']) ? route('etat-besoins.index') : route('dashboard') }}" class="topbar-brand text-decoration-none">
                 <span class="topbar-logo">
                     @if(!empty($entreprise?->logo))
-                        <img src="{{ asset('storage/'.$entreprise->logo) }}" alt="Logo {{ $entreprise->nom_entreprise ?? 'entreprise' }}">
+                        <img src="{{ route('profil.logo', [], false) }}" alt="Logo {{ $entreprise->nom_entreprise ?? 'entreprise' }}">
                     @else
                         <i class="bi bi-building"></i>
                     @endif
@@ -98,7 +98,7 @@
                     <button class="topbar-user" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <span class="topbar-avatar">
                             @if(!empty($user->photo))
-                                <img src="{{ asset('storage/'.$user->photo) }}" alt="Photo de {{ $nomComplet }}">
+                                <img src="{{ route('profil.photo', [], false) }}" alt="Photo de {{ $nomComplet }}">
                             @else
                                 <span>{{ $initiales ?: 'U' }}</span>
                             @endif
@@ -115,7 +115,7 @@
                         <div class="topbar-menu-head">
                             <span class="topbar-avatar topbar-avatar-lg">
                                 @if(!empty($user->photo))
-                                    <img src="{{ asset('storage/'.$user->photo) }}" alt="Photo de {{ $nomComplet }}">
+                                    <img src="{{ route('profil.photo', [], false) }}" alt="Photo de {{ $nomComplet }}">
                                 @else
                                     <span>{{ $initiales ?: 'U' }}</span>
                                 @endif
