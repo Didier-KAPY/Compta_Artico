@@ -28,11 +28,11 @@ class SauvegardeController extends Controller
         Storage::disk('local')->makeDirectory('backups');
         $path = Storage::disk('local')->path($name);
         try {
-            $process = new Process([
-                $this->binary('DB_DUMP_BINARY', 'mysqldump.exe'), '--host='.$db['host'], '--port='.(string) $db['port'],
-                '--user='.$db['username'], '--single-transaction', '--routines', '--triggers', $db['database'],
-                '--result-file='.$path,
-            ], null, $this->processEnvironment((string) $db['password']), null, 300);
+            $process = new Process(array_merge(
+                [$this->binary('DB_DUMP_BINARY', 'mysqldump.exe')],
+                $this->connectionArguments($db),
+                ['--single-transaction', '--routines', '--triggers', $db['database'], '--result-file='.$path],
+            ), null, $this->processEnvironment((string) $db['password']), null, 300);
             $process->mustRun();
         } catch (Throwable $exception) {
             Storage::disk('local')->delete($name);
@@ -56,11 +56,11 @@ class SauvegardeController extends Controller
         $zipPath = Storage::disk('local')->path($zipName);
 
         try {
-            $process = new Process([
-                $this->binary('DB_DUMP_BINARY', 'mysqldump.exe'), '--host='.$db['host'], '--port='.(string) $db['port'],
-                '--user='.$db['username'], '--single-transaction', '--routines', '--triggers', $db['database'],
-                '--result-file='.$sqlPath,
-            ], null, $this->processEnvironment((string) $db['password']), null, 300);
+            $process = new Process(array_merge(
+                [$this->binary('DB_DUMP_BINARY', 'mysqldump.exe')],
+                $this->connectionArguments($db),
+                ['--single-transaction', '--routines', '--triggers', $db['database'], '--result-file='.$sqlPath],
+            ), null, $this->processEnvironment((string) $db['password']), null, 300);
             $process->mustRun();
 
             $zip = new ZipArchive();
@@ -128,7 +128,15 @@ class SauvegardeController extends Controller
         Storage::disk('local')->makeDirectory('backups');
         $filename = 'importe-'.now()->format('Ymd-His').'-'.substr(sha1($upload->getClientOriginalName()), 0, 8).'.sql';
         $upload->storeAs('backups', $filename, 'local');
-        $this->restoreFile($filename);
+        try {
+            $this->restoreFile($filename);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            throw ValidationException::withMessages([
+                'fichier' => 'La restauration MySQL a échoué. Le fichier a été conservé dans les sauvegardes sous le nom '.$filename.'.',
+            ]);
+        }
 
         return back()->with('success', 'Base importée et restaurée depuis '.$upload->getClientOriginalName().'.');
     }
@@ -198,7 +206,11 @@ class SauvegardeController extends Controller
         $stream = fopen(Storage::disk('local')->path('backups/'.$filename), 'r');
 
         try {
-            $process = new Process([$this->binary('DB_CLIENT_BINARY', 'mysql.exe'), '--host='.$db['host'], '--port='.(string) $db['port'], '--user='.$db['username'], $db['database']], null, $this->processEnvironment((string) $db['password']), $stream, 300);
+            $process = new Process(array_merge(
+                [$this->binary('DB_CLIENT_BINARY', 'mysql.exe')],
+                $this->connectionArguments($db),
+                [$db['database']],
+            ), null, $this->processEnvironment((string) $db['password']), $stream, 300);
             $process->mustRun();
         } finally {
             if (is_resource($stream)) {
@@ -213,7 +225,11 @@ class SauvegardeController extends Controller
         abort_unless(($db['driver'] ?? null) === 'mysql', 422, 'La restauration est configurée pour MySQL.');
         $stream = fopen($path, 'r');
         try {
-            $process = new Process([$this->binary('DB_CLIENT_BINARY', 'mysql.exe'), '--host='.$db['host'], '--port='.(string) $db['port'], '--user='.$db['username'], $db['database']], null, $this->processEnvironment((string) $db['password']), $stream, 300);
+            $process = new Process(array_merge(
+                [$this->binary('DB_CLIENT_BINARY', 'mysql.exe')],
+                $this->connectionArguments($db),
+                [$db['database']],
+            ), null, $this->processEnvironment((string) $db['password']), $stream, 300);
             $process->mustRun();
         } finally {
             if (is_resource($stream)) fclose($stream);
@@ -232,6 +248,21 @@ class SauvegardeController extends Controller
         $laragon = glob('C:/laragon/bin/mysql/*/bin/'.$executable) ?: [];
 
         return end($laragon) ?: pathinfo($executable, PATHINFO_FILENAME);
+    }
+
+    private function connectionArguments(array $db): array
+    {
+        $arguments = [
+            '--host='.$db['host'],
+            '--port='.(string) $db['port'],
+            '--user='.$db['username'],
+        ];
+        $sslCa = env('MYSQL_ATTR_SSL_CA');
+        if ($sslCa && is_file($sslCa)) {
+            $arguments[] = '--ssl-ca='.$sslCa;
+        }
+
+        return $arguments;
     }
 
     private function processEnvironment(string $password): array

@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
     nodejs \
     npm \
     ca-certificates \
+    default-mysql-client \
     && docker-php-ext-install pdo_mysql \
     && a2enmod rewrite \
     && rm -rf /var/lib/apt/lists/*
@@ -33,6 +34,9 @@ RUN mkdir -p \
     bootstrap/cache \
     && chown -R www-data:www-data storage bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
+
+RUN printf 'upload_max_filesize=512M\npost_max_size=520M\nmax_execution_time=600\nmax_input_time=600\n' \
+    > /usr/local/etc/php/conf.d/compta-artico-uploads.ini
 
 RUN a2enmod rewrite
 
