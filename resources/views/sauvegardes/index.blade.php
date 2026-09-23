@@ -26,10 +26,12 @@
                 <button class="btn btn-danger" data-loading-text="Import en cours..."><i class="bi bi-upload me-1"></i>Importer et restaurer</button>
             </form>
             <hr>
-            <form method="POST" enctype="multipart/form-data" action="{{ route('parametres.sauvegardes.import-package') }}" data-confirm="Le dossier remplacera la base et les fichiers actuels. Une sauvegarde SQL existe-t-elle avant de continuer ?">@csrf
+            <form id="workspaceImportForm" method="POST" enctype="multipart/form-data" action="{{ route('parametres.sauvegardes.import-package') }}" data-no-loading>@csrf
                 <div class="mb-3"><label for="workspaceImport" class="form-label">Dossier de travail (.zip)</label><input id="workspaceImport" type="file" name="fichier" accept=".zip,application/zip" class="form-control" required><small class="text-muted">Paquet exporté par Compta Artico, maximum 500 Mo.</small></div>
                 <div class="mb-3"><label for="workspacePassword" class="form-label">Votre mot de passe</label><input id="workspacePassword" type="password" name="password" class="form-control" autocomplete="current-password" required></div>
                 <div class="form-check mb-3"><input id="workspaceConfirmation" class="form-check-input" type="checkbox" name="confirmation" value="1" required><label class="form-check-label" for="workspaceConfirmation">Je confirme le remplacement de la base et des fichiers.</label></div>
+                <div id="workspaceImportProgress" class="progress mb-3 d-none" role="progressbar" aria-label="Progression de l'import"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width:0%">0 %</div></div>
+                <div id="workspaceImportMessage" class="alert d-none"></div>
                 <button class="btn btn-danger" data-loading-text="Restauration du dossier..."><i class="bi bi-folder-plus me-1"></i>Importer le dossier de travail</button>
             </form>
         </div></div></div>
@@ -41,21 +43,22 @@
     </tbody></table></div></div>
 </div>
 <script>
-document.getElementById('databaseImportForm')?.addEventListener('submit', async function (event) {
+function configureChunkedImport(formId, progressId, messageId, extension, maxSize, confirmationText) {
+document.getElementById(formId)?.addEventListener('submit', async function (event) {
     event.preventDefault();
-    if (!window.confirm('Cette importation remplacera les données actuelles. Continuer ?')) return;
+    if (!window.confirm(confirmationText)) return;
     const form = this;
     const file = form.querySelector('[name="fichier"]').files[0];
     const password = form.querySelector('[name="password"]').value;
     const confirmation = form.querySelector('[name="confirmation"]').checked;
     const token = form.querySelector('[name="_token"]').value;
-    const progress = document.getElementById('databaseImportProgress');
+    const progress = document.getElementById(progressId);
     const bar = progress.querySelector('.progress-bar');
-    const message = document.getElementById('databaseImportMessage');
+    const message = document.getElementById(messageId);
     const button = form.querySelector('button[type="submit"], button:not([type])');
     if (!file || !password || !confirmation) return;
-    if (!file.name.toLowerCase().endsWith('.sql')) return showError('Le fichier doit être au format .sql.');
-    if (file.size > 104857600) return showError('Le fichier dépasse la limite de 100 Mo.');
+    if (!file.name.toLowerCase().endsWith('.' + extension)) return showError('Le fichier doit être au format .' + extension + '.');
+    if (file.size > maxSize) return showError('Le fichier dépasse la taille maximale autorisée.');
 
     const chunkSize = 4 * 1024 * 1024;
     const total = Math.ceil(file.size / chunkSize);
@@ -91,5 +94,8 @@ document.getElementById('databaseImportForm')?.addEventListener('submit', async 
     }
     function showError(text) { message.className = 'alert alert-danger'; message.textContent = text; }
 });
+}
+configureChunkedImport('databaseImportForm', 'databaseImportProgress', 'databaseImportMessage', 'sql', 100 * 1024 * 1024, 'Cette importation remplacera les données actuelles. Continuer ?');
+configureChunkedImport('workspaceImportForm', 'workspaceImportProgress', 'workspaceImportMessage', 'zip', 500 * 1024 * 1024, 'Le dossier remplacera la base et les fichiers actuels. Continuer ?');
 </script>
 @endsection

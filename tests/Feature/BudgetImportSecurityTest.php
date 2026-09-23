@@ -84,12 +84,12 @@ class BudgetImportSecurityTest extends TestCase
         }
     }
 
-    public function test_un_gros_fichier_sql_peut_etre_envoye_par_blocs(): void
+    public function test_un_gros_dossier_zip_peut_etre_envoye_par_blocs(): void
     {
         Storage::fake('local');
         $user = $this->admin();
         $started = $this->actingAs($user)->postJson(route('parametres.sauvegardes.import.init'), [
-            'nom' => 'grande-base.sql',
+            'nom' => 'dossier-de-travail.zip',
             'taille' => 101911566,
             'nombre_blocs' => 25,
         ])->assertOk();

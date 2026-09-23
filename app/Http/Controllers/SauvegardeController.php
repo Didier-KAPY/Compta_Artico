@@ -146,9 +146,9 @@ class SauvegardeController extends Controller
     public function initChunkedImport(Request $request)
     {
         $data = $request->validate([
-            'nom' => ['required', 'string', 'max:255', 'regex:/\.sql$/i'],
-            'taille' => ['required', 'integer', 'min:1', 'max:104857600'],
-            'nombre_blocs' => ['required', 'integer', 'min:1', 'max:100'],
+            'nom' => ['required', 'string', 'max:255', 'regex:/\.(sql|zip)$/i'],
+            'taille' => ['required', 'integer', 'min:1', 'max:524288000'],
+            'nombre_blocs' => ['required', 'integer', 'min:1', 'max:125'],
         ]);
         $uploadId = (string) Str::uuid();
         $directory = 'backup-imports/'.$request->user()->id.'/'.$uploadId;
@@ -189,7 +189,9 @@ class SauvegardeController extends Controller
         }
         [$directory, $metadata] = $this->chunkMetadata($request, $data['upload_id']);
         Storage::disk('local')->makeDirectory('backups');
-        $filename = 'importe-'.now()->format('Ymd-His').'-'.substr(sha1($metadata['nom']), 0, 8).'.sql';
+        $extension = mb_strtolower(pathinfo($metadata['nom'], PATHINFO_EXTENSION));
+        abort_unless(in_array($extension, ['sql', 'zip'], true), 422, 'Format de fichier non reconnu.');
+        $filename = 'importe-'.now()->format('Ymd-His').'-'.substr(sha1($metadata['nom']), 0, 8).'.'.$extension;
         $destination = fopen(Storage::disk('local')->path('backups/'.$filename), 'wb');
         abort_unless(is_resource($destination), 500, 'Impossible de créer le fichier SQL assemblé.');
 
@@ -209,15 +211,21 @@ class SauvegardeController extends Controller
         abort_unless(Storage::disk('local')->size('backups/'.$filename) === $metadata['taille'], 422, 'Le fichier assemblé est incomplet. Relancez l’import.');
         Storage::disk('local')->deleteDirectory($directory);
         try {
-            $this->restoreFile($filename);
+            if ($extension === 'zip') {
+                $this->restorePackagePath(Storage::disk('local')->path('backups/'.$filename));
+            } else {
+                $this->restoreFile($filename);
+            }
         } catch (Throwable $exception) {
             report($exception);
             throw ValidationException::withMessages([
-                'fichier' => 'La restauration MySQL a échoué. Le fichier assemblé est conservé sous le nom '.$filename.'.',
+                'fichier' => 'La restauration a échoué. Le fichier assemblé est conservé sous le nom '.$filename.'.',
             ]);
         }
 
-        return response()->json(['message' => 'Base importée et restaurée depuis '.$metadata['nom'].'.']);
+        return response()->json(['message' => $extension === 'zip'
+            ? 'Dossier de travail importé : base et fichiers restaurés.'
+            : 'Base importée et restaurée depuis '.$metadata['nom'].'.']);
     }
 
     private function chunkMetadata(Request $request, string $uploadId): array
@@ -250,9 +258,21 @@ class SauvegardeController extends Controller
         $temporary = tempnam(sys_get_temp_dir(), 'compta-workspace-');
         @unlink($temporary);
         $upload->move(dirname($temporary), basename($temporary));
+        try {
+            $this->restorePackagePath($temporary);
+        } finally {
+            @unlink($temporary);
+        }
+
+        return back()->with('success', 'Dossier de travail importé : base et fichiers restaurés.');
+    }
+
+    private function restorePackagePath(string $path): void
+    {
+        abort_unless(class_exists(ZipArchive::class), 500, 'L’extension PHP ZIP est requise pour les dossiers de travail.');
         $zip = new ZipArchive();
         try {
-            abort_unless($zip->open($temporary) === true, 422, 'Archive ZIP illisible.');
+            abort_unless($zip->open($path) === true, 422, 'Archive ZIP illisible.');
             $manifest = json_decode((string) $zip->getFromName('manifest.json'), true);
             $sqlEntry = $zip->locateName('database.sql') !== false ? 'database.sql' : 'database/dump.sql';
             abort_unless(($manifest['format'] ?? null) === 'compta-artico-workspace-v1' || $sqlEntry !== false, 422, 'Format de dossier de travail non reconnu.');
@@ -283,10 +303,7 @@ class SauvegardeController extends Controller
             }
         } finally {
             $zip->close();
-            @unlink($temporary);
         }
-
-        return back()->with('success', 'Dossier de travail importé : base et fichiers restaurés.');
     }
 
     private function restoreFile(string $filename): void
