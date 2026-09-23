@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace Database\Seeders;
 
@@ -13,22 +13,22 @@ class DefaultUserSeeder extends Seeder
     {
         /*
         |--------------------------------------------------------------------------
-        | Création ou récupération du rôle Super Admin
+        | CrÃ©ation ou rÃ©cupÃ©ration du rÃ´le Super Admin
         |--------------------------------------------------------------------------
         */
 
         $role = Role::firstOrCreate(
             [
-                'nom' => 'Super Admin',
+                'designation' => 'Super Admin',
             ],
             [
-                'description' => 'Administrateur principal du système',
+                'observation' => 'Administrateur principal du systÃ¨me',
             ]
         );
 
         /*
         |--------------------------------------------------------------------------
-        | Création de l'utilisateur par défaut
+        | CrÃ©ation de l'utilisateur par dÃ©faut
         |--------------------------------------------------------------------------
         */
 
@@ -41,6 +41,7 @@ class DefaultUserSeeder extends Seeder
                 'prenom' => 'Sarlu',
                 'role_id' => $role->id,
                 'password' => Hash::make('123456'),
+                'password_default' => true,
                 'statut' => 'Actif',
             ]
         );

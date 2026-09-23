@@ -11,7 +11,9 @@
     <div class="row g-4 mb-4">
         <div class="col-lg-6"><div class="card border-0 shadow-sm h-100"><div class="card-body p-4">
             <div class="d-flex align-items-start gap-3 mb-3"><span class="rounded-circle bg-primary-subtle text-primary p-3"><i class="bi bi-database-down fs-4"></i></span><div><h5 class="mb-1">Exporter la base</h5><p class="text-muted mb-0">Crée une copie complète que vous pourrez télécharger ci-dessous.</p></div></div>
-            <form method="POST" action="{{ route('parametres.sauvegardes.store') }}">@csrf<button class="btn btn-primary" data-loading-text="Export en cours..."><i class="bi bi-download me-1"></i>Créer une sauvegarde</button></form>
+            <form method="POST" action="{{ route('parametres.sauvegardes.store') }}">@csrf<button class="btn btn-primary" data-loading-text="Export en cours..."><i class="bi bi-download me-1"></i>Créer une sauvegarde SQL</button></form>
+            <form method="POST" action="{{ route('parametres.sauvegardes.export-package') }}" class="mt-2">@csrf<button class="btn btn-outline-primary" data-loading-text="Préparation du dossier..."><i class="bi bi-folder-symlink me-1"></i>Exporter le dossier de travail</button></form>
+            <small class="text-muted d-block mt-2">Inclut la base, les images, JPG/PNG et PDF des pièces justificatives.</small>
         </div></div></div>
         <div class="col-lg-6"><div class="card border-danger-subtle shadow-sm h-100"><div class="card-body p-4">
             <div class="d-flex align-items-start gap-3 mb-3"><span class="rounded-circle bg-danger-subtle text-danger p-3"><i class="bi bi-database-up fs-4"></i></span><div><h5 class="mb-1">Importer une base</h5><p class="text-muted mb-0">Le fichier SQL remplacera les données actuelles. Taille maximale : 100 Mo.</p></div></div>
@@ -20,6 +22,13 @@
                 <div class="mb-3"><label for="passwordImport" class="form-label">Votre mot de passe</label><input id="passwordImport" type="password" name="password" class="form-control @error('password') is-invalid @enderror" autocomplete="current-password" required>@error('password')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
                 <div class="form-check mb-3"><input id="confirmationImport" class="form-check-input" type="checkbox" name="confirmation" value="1" required><label class="form-check-label" for="confirmationImport">Je confirme le remplacement de la base actuelle.</label></div>
                 <button class="btn btn-danger" data-loading-text="Import en cours..."><i class="bi bi-upload me-1"></i>Importer et restaurer</button>
+            </form>
+            <hr>
+            <form method="POST" enctype="multipart/form-data" action="{{ route('parametres.sauvegardes.import-package') }}" data-confirm="Le dossier remplacera la base et les fichiers actuels. Une sauvegarde SQL existe-t-elle avant de continuer ?">@csrf
+                <div class="mb-3"><label for="workspaceImport" class="form-label">Dossier de travail (.zip)</label><input id="workspaceImport" type="file" name="fichier" accept=".zip,application/zip" class="form-control" required><small class="text-muted">Paquet exporté par Compta Artico, maximum 500 Mo.</small></div>
+                <div class="mb-3"><label for="workspacePassword" class="form-label">Votre mot de passe</label><input id="workspacePassword" type="password" name="password" class="form-control" autocomplete="current-password" required></div>
+                <div class="form-check mb-3"><input id="workspaceConfirmation" class="form-check-input" type="checkbox" name="confirmation" value="1" required><label class="form-check-label" for="workspaceConfirmation">Je confirme le remplacement de la base et des fichiers.</label></div>
+                <button class="btn btn-danger" data-loading-text="Restauration du dossier..."><i class="bi bi-folder-plus me-1"></i>Importer le dossier de travail</button>
             </form>
         </div></div></div>
     </div>
