@@ -550,6 +550,9 @@ Route::middleware(['auth', 'force.password.change', 'accounting.open'])->group(f
     Route::get('/balance', [BalanceController::class, 'index'])
         ->middleware(['feature:accounting', 'role:Super Admin,Admin,Directeur Général,DAF,Comptable'])
         ->name('balance.index');
+    Route::get('/diagnostic-comptable', \App\Http\Controllers\AccountingDiagnosticController::class)
+        ->middleware('role:Super Admin')
+        ->name('diagnostic-comptable');
 
     Route::prefix('comptabilite/etats-financiers')
         ->name('comptabilite.etats-financiers.')
