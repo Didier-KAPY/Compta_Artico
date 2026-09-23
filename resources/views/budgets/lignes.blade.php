@@ -8,7 +8,7 @@
 @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
 @can('manageBudgetLines')
 <section class="card border-0 shadow-sm mb-4"><div class="card-body p-4"><form method="POST" action="{{ route('parametres.budgets.lignes.store') }}" class="row g-3">@csrf
-<div class="col-md-6"><label class="form-label">Département</label><select name="departement_id" class="form-select"><option value="">Tous</option>@foreach($departements as $d)<option value="{{ $d->id }}">{{ $d->designation }}</option>@endforeach</select></div>
+<div class="col-md-6"><label class="form-label">Direction</label><select name="departement_id" class="form-select"><option value="">Tous</option>@foreach($departements as $d)<option value="{{ $d->id }}">{{ $d->designation }}</option>@endforeach</select></div>
 <div class="col-md-6"><label class="form-label">Rubrique budgétaire</label><select name="rubrique_budgetaire_id" class="form-select" required><option value="">Sélectionner</option>@foreach($rubriquesBudgetaires as $r)<option value="{{ $r->id }}" @selected((string)old('rubrique_budgetaire_id')===(string)$r->id)>[{{ $r->nature }}] {{ $r->designation }} — {{ $r->compte?->compte }}</option>@endforeach</select></div>
 <div class="col-md-6"><label class="form-label">Prévision initiale</label><input type="number" min="0" step="0.01" name="prevision_initiale" value="{{ old('prevision_initiale') }}" class="form-control" required></div>
 <div class="col-md-4"><label class="form-label">Date de début</label><input type="date" name="date_debut" value="{{ old('date_debut') }}" class="form-control" required></div>

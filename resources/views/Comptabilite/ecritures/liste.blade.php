@@ -157,9 +157,10 @@
                             <td class="text-center">
                                 <a href="{{ route('ecritures.show', $ecriture) }}"
                                    class="btn btn-sm btn-primary"
-                                   title="Imputation">
-                                    <i class="bi bi-diagram-3 me-1"></i>Imputation
+                                   title="{{ $ecriture->constatation_id ? 'Voir' : 'Imputation' }}">
+                                    <i class="bi bi-diagram-3 me-1"></i>{{ $ecriture->constatation_id ? 'Voir' : 'Imputation' }}
                                 </a>
+                                @include('Comptabilite.ecritures._constatation_action')
                             </td>
                         </tr>
                     @empty

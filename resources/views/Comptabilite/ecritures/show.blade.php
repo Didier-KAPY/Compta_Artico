@@ -7,6 +7,20 @@
         <a href="{{ route('ecritures.liste') }}" class="btn btn-secondary"><i class="bi bi-arrow-left me-1"></i>Retour</a>
     </div>
     @include('partials.document-navigation')
+    <div class="mb-3">@include('Comptabilite.ecritures._constatation_action')</div>
+    @php
+        $constatationHistorique = $ecriture->constatation ?? $ecriture->journal?->constatation;
+    @endphp
+    @if($constatationHistorique)
+        <div class="card border-0 shadow-sm mb-4" id="historique-constatation">
+            <div class="card-header"><strong>Historique de la constatation</strong></div>
+            <div class="card-body">
+                <p class="mb-2">{{ $constatationHistorique->numero }} — Source #{{ $constatationHistorique->source_ecriture_id }} — Journal de règlement #{{ $constatationHistorique->reglement_journal_id }} — Pièce {{ $constatationHistorique->piece_origine }}</p>
+                <p>{{ $constatationHistorique->created_at->format('d/m/Y H:i') }} — {{ $constatationHistorique->user?->prenom }} {{ $constatationHistorique->user?->nom }} — {{ number_format($constatationHistorique->montant_cdf, 2, ',', ' ') }} CDF — {{ $constatationHistorique->statut }}</p>
+                <a class="btn btn-sm btn-outline-primary" href="{{ route('ecritures.constatation', $constatationHistorique->source_ecriture_id) }}">Voir</a>
+            </div>
+        </div>
+    @endif
     @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
     @if($errors->any())<div class="alert alert-danger"><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 

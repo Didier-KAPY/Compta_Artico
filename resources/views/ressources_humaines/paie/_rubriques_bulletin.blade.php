@@ -23,3 +23,4 @@
 @endif
 <tr><td>Retenue sur absence</td><td></td><td class="amount">{{ $paie->appliquer_retenue_absence && (float)$paie->retenue_absence_theorique ? number_format($paie->retenue_absence_theorique,2,',',' ') : '—' }}</td></tr>
 <tr><td>Autres retenues</td><td></td><td class="amount">{{ $paie->appliquer_retenues && (float)$paie->retenues ? number_format(max(0,(float)$paie->retenues-($paie->appliquer_retenue_absence?(float)$paie->retenue_absence_theorique:0)),2,',',' ') : '—' }}</td></tr>
+<tr><td>Avance sur salaire</td><td></td><td class="amount">{{ (float)$paie->avance_salaire ? number_format($paie->avance_salaire,2,',',' ') : '—' }}</td></tr>

@@ -20,7 +20,7 @@ class MatriculeEmployeServiceTest extends TestCase
         [$entreprise, $direction] = $this->contexte('Direction des Ressources Humaines');
         $service = app(MatriculeEmployeService::class);
 
-        $this->assertSame('DRH-'.now()->format('Y').'-00001', $service->generer($entreprise->id, $direction->id));
+        $this->assertSame('DRH-00001', $service->generer($entreprise->id, $direction->id));
         $this->assertSame('DG', $service->initiales('Direction Générale'));
     }
 
@@ -30,10 +30,10 @@ class MatriculeEmployeServiceTest extends TestCase
         $finance = Departement::create(['entreprise_id' => $entreprise->id, 'designation' => 'Direction Financière', 'actif' => true]);
         $service = app(MatriculeEmployeService::class);
         $annee = now()->format('Y');
-        Employe::create(['entreprise_id' => $entreprise->id, 'departement_id' => $technique->id, 'matricule' => "DT-$annee-00001", 'nom' => 'Premier', 'statut' => 'Actif']);
+        Employe::create(['entreprise_id' => $entreprise->id, 'departement_id' => $technique->id, 'matricule' => "DT-00001", 'nom' => 'Premier', 'statut' => 'Actif']);
 
-        $this->assertSame("DT-$annee-00002", $service->generer($entreprise->id, $technique->id));
-        $this->assertSame("DF-$annee-00001", $service->generer($entreprise->id, $finance->id));
+        $this->assertSame("DT-00002", $service->generer($entreprise->id, $technique->id));
+        $this->assertSame("DF-00001", $service->generer($entreprise->id, $finance->id));
     }
 
     private function contexte(string $designation): array

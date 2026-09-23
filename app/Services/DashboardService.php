@@ -11,7 +11,6 @@ use App\Models\JournalType;
 use App\Models\ListeDesComptes;
 use App\Models\SortieCaisse;
 use App\Models\TauxDeChange;
-use App\Models\ClotureJournaliere;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
@@ -30,12 +29,14 @@ class DashboardService
         $data = [];
 
         if ($sections['statistics']) {
+            $debutMois = now()->startOfMonth()->toDateString();
+            $finMois = now()->endOfMonth()->toDateString();
             $data['statistics'] = [
                 'users' => User::count(),
-                'brc' => BRC::count(),
-                'cash_in' => EntreeCaisse::count(),
-                'cash_out' => SortieCaisse::count(),
-                'needs' => EtatBesoin::count(),
+                'brc' => BRC::whereBetween('date', [$debutMois, $finMois])->count(),
+                'cash_in' => EntreeCaisse::whereBetween('date', [$debutMois, $finMois])->count(),
+                'cash_out' => SortieCaisse::whereBetween('date', [$debutMois, $finMois])->count(),
+                'needs' => EtatBesoin::whereBetween('date', [$debutMois, $finMois])->count(),
                 'accounts' => ListeDesComptes::count(),
             ];
         }
@@ -141,10 +142,11 @@ class DashboardService
                 'journals' => Journaux::where('statut', 'En attente')->count(),
             ];
             $data['accounting_alerts'] = [
-                'journaux_sans_piece' => Journaux::whereNull('piece_justificatif')->count(),
-                'journaux_non_regroupes' => Journaux::where('statut_regroupement', 'non_regroupe')->count(),
-                'jours_ouverts' => Journaux::where('statut_regroupement', 'non_regroupe')->distinct('date')->count('date'),
-                'derniere_cloture' => ClotureJournaliere::latest('date_comptable')->value('date_comptable'),
+                'etats_besoin_sans_piece' => EtatBesoin::query()
+                    ->where('statut', 'Validé')
+                    ->where(fn ($query) => $query->whereNull('piece_justificative')->orWhere('piece_justificative', ''))
+                    ->where(fn ($query) => $query->whereNull('pieces_justificatives')->orWhereJsonLength('pieces_justificatives', 0))
+                    ->count(),
             ];
         }
 

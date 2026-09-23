@@ -4,6 +4,13 @@
         <div class="d-flex gap-2">
             <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" href="{{ route($pieceRoute, ['id' => $document->id, 'piece' => hash('sha256', $pieceJointe['path'])]) }}">Consulter</a>
             <a class="btn btn-sm btn-outline-secondary" data-no-loading href="{{ route($pieceRoute, ['id' => $document->id, 'piece' => hash('sha256', $pieceJointe['path']), 'telecharger' => 1]) }}">Télécharger</a>
+            @if(($canDeletePiece ?? false) && isset($pieceDeleteRoute))
+                <form method="POST" action="{{ route($pieceDeleteRoute, ['id' => $document->id, 'piece' => hash('sha256', $pieceJointe['path'])]) }}" data-confirm="Supprimer cette pièce justificative ?">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash me-1"></i>Supprimer</button>
+                </form>
+            @endif
         </div>
     </div>
 @empty

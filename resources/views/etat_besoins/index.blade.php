@@ -97,9 +97,9 @@
 
                     @if($peutVoirTout)
                     <div class="col-md-4">
-                        <label class="form-label">Département</label>
+                        <label class="form-label">Direction</label>
                         <select name="departement_id" class="form-select">
-                            <option value="">Tous les départements</option>
+                            <option value="">Tous les directions</option>
                             @foreach($departements as $departement)
                                 <option value="{{ $departement->id }}" {{ (string) request('departement_id') === (string) $departement->id ? 'selected' : '' }}>{{ $departement->designation }}</option>
                             @endforeach
@@ -141,7 +141,7 @@
                             <th>Validé par</th>
                         @endif
                         <th>Date</th>
-                        <th>Département</th>
+                        <th>Direction</th>
                         <th>Demandeur</th>
                         <th>Désignation</th>
                         <th>Monnaie</th>

@@ -679,6 +679,7 @@
             }
 
             delete form.dataset.confirmed;
+            if (submitter?.dataset.noLoading !== undefined) return;
             if (form.dataset.submitting === 'true') {
                 event.preventDefault();
                 return;

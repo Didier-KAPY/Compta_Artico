@@ -41,6 +41,8 @@ class AppServiceProvider extends ServiceProvider
         foreach (['viewHRDashboard','viewEmployees','createEmployees','updateEmployees','archiveEmployees','viewEmployeeSensitiveData','manageDepartments','managePositions','viewContracts','manageContracts','validateContracts','viewAttendance','manageAttendance','validateAttendance','requestLeave','viewTeamLeaves','approveManagerLeave','approveHRLeave','manageLeaveBalances','viewPayroll','createPayroll','validatePayroll','payPayroll','cancelPayroll','viewPayslips','manageEvaluations','manageTrainings','manageDisciplinaryActions','viewHRReports','exportHRReports','viewHRAuditLog','manageHRSettings'] as $permission) {
             Gate::define($permission, fn (User $user): bool => $user->hasRhPermission($permission));
         }
+        Gate::define('viewAttendanceSummaries', fn (User $user): bool =>
+            ! $user->isTechnicalOfficer() && $user->hasRhPermission('viewAttendance'));
 
         Gate::define('viewAccountingReports', fn (User $user): bool => $user->hasRole(
             ['Super Admin', 'Admin', 'DAF', 'Comptable']
@@ -75,6 +77,11 @@ class AppServiceProvider extends ServiceProvider
         });
 
         Gate::define('deleteEtatBesoin', fn (User $user): bool => $user->isSuperAdmin() || $user->isManagement());
+        Gate::define('deleteEtatBesoinAttachment', function (User $user): bool {
+            $role = mb_strtolower(trim((string) $user->role?->designation));
+
+            return in_array($role, ['gérant', 'gerant'], true);
+        });
         Gate::define('deleteFinancialDocument', fn (User $user): bool => $user->isSuperAdmin() || $user->isManagement());
         Gate::define('restoreFinancialDocument', fn (User $user): bool => $user->isSuperAdmin());
         Gate::define('forceDeleteFinancialDocument', fn (User $user): bool => $user->isSuperAdmin());

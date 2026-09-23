@@ -14,6 +14,7 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'nom',
+        'postnom',
         'prenom',
         'email',
         'password',
@@ -66,7 +67,18 @@ class User extends Authenticatable
     public function hasRhPermission(string $permission): bool
     {
         if ($this->isSuperAdmin()) return true;
+        $role = mb_strtolower(trim((string) $this->role?->designation));
+        if (in_array($role, ['chargé technique', 'charge technique', 'charger technique'], true)) {
+            return in_array($permission, ['viewAttendance', 'manageAttendance'], true);
+        }
         return $this->role?->rhPermissions()->where('code', $permission)->exists() ?? false;
+    }
+
+    public function isTechnicalOfficer(): bool
+    {
+        return in_array(mb_strtolower(trim((string) $this->role?->designation)), [
+            'chargé technique', 'charge technique', 'charger technique',
+        ], true);
     }
 
     public function cartesService()

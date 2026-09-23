@@ -158,12 +158,15 @@ class HumanResourcesPayslipTest extends TestCase
         $periode = RhPeriodePaie::create(['entreprise_id' => $ent->id, 'libelle' => 'Septembre', 'date_debut' => '2026-09-01', 'date_fin' => '2026-09-30', 'annee' => 2026, 'mois' => 9, 'statut' => 'Ouverte']);
         RhContrat::create(['entreprise_id' => $ent->id, 'employe_id' => $e->id, 'numero' => 'PAY-CTR-001', 'type' => 'CDI', 'date_debut' => '2026-01-01', 'salaire_base' => 1000, 'devise' => 'USD', 'statut' => 'Actif']);
         RhSyntheseMensuelle::create(['entreprise_id' => $ent->id, 'employe_id' => $e->id, 'periode_paie_id' => $periode->id, 'annee' => 2026, 'mois' => 9, 'statut' => 'Validée']);
-        $data = ['employe_id' => $e->id, 'annee' => 2026, 'mois' => 9, 'date_paiement' => '2026-09-14', 'mode_paiement' => 'Mobile money'];
+        $data = ['employe_id' => $e->id, 'annee' => 2026, 'mois' => 9, 'date_paiement' => '2026-09-14', 'mode_paiement' => 'Mobile money', 'avance_salaire' => 50];
+        $this->actingAs($u)->post(route('parametres.rh.paie.store'), array_merge($data, ['avance_salaire' => 2000]))->assertSessionHasErrors('avance_salaire');
         $this->actingAs($u)->post(route('parametres.rh.paie.store'), $data)->assertRedirect()->assertSessionHasNoErrors();
         $p = RhPaie::where('employe_id', $e->id)->firstOrFail();
         $this->assertSame('2026-09-14', $p->date_paiement->toDateString());
         $this->assertSame('Mobile money', $p->mode_paiement);
         $this->assertSame('PAY-202609-000001', $p->reference_paiement);
+        $this->assertSame('50.00', $p->avance_salaire);
+        $this->assertSame(950.0, $p->net);
         $this->get(route('parametres.rh.paie'))->assertOk()->assertSee('14/09/2026')->assertSee('Mobile money')->assertSee($p->reference_paiement);
         $this->post(route('parametres.rh.paie.store'), array_merge($data, ['mois' => 10, 'date_paiement' => 'invalide']))->assertSessionHasErrors('date_paiement');
     }
@@ -172,7 +175,7 @@ class HumanResourcesPayslipTest extends TestCase
     {
         $u = $this->user();
         $this->actingAs($u);
-        $ent = Entreprise::create(['user_id'=>$u->id,'nom_entreprise'=>'ARTICO','rccm'=>'CD-TEST-123','id_nat'=>'NAT-456']);
+        $ent = Entreprise::create(['user_id'=>$u->id,'nom_entreprise'=>'ARTICO','rccm'=>'CD-TEST-123','id_nat'=>'NAT-456','numero_identification_fiscal'=>'NIF-789']);
         $e = Employe::create(['entreprise_id'=>$ent->id,'user_id'=>$u->id,'matricule'=>'BEN-1','nom'=>'Mwamba','postnom'=>'Test','prenom'=>'Aline','statut'=>'Actif']);
         $p = RhPaie::create(['entreprise_id'=>$ent->id,'employe_id'=>$e->id,'annee'=>2026,'mois'=>9,'salaire_base'=>1000,'transport'=>10,'logement'=>20,'autres_avantages'=>30,'telecommunication'=>40,'retenues'=>15,'total_taxes'=>25,'appliquer_retenues'=>false,'appliquer_retenue_absence'=>false,'monnaie'=>'USD','statut'=>'Brouillon']);
         $this->assertSame(1100.0, $p->fresh()->net);
@@ -180,8 +183,12 @@ class HumanResourcesPayslipTest extends TestCase
         $html = view('ressources_humaines.paie.bulletin',['paie'=>$p->fresh(),'entreprise'=>$ent,'gerant'=>null])->render();
         foreach (['CD-TEST-123','NAT-456','Mwamba Test Aline','Transport','Logement','Autres avantages','Télécommunication','IPR non appliqué'] as $texte) $this->assertStringContainsString($texte,$html);
         $this->assertMatchesRegularExpression('/IPR non appliqué<\/td><td><\/td><td class="amount">—<\/td>/u',$html);
+        $this->assertStringContainsString('NIF-789', $html);
+        $this->assertStringContainsString('Avance sur salaire', $html);
+        $this->assertStringNotContainsString('Signature de l’employé', $html);
         $excel = view('exports.table_excel',['entreprise'=>$ent,'headers'=>['Employé'],'rows'=>[['Mwamba']],'titre'=>'Paie','dateDebut'=>'2026-01-01','dateFin'=>'2026-09-15'])->render();
         $this->assertStringContainsString('CD-TEST-123',$excel);
+        $this->assertStringContainsString('NIF-789',$excel);
         $this->assertStringContainsString('NAT-456',$excel);
     }
 

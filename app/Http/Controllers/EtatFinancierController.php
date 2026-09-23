@@ -123,16 +123,27 @@ class EtatFinancierController extends Controller
 
     public function bilanPdf(Request $request)
     {
-        return Pdf::loadView('Comptabilite.etats_financiers.bilan_pdf', $this->donnees($request))
+        return Pdf::loadView('Comptabilite.etats_financiers.bilan_pdf', $this->donneesExport($request))
             ->setPaper('a4', 'landscape')
             ->download('bilan-final.pdf');
     }
 
     public function compteResultatPdf(Request $request)
     {
-        return Pdf::loadView('Comptabilite.etats_financiers.compte_resultat_pdf', $this->donnees($request, true))
+        return Pdf::loadView('Comptabilite.etats_financiers.compte_resultat_pdf', $this->donneesExport($request, true))
             ->setPaper('a4', 'landscape')
             ->download('compte-resultat.pdf');
+    }
+
+    private function donneesExport(Request $request, bool $compteResultat = false): array
+    {
+        $data = $this->donnees($request, $compteResultat);
+        if (Entreprise::exists()) {
+            $data['entreprise'] = app(\App\Services\CurrentEntreprise::class)->for($request->user());
+            $data['signaturesReleve'] = app(\App\Services\ReportSignatureService::class)->forCompany($data['entreprise']);
+            $data['signatureLabels'] = ['gerant'=>'Le gérant', 'finances'=>'Le chargé des finances'];
+        }
+        return $data;
     }
 
     private function donnees(Request $request, bool $compteResultat = false): array

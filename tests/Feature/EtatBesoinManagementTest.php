@@ -87,6 +87,69 @@ class EtatBesoinManagementTest extends TestCase
             ->assertHeader('content-disposition', 'inline; filename="facture.pdf"');
     }
 
+    public function test_le_gerant_peut_supprimer_une_piece_justificative_precise(): void
+    {
+        Storage::fake('public');
+        $gerant = $this->user(Role::create(['designation' => 'Gérant']), 51);
+        $etat = $this->etat($gerant, Departement::create(['designation' => 'Direction']), 'EB-PIECE-DELETE', 'Validé');
+        Storage::disk('public')->put('etat-besoins/pieces/facture.pdf', 'facture');
+        Storage::disk('public')->put('etat-besoins/pieces/recu.pdf', 'recu');
+        $etat->update([
+            'piece_justificative' => 'etat-besoins/pieces/facture.pdf',
+            'piece_justificative_nom' => 'Facture.pdf',
+            'pieces_justificatives' => [
+                ['path' => 'etat-besoins/pieces/facture.pdf', 'nom' => 'Facture.pdf'],
+                ['path' => 'etat-besoins/pieces/recu.pdf', 'nom' => 'Reçu.pdf'],
+            ],
+        ]);
+        $url = route('etat-besoins.piece-justificative.destroy', [
+            'id' => $etat->id,
+            'piece' => hash('sha256', 'etat-besoins/pieces/facture.pdf'),
+        ]);
+
+        $this->actingAs($gerant)->get(route('etat-besoins.show', $etat))
+            ->assertOk()
+            ->assertSee($url, false)
+            ->assertSee('Supprimer');
+        $this->delete($url)->assertRedirect()->assertSessionHas('success');
+
+        $etat->refresh();
+        $this->assertSame('etat-besoins/pieces/recu.pdf', $etat->piece_justificative);
+        $this->assertSame('Reçu.pdf', $etat->piece_justificative_nom);
+        $this->assertCount(1, $etat->pieces_justificatives);
+        Storage::disk('public')->assertMissing('etat-besoins/pieces/facture.pdf');
+        Storage::disk('public')->assertExists('etat-besoins/pieces/recu.pdf');
+        $this->assertDatabaseHas('audit_logs', [
+            'model_type' => EtatBesoin::class,
+            'model_id' => $etat->id,
+            'action' => 'suppression_piece_justificative_etat_besoin',
+        ]);
+    }
+
+    public function test_un_utilisateur_non_autorise_ne_peut_pas_supprimer_une_piece_justificative(): void
+    {
+        Storage::fake('public');
+        $comptable = $this->user(Role::create(['designation' => 'Comptable']), 52);
+        $etat = $this->etat($comptable, Departement::create(['designation' => 'Comptabilité']), 'EB-PIECE-PROTECTED', 'Validé');
+        Storage::disk('public')->put('etat-besoins/pieces/protegee.pdf', 'contenu');
+        $etat->update([
+            'piece_justificative' => 'etat-besoins/pieces/protegee.pdf',
+            'piece_justificative_nom' => 'Protégée.pdf',
+        ]);
+        $url = route('etat-besoins.piece-justificative.destroy', [
+            'id' => $etat->id,
+            'piece' => hash('sha256', 'etat-besoins/pieces/protegee.pdf'),
+        ]);
+
+        $this->actingAs($comptable)->get(route('etat-besoins.show', $etat))
+            ->assertOk()
+            ->assertDontSee('Supprimer cette pièce justificative');
+        $this->delete($url)->assertForbidden();
+
+        Storage::disk('public')->assertExists('etat-besoins/pieces/protegee.pdf');
+        $this->assertSame('etat-besoins/pieces/protegee.pdf', $etat->fresh()->piece_justificative);
+    }
+
     public function test_management_roles_can_only_view_and_validate_an_etat(): void
     {
         foreach (['Admin', 'Gérant', 'Gerant', 'Directeur Général'] as $index => $designation) {
@@ -119,6 +182,32 @@ class EtatBesoinManagementTest extends TestCase
             $this->actingAs($user)->get(route('sortie-caisses.show', $sortie))
                 ->assertOk()->assertSee('Nature du bon')->assertSee('Non attribué');
         }
+    }
+
+    public function test_les_fiches_affichent_les_validateurs_de_l_etat_et_du_bon_de_sortie(): void
+    {
+        $superAdmin = $this->user(Role::firstOrCreate(['designation' => 'Super Admin']), 60);
+        $approbateur = $this->user(Role::firstOrCreate(['designation' => 'Gérant']), 61);
+        $approbateur->update(['prenom' => 'Alice', 'nom' => 'Approbatrice']);
+        $validateurBon = $this->user(Role::firstOrCreate(['designation' => 'Chargé des finances']), 62);
+        $validateurBon->update(['prenom' => 'Bruno', 'nom' => 'Validateur']);
+        $departement = Departement::create(['designation' => 'Direction financière']);
+        $etat = $this->etat($superAdmin, $departement, 'EB-VALIDATEURS', 'Validé');
+        $etat->update(['valide_par' => $approbateur->id]);
+        $sortie = $this->sortie($superAdmin, $etat, 'BSC-VALIDATEURS', 'Validé');
+        $sortie->update(['valide_par' => $validateurBon->id]);
+
+        $this->actingAs($superAdmin)->get(route('etat-besoins.show', $etat))
+            ->assertOk()
+            ->assertSee('Approuvé par')
+            ->assertSee('Alice Approbatrice');
+
+        $this->get(route('sortie-caisses.show', $sortie))
+            ->assertOk()
+            ->assertSee('État de besoin approuvé par')
+            ->assertSee('Bon de sortie validé par')
+            ->assertSee('Alice Approbatrice')
+            ->assertSee('Bruno Validateur');
     }
 
     public function test_super_admin_can_reopen_an_etat_without_validated_output(): void

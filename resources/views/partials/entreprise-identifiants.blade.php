@@ -1,1 +1,1 @@
-<span style="display:block;font-size:10px;font-weight:normal">RCCM : {{ $entreprise?->rccm ?: '—' }} · ID NAT : {{ $entreprise?->id_nat ?: '—' }}</span>
+<span style="display:block;font-size:10px;font-weight:normal">NIF : {{ $entreprise?->numero_identification_fiscal ?: '—' }} · RCCM : {{ $entreprise?->rccm ?: '—' }} · ID NAT : {{ $entreprise?->id_nat ?: '—' }}</span>

@@ -113,7 +113,7 @@
 
                 <div class="col-md-3">
 
-                    <strong>Département</strong><br>
+                    <strong>Direction</strong><br>
 
                     {{ $etat->departement?->designation ?? $etat->service }}
 
@@ -182,6 +182,13 @@
 
                 </div>
 
+                @if($etat->statut === 'Validé')
+                    <div class="col-md-3">
+                        <strong>Approuvé par</strong><br>
+                        {{ trim(($etat->validateur?->prenom ?? '').' '.($etat->validateur?->nom ?? '')) ?: 'Non renseigné' }}
+                    </div>
+                @endif
+
 
 
 
@@ -245,7 +252,12 @@
     <div class="card shadow-sm border-0 mb-3">
         <div class="card-header bg-light fw-bold"><i class="bi bi-paperclip me-2"></i>Pièce justificative</div>
         <div class="card-body">
-            @include('partials.pieces-justificatives', ['document' => $etat, 'pieceRoute' => 'etat-besoins.piece-justificative.show'])
+            @include('partials.pieces-justificatives', [
+                'document' => $etat,
+                'pieceRoute' => 'etat-besoins.piece-justificative.show',
+                'pieceDeleteRoute' => 'etat-besoins.piece-justificative.destroy',
+                'canDeletePiece' => auth()->user()->can('deleteEtatBesoinAttachment'),
+            ])
             @can('consultEtatBesoin')
             <form method="POST" enctype="multipart/form-data" action="{{ route('etat-besoins.piece-justificative.store', $etat) }}" class="row g-2 align-items-end">
                 @csrf

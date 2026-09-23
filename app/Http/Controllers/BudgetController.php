@@ -150,11 +150,11 @@ class BudgetController extends Controller
         $data = $this->pageData();
         $budgets = $data['budgets'];
         [$titre, $headers, $rows] = match ($rapport) {
-            'budgets' => ['Budgets annuels', ['Période', 'Département', 'Compte', 'Désignation', 'Prévision', 'Monnaie'], $budgets->map(fn ($b) => [
+            'budgets' => ['Budgets annuels', ['Période', 'Direction', 'Compte', 'Désignation', 'Prévision', 'Monnaie'], $budgets->map(fn ($b) => [
                 $b->date_debut->format('d/m/Y').' - '.$b->date_fin->format('d/m/Y'), $b->departement?->designation ?? 'Tous',
                 $b->compte?->compte ?? '—', $b->compte?->designation ?? '—', number_format((float) $b->montant_prevu, 2, ',', ' '), $b->monnaie,
             ])],
-            'lignes' => ['Lignes budgétaires', ['Période', 'Département', 'Compte', 'Prévu CDF', 'Réalisé CDF', 'Disponible CDF', 'Exécution'], $budgets->map(fn ($b) => [
+            'lignes' => ['Lignes budgétaires', ['Période', 'Direction', 'Compte', 'Prévu CDF', 'Réalisé CDF', 'Disponible CDF', 'Exécution'], $budgets->map(fn ($b) => [
                 $b->date_debut->format('d/m/Y').' - '.$b->date_fin->format('d/m/Y'), $b->departement?->designation ?? 'Tous',
                 ($b->compte?->compte ?? '—').' - '.($b->compte?->designation ?? '—'), number_format((float) $b->montant_prevu, 2, ',', ' '),
                 number_format($b->consomme, 2, ',', ' '), number_format($b->disponible, 2, ',', ' '), number_format($b->taux_consommation, 1, ',', ' ').' %',

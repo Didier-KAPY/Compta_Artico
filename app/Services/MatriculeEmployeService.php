@@ -14,7 +14,7 @@ class MatriculeEmployeService
         return DB::transaction(function () use ($entrepriseId, $directionId) {
             $direction = $directionId ? Departement::find($directionId) : null;
             $prefixe = $this->initiales($direction?->designation);
-            $base = $prefixe.'-'.now()->format('Y').'-';
+            $base = $prefixe.'-';
             $dernier = Employe::withTrashed()
                 ->where('entreprise_id', $entrepriseId)
                 ->where('matricule', 'like', $base.'%')

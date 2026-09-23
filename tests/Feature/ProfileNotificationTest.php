@@ -12,6 +12,17 @@ class ProfileNotificationTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_profile_saves_postnom(): void
+    {
+        $user = $this->userWithRole('Admin', 'postnom@test.local');
+        $this->actingAs($user)->post(route('profil.update'), [
+            'nom' => $user->nom, 'prenom' => $user->prenom,
+            'postnom' => 'Mwamba', 'email' => $user->email,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame('Mwamba', $user->fresh()->postnom);
+        $this->get(route('profil.index'))->assertOk()->assertSee('Mwamba')->assertSee('Post nom');
+    }
+
     public function test_profile_displays_only_pending_notifications(): void
     {
         $admin = $this->userWithRole('Admin', 'admin-notifications@test.local');

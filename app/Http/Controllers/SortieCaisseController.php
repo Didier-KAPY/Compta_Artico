@@ -122,6 +122,8 @@ class SortieCaisseController extends Controller
 {
     $sortie = SortieCaisse::with([
         'user',
+        'validateur',
+        'etatBesoin.validateur',
         'etatBesoin.lignes',
         'journaux.ecritures',
         'clotureJournaliere',

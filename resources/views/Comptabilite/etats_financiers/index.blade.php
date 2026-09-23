@@ -11,7 +11,7 @@
         </form>
     </div></div>
     <div class="row g-4">
-        <div class="col-md-6"><a class="card h-100 shadow-sm border-0 text-decoration-none text-dark" href="{{ route('comptabilite.etats-financiers.bilan', ['date_debut'=>$dateDebut,'date_fin'=>$dateFin]) }}"><div class="card-body py-4"><h4>Bilan final</h4><p class="text-muted mb-0">Actif, passif, résultat net et contrôle d’équilibre.</p></div></a></div>
+        <div class="col-md-6"><a class="card h-100 shadow-sm border-0 text-decoration-none text-dark" href="{{ route('comptabilite.etats-financiers.bilan', ['date_debut'=>$dateDebut,'date_fin'=>$dateFin]) }}"><div class="card-body py-4"><h4>Bilan</h4><p class="text-muted mb-0">Actif, passif, résultat net et contrôle d’équilibre.</p></div></a></div>
         <div class="col-md-6"><a class="card h-100 shadow-sm border-0 text-decoration-none text-dark" href="{{ route('comptabilite.etats-financiers.compte-resultat', ['date_debut'=>$dateDebut,'date_fin'=>$dateFin]) }}"><div class="card-body py-4"><h4>Compte de résultat</h4><p class="text-muted mb-0">Produits, charges et résultat net de l’exercice.</p></div></a></div>
     </div>
 </div>

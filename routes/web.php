@@ -111,10 +111,10 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
             Route::post('/presences', [RhPresenceController::class, 'store'])->middleware('can:manageAttendance')->name('presences.store');
             Route::patch('/presences/{presence}/statut', [RhPresenceController::class, 'transition'])->middleware('can:manageAttendance')->name('presences.transition');
             Route::patch('/presences/{presence}/corriger', [RhPresenceController::class, 'corriger'])->middleware('can:manageAttendance')->name('presences.correct');
-            Route::get('/syntheses', [RhSyntheseMensuelleController::class, 'index'])->middleware('can:viewAttendance')->name('syntheses');
-            Route::post('/syntheses', [RhSyntheseMensuelleController::class, 'store'])->middleware('can:manageAttendance')->name('syntheses.store');
-            Route::post('/syntheses/generer-toutes', [RhSyntheseMensuelleController::class, 'storeAll'])->middleware('can:manageAttendance')->name('syntheses.store-all');
-            Route::patch('/syntheses/{synthese}/statut', [RhSyntheseMensuelleController::class, 'transition'])->middleware('can:manageAttendance')->name('syntheses.transition');
+            Route::get('/syntheses', [RhSyntheseMensuelleController::class, 'index'])->middleware('can:viewAttendanceSummaries')->name('syntheses');
+            Route::post('/syntheses', [RhSyntheseMensuelleController::class, 'store'])->middleware('can:viewAttendanceSummaries')->name('syntheses.store');
+            Route::post('/syntheses/generer-toutes', [RhSyntheseMensuelleController::class, 'storeAll'])->middleware('can:viewAttendanceSummaries')->name('syntheses.store-all');
+            Route::patch('/syntheses/{synthese}/statut', [RhSyntheseMensuelleController::class, 'transition'])->middleware('can:viewAttendanceSummaries')->name('syntheses.transition');
             Route::put('/syntheses/{synthese}', [RhSyntheseMensuelleController::class, 'update'])->middleware('role:Super Admin')->name('syntheses.update');
             Route::delete('/syntheses/{synthese}', [RhSyntheseMensuelleController::class, 'destroy'])->middleware('role:Super Admin')->name('syntheses.destroy');
             Route::post('/conges', [RessourceHumaineController::class, 'storeConge'])->middleware('can:requestLeave')->name('conges.store');
@@ -359,6 +359,9 @@ Route::middleware(['auth', 'force.password.change', 'accounting.open'])->group(f
     Route::get('/etat-besoins/{id}/piece-justificative', [EtatBesoinController::class, 'pieceJustificative'])
         ->middleware('can:consultEtatBesoin')
         ->name('etat-besoins.piece-justificative.show');
+    Route::delete('/etat-besoins/{id}/piece-justificative', [EtatBesoinController::class, 'supprimerPieceJustificative'])
+        ->middleware(['can:consultEtatBesoin', 'can:deleteEtatBesoinAttachment'])
+        ->name('etat-besoins.piece-justificative.destroy');
     Route::resource('etat-besoins', EtatBesoinController::class)
         ->only(['index']);
     Route::resource('etat-besoins', EtatBesoinController::class)
@@ -574,6 +577,12 @@ Route::middleware(['auth', 'force.password.change', 'accounting.open'])->group(f
     Route::get('/ecritures/{id}', [EcritureComptableController::class, 'show'])
         ->middleware(['feature:accounting', 'role:Super Admin,Admin,Directeur Général,DAF,Comptable'])
         ->name('ecritures.show');
+    Route::get('/ecritures/{id}/constatation', [\App\Http\Controllers\ConstatationComptableController::class, 'show'])
+        ->middleware(['feature:accounting', 'role:Super Admin,Admin,Directeur Général,DAF,Comptable'])
+        ->name('ecritures.constatation');
+    Route::post('/ecritures/{id}/constatation', [\App\Http\Controllers\ConstatationComptableController::class, 'store'])
+        ->middleware(['feature:accounting', 'role:Super Admin,Comptable'])
+        ->name('ecritures.constatation.store');
     Route::post('/ecritures/{id}/valider', [EcritureComptableController::class, 'valider'])
         ->middleware(['feature:accounting', 'role:Super Admin,Comptable'])
         ->name('ecritures.valider');

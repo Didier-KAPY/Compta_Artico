@@ -18,6 +18,9 @@ class PiecesJustificativesService
             $pieces->push(['path' => $document->piece_justificative, 'nom' => $document->piece_justificative_nom ?: basename($document->piece_justificative)]);
         }
         if ($document instanceof EcritureComptable) {
+            if ($document->role_constatation === 'constatation' && $document->constatation?->source) {
+                $pieces = $pieces->concat($this->liste($document->constatation->source));
+            }
             $journal = $document->journal;
             if ($journal?->piece_justificatif) {
                 $pieces->push(['path' => $journal->piece_justificatif, 'nom' => basename($journal->piece_justificatif)]);
@@ -82,5 +85,44 @@ class PiecesJustificativesService
             : Storage::disk('public')->response($piece['path'], $piece['nom'], [
                 'Content-Disposition' => 'inline; filename="'.str_replace(["\r", "\n", '"', '\\'], '', $piece['nom']).'"',
             ]);
+    }
+
+    public function supprimer(Model $document, string $identifiant): array
+    {
+        $pieceSupprimee = DB::transaction(function () use ($document, $identifiant) {
+            $locked = $document->newQuery()->lockForUpdate()->findOrFail($document->getKey());
+            $pieces = collect($locked->pieces_justificatives ?? []);
+            $legacy = $locked->piece_justificative
+                ? ['path' => $locked->piece_justificative, 'nom' => $locked->piece_justificative_nom ?: basename($locked->piece_justificative)]
+                : null;
+            $piece = $pieces->first(fn (array $item) => hash('sha256', $item['path']) === $identifiant);
+
+            if (! $piece && $legacy && hash('sha256', $legacy['path']) === $identifiant) {
+                $piece = $legacy;
+            }
+
+            abort_unless($piece, 404);
+
+            $restantes = $pieces
+                ->reject(fn (array $item) => $item['path'] === $piece['path'])
+                ->values()
+                ->all();
+
+            $locked->pieces_justificatives = $restantes;
+            if ($locked->piece_justificative === $piece['path']) {
+                $suivante = $restantes[0] ?? null;
+                $locked->piece_justificative = $suivante['path'] ?? null;
+                if (! $locked instanceof EcritureComptable) {
+                    $locked->piece_justificative_nom = $suivante['nom'] ?? null;
+                }
+            }
+            $locked->save();
+
+            return $piece;
+        });
+
+        Storage::disk('public')->delete($pieceSupprimee['path']);
+
+        return $pieceSupprimee;
     }
 }

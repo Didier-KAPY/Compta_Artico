@@ -1,18 +1,6 @@
 <table style="width:100%; margin-top:24px; page-break-inside:avoid">
     <tr>
-        {{-- Signature de l'employé --}}
-        <td style="width:33%; text-align:center; vertical-align:top">
-            Signature de l’employé
-
-            <div style="height:85px;padding-top:8px">
-                @php($signatureEmploye = $paie->employe?->user?->signature)
-                @if($signatureEmploye && is_file(public_path('storage/'.$signatureEmploye)))
-                    <img src="{{ public_path('storage/'.$signatureEmploye) }}" alt="Signature de l’employé" style="max-width:140px;max-height:75px">
-                @endif
-            </div>
-            {{ trim(($paie->employe?->nom ?? '').' '.($paie->employe?->postnom ?? '').' '.($paie->employe?->prenom ?? '')) }}
-            <div>____________________</div>
-        </td>
+<td style="width:33%;text-align:center;vertical-align:top">Nom de l’employé<br>{{ trim(($paie->employe?->nom ?? '').' '.($paie->employe?->postnom ?? '').' '.($paie->employe?->prenom ?? '')) }}</td>
 
         {{-- Cachet de l'entreprise --}}
         <td style="width:34%; text-align:center; vertical-align:top">

@@ -7,6 +7,7 @@ use App\Models\EntreeCaisse;
 use App\Models\Entreprise;
 use App\Models\EtatBesoin;
 use App\Models\Journaux;
+use App\Models\JournalType;
 use App\Models\SortieCaisse;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -160,7 +161,7 @@ class ReportExportController extends Controller
         }
         $this->numero($query, $request);
         $records = $query->orderBy('date')->orderBy('id')->get();
-        $headers = ['Date', 'Numéro', 'Département', 'Demandeur', 'Désignation', 'Montant', 'Monnaie', 'Statut'];
+        $headers = ['Date', 'Numéro', 'Direction', 'Demandeur', 'Désignation', 'Montant', 'Monnaie', 'Statut'];
         $rows = $records->map(fn ($item) => [
             $this->date($item->date), $item->numero, $item->departement?->designation ?? $item->service,
             $item->demandeur, $item->lignes->pluck('designation')->join(', '), $this->montant($item->montant_estime),
@@ -220,7 +221,9 @@ class ReportExportController extends Controller
             $rows->push([$this->date($i->date), $i->reference, $i->journalType?->code ?? '-', $i->compte?->compte ?? $i->journalType?->compte?->compte ?? '-', $i->libelle_releve, $this->montant($i->entrees_cdf), $this->montant($i->sorties_cdf), $this->montant($cdf), $this->montant($i->entrees_usd), $this->montant($i->sorties_usd), $this->montant($usd)]);
         }
 
-        return $this->telecharger($format, 'Relevé de trésorerie', 'releve-tresorerie', $headers, $rows, $request, 'landscape');
+        $rows->push(['', 'TOTAL DE LA PÉRIODE', '', '', '', $this->montant($records->sum('entrees_cdf')), $this->montant($records->sum('sorties_cdf')), $this->montant($cdf), $this->montant($records->sum('entrees_usd')), $this->montant($records->sum('sorties_usd')), $this->montant($usd)]);
+
+        return $this->telecharger($format, 'Relevé journalier des mouvements', 'releve-tresorerie', $headers, $rows, $request, 'landscape');
     }
 
     public function balance(Request $request, string $format)
@@ -248,7 +251,7 @@ class ReportExportController extends Controller
             }
         }
 
-        return $this->telecharger($format, 'Bilan final', 'bilan-final', ['Type', 'Réf.', 'Libellé', 'Exercice N', 'Exercice N-1'], $rows, $request, 'landscape');
+        return $this->telecharger($format, 'Bilan', 'bilan-final', ['Type', 'Réf.', 'Libellé', 'Exercice N', 'Exercice N-1'], $rows, $request, 'landscape');
     }
 
     public function compteResultat(Request $request, string $format)
@@ -335,13 +338,31 @@ class ReportExportController extends Controller
         abort_unless(in_array($format, ['pdf', 'excel'], true), 404);
         $data = ['titre' => $titre, 'headers' => $headers, 'rows' => $rows, 'entreprise' => Entreprise::first(),
             'dateDebut' => $request->date_debut, 'dateFin' => $request->date_fin];
+        if ($nom === 'releve-tresorerie' && $request->filled('journal_type_id')) {
+            $selection = JournalType::with('compte')->where('est_tresorerie', true)->find($request->integer('journal_type_id'));
+            if ($selection) {
+                $data['compteSelectionne'] = trim($selection->code.' — '.($selection->compte?->compte ?? '—').' '.($selection->compte?->designation ?? ''));
+            }
+        }
+        if (in_array($nom, ['releve-tresorerie', 'bilan-final', 'compte-resultat'], true) && Entreprise::exists()) {
+            $data['entreprise'] = app(\App\Services\CurrentEntreprise::class)->for($request->user());
+            $data['signaturesReleve'] = app(\App\Services\ReportSignatureService::class)->forCompany($data['entreprise']);
+            if ($nom !== 'releve-tresorerie') {
+                $data['signatureLabels'] = ['gerant'=>'Le gérant', 'finances'=>'Le chargé des finances'];
+                unset($data['signaturesReleve']['cachet']);
+            }
+        }
         $suffixe = $request->date_debut.'_'.$request->date_fin;
         if ($format === 'pdf') {
             return Pdf::loadView('exports.table', $data)->setPaper('a4', $orientation)->download($nom.'_'.$suffixe.'.pdf');
         }
+        $data['formatSignature'] = 'excel';
         $contenu = view('exports.table_excel', $data)->render();
+        if (isset($data['signaturesReleve'])) {
+            $contenu = app(\App\Services\ReportSignatureService::class)->excelDocument($contenu, $data['signaturesReleve']);
+        }
 
-        return response("\xEF\xBB\xBF".$contenu, 200, [
+        return response((isset($data['signaturesReleve']) ? '' : "\xEF\xBB\xBF").$contenu, 200, [
             'Content-Type' => 'application/vnd.ms-excel; charset=UTF-8',
             'Content-Disposition' => 'attachment; filename="'.$nom.'_'.$suffixe.'.xls"',
         ]);

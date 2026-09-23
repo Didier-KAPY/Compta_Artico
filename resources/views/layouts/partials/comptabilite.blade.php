@@ -86,7 +86,7 @@
                 <a href="{{ route('comptabilite.etats-financiers.bilan') }}"
                    class="nav-link {{ request()->routeIs('comptabilite.etats-financiers.bilan*') ? 'active-menu' : '' }}">
                     <i class="bi bi-file-earmark-spreadsheet me-2"></i>
-                    Bilan final
+                    Bilan
                 </a>
             </li>
             <li>

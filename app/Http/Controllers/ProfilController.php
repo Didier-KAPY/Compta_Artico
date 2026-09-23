@@ -67,6 +67,7 @@ class ProfilController extends Controller
 
             'nom'=>'required|string|max:100',
 
+            'postnom'=>'nullable|string|max:120',
             'prenom'=>'required|string|max:100',
 
             'email'=>'required|email|unique:users,email,'.$user->id,
@@ -90,6 +91,7 @@ class ProfilController extends Controller
 
 
         $user->nom = $request->nom;
+        $user->postnom = $request->input('postnom', $user->postnom);
 
         $user->prenom = $request->prenom;
 
@@ -167,6 +169,8 @@ class ProfilController extends Controller
 
         $user->save();
 
+        $user->employe()->update(['postnom' => $user->postnom]);
+
 
 
         return back()->with(
@@ -193,6 +197,7 @@ class ProfilController extends Controller
 
             'nom'=>'required',
 
+            'postnom'=>'nullable|string|max:120',
             'prenom'=>'required',
 
             'email'=>'required|email|unique:users,email',
@@ -236,6 +241,7 @@ class ProfilController extends Controller
 
 
         $user->nom = $request->nom;
+        $user->postnom = $request->postnom;
 
 
         $user->prenom = $request->prenom;

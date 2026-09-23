@@ -21,6 +21,8 @@ use Illuminate\Support\Facades\Storage;
 use App\Http\Requests\DeleteFinancialDocumentRequest;
 use App\Services\FinancialDocumentService;
 use App\Services\DocumentNumberService;
+use App\Services\AuditLogService;
+use App\Services\PiecesJustificativesService;
 
 class EtatBesoinController extends Controller
 {
@@ -241,7 +243,7 @@ class EtatBesoinController extends Controller
      */
    public function show($id, FinancialDocumentService $documents)
     {
-        $etat = $this->etatAccessible($id, ['lignes', 'departement', 'sortieCaisses.journaux.ecritures']);
+        $etat = $this->etatAccessible($id, ['lignes', 'departement', 'validateur', 'sortieCaisses.journaux.ecritures']);
         $suppressionDependencies = $documents->dependencies($etat);
         $documentLinks = collect();
 
@@ -274,6 +276,35 @@ class EtatBesoinController extends Controller
     {
         $etat = $this->etatAccessible($id);
         return app(\App\Services\PiecesJustificativesService::class)->consulter($request, $etat);
+    }
+
+    public function supprimerPieceJustificative(
+        Request $request,
+        $id,
+        PiecesJustificativesService $pieces,
+        AuditLogService $audit,
+    ) {
+        Gate::authorize('deleteEtatBesoinAttachment');
+        $etat = $this->etatAccessible($id);
+        $identifiant = (string) $request->query('piece');
+        abort_if($identifiant === '', 404);
+
+        $ancienneValeur = $etat->only(['statut', 'piece_justificative', 'piece_justificative_nom', 'pieces_justificatives']);
+        $pieceSupprimee = $pieces->supprimer($etat, $identifiant);
+        $etat->refresh();
+
+        $audit->record(
+            'suppression_piece_justificative_etat_besoin',
+            $etat,
+            $etat->numero,
+            'Suppression de la pièce justificative '.$pieceSupprimee['nom'],
+            $ancienneValeur,
+            $etat->only(['statut', 'piece_justificative', 'piece_justificative_nom', 'pieces_justificatives']),
+            ['piece_supprimee' => $pieceSupprimee],
+            $request,
+        );
+
+        return back()->with('success', 'Pièce justificative supprimée avec succès.');
     }
     /**
      * EDIT

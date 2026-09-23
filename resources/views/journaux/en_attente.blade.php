@@ -21,31 +21,6 @@
     @if(session('error'))<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>{{ session('error') }}</div>@endif
     @if($errors->any())<div class="alert alert-danger"><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 
-    <div class="mb-2">
-        <h5 class="fw-bold mb-1">Montants des comptes liés</h5>
-        <p class="text-muted small mb-0">Tous les mouvements validés, sur tout l’historique.</p>
-    </div>
-    <div class="row g-3 mb-4">
-        @foreach(['entrees' => 'Total des entrées', 'sorties' => 'Total des sorties', 'solde' => 'Solde des comptes'] as $cle => $libelle)
-            <div class="col-md-4"><div class="summary-card">
-                <small>{{ $libelle }}</small>
-                @foreach(['CDF', 'USD'] as $monnaie)
-                    <strong class="d-block mt-1">{{ number_format($montantsComptes[$monnaie][$cle], 2, ',', ' ') }} <span class="summary-currency">{{ $monnaie }}</span></strong>
-                @endforeach
-            </div></div>
-        @endforeach
-    </div>
-
-    <div class="row g-3 mb-4">
-        <div class="col-sm-6 col-xl-3"><div class="summary-card"><small>En attente</small><strong>{{ $totaux['nombre'] }}</strong></div></div>
-        @foreach(['ttc' => 'Total TTC', 'ht' => 'Total HT', 'tva' => 'Total TVA'] as $cle => $libelle)
-        <div class="col-sm-6 col-xl-3"><div class="summary-card"><small>{{ $libelle }} — validé</small>
-            <strong class="d-block">{{ number_format($totaux['CDF'][$cle], 2, ',', ' ') }} <span class="summary-currency">CDF</span></strong>
-            <strong class="d-block mt-1">{{ number_format($totaux['USD'][$cle], 2, ',', ' ') }} <span class="summary-currency">USD</span></strong>
-        </div></div>
-        @endforeach
-    </div>
-
     <div class="card border-0 shadow-sm mb-4">
         <div class="card-body">
             <form method="GET" action="{{ route($routeNom) }}" class="row g-3 align-items-end">

@@ -36,9 +36,9 @@
                     </div>
 
                     <div class="col-md-4 mb-3">
-                        <label class="form-label">Département</label>
+                        <label class="form-label">Direction</label>
                         <select name="departement_id" class="form-select" required>
-                            <option value="">-- Sélectionner un département --</option>
+                            <option value="">-- Sélectionner un direction --</option>
                             @foreach($departements as $departement)
                                 <option value="{{ $departement->id }}" {{ (string) old('departement_id', auth()->user()->departement_id) === (string) $departement->id ? 'selected' : '' }}>
                                     {{ $departement->designation }}

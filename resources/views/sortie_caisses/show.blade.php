@@ -231,25 +231,29 @@ Informations générales
 
 
 
-@if($isSuperAdmin)
-
 <div class="col-md-3">
 
 <strong>
 
-Utilisateur créateur
+État de besoin approuvé par
 
 </strong>
 
 <br>
 
-{{ $sortie->user?->prenom ?? '' }}
-
-{{ $sortie->user?->nom ?? '' }}
+{{ trim(($sortie->etatBesoin?->validateur?->prenom ?? '').' '.($sortie->etatBesoin?->validateur?->nom ?? '')) ?: 'Non approuvé' }}
 
 </div>
 
-@endif
+<div class="col-md-3">
+
+<strong>Bon de sortie validé par</strong>
+
+<br>
+
+{{ trim(($sortie->validateur?->prenom ?? '').' '.($sortie->validateur?->nom ?? '')) ?: 'Non validé' }}
+
+</div>
 
 @if($sortie->etatBesoin?->piece_justificative)
 <div class="card shadow-sm border-success mb-3">

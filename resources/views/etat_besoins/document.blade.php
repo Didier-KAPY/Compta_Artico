@@ -58,7 +58,7 @@
 
     <table class="meta">
         <tr><td><span class="label">Date</span><span class="value">{{ \Carbon\Carbon::parse($etat->date)->format('d/m/Y') }}</span></td><td><span class="label">Statut</span><span class="value">{{ $etat->statut }}</span></td></tr>
-        <tr><td><span class="label">Département</span><span class="value">{{ $etat->departement?->designation ?? $etat->service }}</span></td><td><span class="label">Demandeur</span><span class="value">{{ $etat->demandeur }}</span></td></tr>
+        <tr><td><span class="label">Direction</span><span class="value">{{ $etat->departement?->designation ?? $etat->service }}</span></td><td><span class="label">Demandeur</span><span class="value">{{ $etat->demandeur }}</span></td></tr>
         <tr><td colspan="2"><span class="label">Motif</span><span class="value">{{ $etat->motif }}</span></td></tr>
     </table>
 

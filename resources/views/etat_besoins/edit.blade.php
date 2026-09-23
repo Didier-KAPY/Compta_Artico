@@ -13,7 +13,7 @@
         @method('PUT')
 
         <div class="mb-3">
-            <label>Département</label>
+            <label>Direction</label>
             <select name="departement_id" class="form-select" required>
                 @foreach($departements as $departement)
                     <option value="{{ $departement->id }}" @selected((string)old('departement_id', $etat->departement_id)===(string)$departement->id)>{{ $departement->designation }}</option>

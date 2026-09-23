@@ -8,11 +8,12 @@
     $isSuperAdmin = $user->isSuperAdmin();
     $isAdmin = $user->isSuperAdmin() || $user->isManagement();
     $isComptabilite = $user->hasRole(['Comptable', 'DAF']);
+    $isChargeTechnique = $user->isTechnicalOfficer();
 
     $rubriques = collect([
         ['visible' => $isAdmin, 'route' => 'parametres.entreprise', 'icon' => 'bi-building', 'color' => 'primary', 'title' => 'Entreprise', 'text' => 'Identité, coordonnées et informations légales.'],
         ['visible' => $isAdmin, 'route' => 'parametres.utilisateurs', 'icon' => 'bi-people', 'color' => 'primary', 'title' => 'Utilisateurs', 'text' => 'Créer les comptes et consulter les dernières connexions.'],
-        ['visible' => $isAdmin || $user->hasRole('DAF'), 'route' => 'parametres.rh.index', 'icon' => 'bi-person-workspace', 'color' => 'info', 'title' => 'Gestion des ressources humaines', 'text' => 'Employés, contrats, pointages, congés, paie et cartes de service.'],
+        ['visible' => $isAdmin || $user->hasRole('DAF') || $isChargeTechnique, 'route' => $isChargeTechnique ? 'parametres.rh.presences' : 'parametres.rh.index', 'icon' => 'bi-person-workspace', 'color' => 'info', 'title' => 'Gestion des ressources humaines', 'text' => $isChargeTechnique ? 'Présences, pointages et cartes de service.' : 'Employés, contrats, pointages, congés, paie et cartes de service.'],
         ['visible' => config('features.accounting') && ($isSuperAdmin || $isComptabilite), 'route' => 'parametres.comptes', 'icon' => 'bi-journal-bookmark', 'color' => 'success', 'title' => 'Plan comptable', 'text' => 'Comptes généraux utilisés dans les écritures.'],
         ['visible' => config('features.accounting') && ($isSuperAdmin || $isComptabilite), 'route' => 'parametres.journal-types.create', 'icon' => 'bi-journal-text', 'color' => 'warning', 'title' => 'Types de journaux', 'text' => 'Codes journaux et comptes de trésorerie associés.'],
         ['visible' => config('features.accounting') && ($isSuperAdmin || $isComptabilite), 'route' => 'parametres.taux-change.create', 'icon' => 'bi-currency-exchange', 'color' => 'danger', 'title' => 'Taux de change', 'text' => 'Cours appliqué aux opérations multidevises.'],

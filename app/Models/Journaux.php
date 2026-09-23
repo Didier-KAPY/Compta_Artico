@@ -16,6 +16,21 @@ use App\Models\ListeDesComptes;
 
 class Journaux extends Model
 {
+    protected static function booted(): void
+    {
+        static::creating(function (self $journal) {
+            if (!$journal->entreprise_id && auth()->user() && Entreprise::exists()) $journal->entreprise_id = app(\App\Services\CurrentEntreprise::class)->for()->id;
+        });
+        static::updating(function (self $journal) {
+            if ($journal->constatation()->exists() && $journal->isDirty(['date','reference','liste_des_comptes_id','journal_type_id','entree_caisse_id','sortie_caisse_id','monnaie','montant_ttc','entrees_cdf','sorties_cdf','entrees_usd','sorties_usd','statut'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['constatation'=>'Le règlement lié à une constatation validée est verrouillé.']);
+            }
+        });
+        static::deleting(function (self $journal) {
+            if ($journal->constatation()->exists()) throw \Illuminate\Validation\ValidationException::withMessages(['constatation'=>'Le règlement lié à une constatation validée ne peut pas être supprimé.']);
+        });
+    }
+    public function constatation() { return $this->hasOne(ConstatationComptable::class, 'reglement_journal_id'); }
 
     use HasFactory, SoftDeletes;
 
@@ -25,6 +40,7 @@ class Journaux extends Model
 
 
     protected $fillable = [
+        'entreprise_id',
 
         'user_id',
 

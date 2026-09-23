@@ -27,11 +27,11 @@ class EcritureComptableController extends Controller
  */
 public function liste(Request $request)
 {
-    $journalCible = $request->filled('journal_id') || $request->filled('journal_ids');
     $dateDebut = $request->input('date_debut');
     $dateFin = $request->input('date_fin');
-    $statut = $request->input('statut', $journalCible ? '' : 'En attente');
+    $statut = $request->input('statut', 'En attente');
     $query = EcritureComptable::with([
+        'constatation', 'journal.constatation', 'journal.journalType',
         'journal',
         'compte',
         'user',
@@ -49,9 +49,12 @@ public function liste(Request $request)
     $query->when(filled($statut), fn ($q) => $q->where('statut', $statut));
 
     $ecritures = $query
+        ->orderByRaw("CASE WHEN role_constatation = 'constatation' THEN 0 ELSE 1 END")
         ->orderBy('date', 'desc')
-        ->orderByDesc('created_at')
-        ->orderBy('id', 'desc')
+        ->orderByRaw('COALESCE(constatation_id, journal_id, id) DESC')
+        ->orderByRaw('COALESCE(journal_id, 0) DESC')
+        ->orderByRaw('CASE WHEN debit_cdf > 0 THEN 0 ELSE 1 END')
+        ->orderBy('id')
         ->paginate(20)
         ->withQueryString();
 
@@ -160,7 +163,7 @@ public function traiterJournal(Request $request, Journaux $journal, WorkflowComp
 }
 public function show($id, FinancialDocumentService $documents)
 {
-    $ecriture = EcritureComptable::with(['journal.entreeCaisse', 'journal.sortieCaisse.etatBesoin', 'journal.brcs', 'journal.clotureJournaliere', 'compte', 'user', 'validateur'])->findOrFail($id);
+    $ecriture = EcritureComptable::with(['constatation.user', 'journal.constatation.user', 'journal.journalType', 'journal.entreeCaisse', 'journal.sortieCaisse.etatBesoin', 'journal.brcs', 'journal.clotureJournaliere', 'compte', 'user', 'validateur'])->findOrFail($id);
     $suppressionDependencies = $documents->dependencies($ecriture);
     $journal = $ecriture->journal;
     $documentLinks = collect([
