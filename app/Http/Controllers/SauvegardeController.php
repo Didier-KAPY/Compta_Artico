@@ -104,7 +104,15 @@ class SauvegardeController extends Controller
         }
         $file = basename($data['fichier']);
         abort_unless($file === $data['fichier'] && Storage::disk('local')->exists('backups/'.$file), 404);
-        $this->restoreFile($file);
+        try {
+            $this->restoreFile($file);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            throw ValidationException::withMessages([
+                'fichier' => 'La restauration a échoué. La sauvegarde '.$file.' est toujours conservée sur le serveur.',
+            ]);
+        }
 
         return back()->with('success', 'Base restaurée depuis '.$file.'.');
     }
