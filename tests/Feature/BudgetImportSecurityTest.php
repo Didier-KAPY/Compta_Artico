@@ -88,6 +88,11 @@ class BudgetImportSecurityTest extends TestCase
     {
         Storage::fake('local');
         $user = $this->admin();
+        $this->actingAs($user)->get(route('parametres.sauvegardes.index'))
+            ->assertOk()
+            ->assertSee('id="workspaceImportForm"', false)
+            ->assertSee('onsubmit="return false;"', false)
+            ->assertSee('data-import-trigger', false);
         $started = $this->actingAs($user)->postJson(route('parametres.sauvegardes.import.init'), [
             'nom' => 'dossier-de-travail.zip',
             'taille' => 101911566,

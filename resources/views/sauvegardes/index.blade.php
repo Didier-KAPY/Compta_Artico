@@ -17,22 +17,22 @@
         </div></div></div>
         <div class="col-lg-6"><div class="card border-danger-subtle shadow-sm h-100"><div class="card-body p-4">
             <div class="d-flex align-items-start gap-3 mb-3"><span class="rounded-circle bg-danger-subtle text-danger p-3"><i class="bi bi-database-up fs-4"></i></span><div><h5 class="mb-1">Importer une base</h5><p class="text-muted mb-0">Le fichier SQL remplacera les données actuelles. Taille maximale : 100 Mo.</p></div></div>
-            <form id="databaseImportForm" method="POST" enctype="multipart/form-data" action="{{ route('parametres.sauvegardes.import') }}" data-no-loading>@csrf
+            <form id="databaseImportForm" method="POST" enctype="multipart/form-data" action="{{ route('parametres.sauvegardes.import') }}" onsubmit="return false;" data-no-loading>@csrf
                 <div class="mb-3"><label for="fichierImport" class="form-label">Fichier SQL</label><input id="fichierImport" type="file" name="fichier" accept=".sql,application/sql,text/plain" class="form-control @error('fichier') is-invalid @enderror" required>@error('fichier')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
                 <div class="mb-3"><label for="passwordImport" class="form-label">Votre mot de passe</label><input id="passwordImport" type="password" name="password" class="form-control @error('password') is-invalid @enderror" autocomplete="current-password" required>@error('password')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
                 <div class="form-check mb-3"><input id="confirmationImport" class="form-check-input" type="checkbox" name="confirmation" value="1" required><label class="form-check-label" for="confirmationImport">Je confirme le remplacement de la base actuelle.</label></div>
                 <div id="databaseImportProgress" class="progress mb-3 d-none" role="progressbar" aria-label="Progression de l'import"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width:0%">0 %</div></div>
                 <div id="databaseImportMessage" class="alert d-none"></div>
-                <button class="btn btn-danger" data-loading-text="Import en cours..."><i class="bi bi-upload me-1"></i>Importer et restaurer</button>
+                <button type="button" class="btn btn-danger" data-import-trigger><i class="bi bi-upload me-1"></i>Importer et restaurer</button>
             </form>
             <hr>
-            <form id="workspaceImportForm" method="POST" enctype="multipart/form-data" action="{{ route('parametres.sauvegardes.import-package') }}" data-no-loading>@csrf
+            <form id="workspaceImportForm" method="POST" enctype="multipart/form-data" action="{{ route('parametres.sauvegardes.import-package') }}" onsubmit="return false;" data-no-loading>@csrf
                 <div class="mb-3"><label for="workspaceImport" class="form-label">Dossier de travail (.zip)</label><input id="workspaceImport" type="file" name="fichier" accept=".zip,application/zip" class="form-control" required><small class="text-muted">Paquet exporté par Compta Artico, maximum 500 Mo.</small></div>
                 <div class="mb-3"><label for="workspacePassword" class="form-label">Votre mot de passe</label><input id="workspacePassword" type="password" name="password" class="form-control" autocomplete="current-password" required></div>
                 <div class="form-check mb-3"><input id="workspaceConfirmation" class="form-check-input" type="checkbox" name="confirmation" value="1" required><label class="form-check-label" for="workspaceConfirmation">Je confirme le remplacement de la base et des fichiers.</label></div>
                 <div id="workspaceImportProgress" class="progress mb-3 d-none" role="progressbar" aria-label="Progression de l'import"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width:0%">0 %</div></div>
                 <div id="workspaceImportMessage" class="alert d-none"></div>
-                <button class="btn btn-danger" data-loading-text="Restauration du dossier..."><i class="bi bi-folder-plus me-1"></i>Importer le dossier de travail</button>
+                <button type="button" class="btn btn-danger" data-import-trigger><i class="bi bi-folder-plus me-1"></i>Importer le dossier de travail</button>
             </form>
         </div></div></div>
     </div>
@@ -44,10 +44,11 @@
 </div>
 <script>
 function configureChunkedImport(formId, progressId, messageId, extension, maxSize, confirmationText) {
-document.getElementById(formId)?.addEventListener('submit', async function (event) {
-    event.preventDefault();
+const configuredForm = document.getElementById(formId);
+configuredForm?.addEventListener('submit', event => event.preventDefault());
+configuredForm?.querySelector('[data-import-trigger]')?.addEventListener('click', async function () {
     if (!window.confirm(confirmationText)) return;
-    const form = this;
+    const form = configuredForm;
     const file = form.querySelector('[name="fichier"]').files[0];
     const password = form.querySelector('[name="password"]').value;
     const confirmation = form.querySelector('[name="confirmation"]').checked;
@@ -55,7 +56,7 @@ document.getElementById(formId)?.addEventListener('submit', async function (even
     const progress = document.getElementById(progressId);
     const bar = progress.querySelector('.progress-bar');
     const message = document.getElementById(messageId);
-    const button = form.querySelector('button[type="submit"], button:not([type])');
+    const button = form.querySelector('[data-import-trigger]');
     if (!file || !password || !confirmation) return;
     if (!file.name.toLowerCase().endsWith('.' + extension)) return showError('Le fichier doit être au format .' + extension + '.');
     if (file.size > maxSize) return showError('Le fichier dépasse la taille maximale autorisée.');
