@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -337,6 +338,7 @@ class SauvegardeController extends Controller
                 fclose($stream);
             }
         }
+        $this->migrateRestoredDatabase();
     }
 
     private function restoreSqlPath(string $path): void
@@ -359,6 +361,13 @@ class SauvegardeController extends Controller
         } finally {
             if (is_resource($stream)) fclose($stream);
         }
+        $this->migrateRestoredDatabase();
+    }
+
+    private function migrateRestoredDatabase(): void
+    {
+        DB::purge(config('database.default'));
+        Artisan::call('migrate', ['--force' => true]);
     }
 
     private function binary(string $environmentKey, string $executable): string

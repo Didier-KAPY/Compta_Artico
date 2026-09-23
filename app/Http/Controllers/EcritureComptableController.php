@@ -19,6 +19,7 @@ use Illuminate\Validation\ValidationException;
 use App\Services\WorkflowComptableService;
 use App\Services\DocumentNumberService;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Schema;
 
 class EcritureComptableController extends Controller
 {
@@ -30,13 +31,20 @@ public function liste(Request $request)
     $dateDebut = $request->input('date_debut');
     $dateFin = $request->input('date_fin');
     $statut = $request->input('statut', 'En attente');
-    $query = EcritureComptable::with([
-        'constatation', 'journal.constatation', 'journal.journalType',
+    $constatationsDisponibles = Schema::hasTable('constatations_comptables')
+        && Schema::hasColumn('ecritures_comptables', 'constatation_id')
+        && Schema::hasColumn('ecritures_comptables', 'role_constatation');
+    $relations = [
+        'journal.journalType',
         'journal',
         'compte',
         'user',
         'validateur'
-    ]);
+    ];
+    if ($constatationsDisponibles) {
+        array_push($relations, 'constatation', 'journal.constatation');
+    }
+    $query = EcritureComptable::with($relations);
     $query->when($request->filled('journal_id'), fn ($q) => $q->where('journal_id', $request->integer('journal_id')));
 
     $query->when($request->filled('journal_ids'), function ($q) use ($request) {
@@ -49,9 +57,12 @@ public function liste(Request $request)
     $query->when(filled($statut), fn ($q) => $q->where('statut', $statut));
 
     $ecritures = $query
-        ->orderByRaw("CASE WHEN role_constatation = 'constatation' THEN 0 ELSE 1 END")
+        ->when($constatationsDisponibles, fn ($q) => $q
+            ->orderByRaw("CASE WHEN role_constatation = 'constatation' THEN 0 ELSE 1 END"))
         ->orderBy('date', 'desc')
-        ->orderByRaw('COALESCE(constatation_id, journal_id, id) DESC')
+        ->when($constatationsDisponibles,
+            fn ($q) => $q->orderByRaw('COALESCE(constatation_id, journal_id, id) DESC'),
+            fn ($q) => $q->orderByRaw('COALESCE(journal_id, id) DESC'))
         ->orderByRaw('COALESCE(journal_id, 0) DESC')
         ->orderByRaw('CASE WHEN debit_cdf > 0 THEN 0 ELSE 1 END')
         ->orderBy('id')
