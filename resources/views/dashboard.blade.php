@@ -99,7 +99,7 @@
                 <table class="table dashboard-table align-middle mb-0">
                     <thead><tr><th>Journal</th><th>Compte</th><th>Désignation</th><th>Nature</th><th class="text-end">Solde CDF</th><th class="text-end">Solde USD</th></tr></thead>
                     <tbody>
-                        @forelse($treasury_situation['accounts'] as $account)
+                        @forelse(collect($treasury_situation['accounts'])->filter(fn ($account) => round((float) $account['balance_cdf'], 2) != 0 || round((float) $account['balance_usd'], 2) != 0) as $account)
                             <tr>
                                 <td><span class="badge bg-light text-dark">{{ $account['code'] }}</span></td>
                                 <td>{{ $account['account'] }}</td>
@@ -109,24 +109,11 @@
                                 <td class="text-end fw-semibold {{ $account['balance_usd'] < 0 ? 'text-danger' : '' }}">{{ number_format($account['balance_usd'], 2, ',', ' ') }}</td>
                             </tr>
                         @empty
-                            <tr><td colspan="6" class="text-center text-muted py-4"><i class="bi bi-inbox me-1"></i> Aucun mouvement de trésorerie validé.</td></tr>
+                            <tr><td colspan="6" class="text-center text-muted py-4"><i class="bi bi-inbox me-1"></i> Aucun compte avec un solde non nul.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
             </div>
-        </div>
-    @endif
-
-    @if($sections['cash'])
-        <div class="section-heading"><div><span class="eyebrow">Liquidités</span><h4>Situation de caisse</h4><small class="section-note">Résumé des entrées, sorties et soldes enregistrés, séparés en CDF et USD.</small></div></div>
-        <div class="row g-3 mb-4">
-            @foreach([
-                ['Entrées CDF', $cash['in_cdf'], 'arrow-down-left', 'success', 'CDF'], ['Sorties CDF', $cash['out_cdf'], 'arrow-up-right', 'danger', 'CDF'],
-                ['Solde CDF', $cash['balance_cdf'], 'wallet2', 'primary', 'CDF'], ['Entrées USD', $cash['in_usd'], 'arrow-down-left', 'success', 'USD'],
-                ['Sorties USD', $cash['out_usd'], 'arrow-up-right', 'danger', 'USD'], ['Solde USD', $cash['balance_usd'], 'wallet2', 'primary', 'USD']
-            ] as [$label, $value, $icon, $color, $currency])
-                <div class="col-sm-6 col-xl-4"><div class="cash-card border-{{ $color }}"><i class="bi bi-{{ $icon }} text-{{ $color }}"></i><div><span>{{ $label }}</span><strong>{{ number_format($value, 2, ',', ' ') }} <small>{{ $currency }}</small></strong></div></div></div>
-            @endforeach
         </div>
     @endif
 
@@ -183,16 +170,6 @@
         </div>
     @endif
 
-    @if($sections['operations'])
-        <div class="panel-card">
-            <div class="panel-title"><div><span class="eyebrow">Activité récente</span><h5>10 dernières opérations</h5><small class="section-note">Journaux les plus récents, classés par date d’opération.</small></div></div>
-            <div class="table-responsive"><table class="table dashboard-table align-middle mb-0"><thead><tr><th>Date</th><th>Référence</th><th>Type</th><th>Montant</th><th>Monnaie</th>@if($user->isSuperAdmin())<th>Validé par</th>@endif<th>Statut</th></tr></thead><tbody>
-                @forelse($latest_operations as $operation)
-                    <tr><td>{{ $operation->date?->format('d/m/Y') }}</td><td class="fw-semibold">{{ $operation->reference }}</td><td>{{ ucfirst($operation->type) }}</td><td>{{ number_format($operation->montant_ttc, 2, ',', ' ') }}</td><td>{{ $operation->monnaie }}</td>@if($user->isSuperAdmin())<td>{{ trim(($operation->validateur?->prenom ?? '').' '.($operation->validateur?->nom ?? '')) ?: 'Non validé' }}</td>@endif<td><span class="status status-{{ $operation->statut === 'Validé' ? 'success' : ($operation->statut === 'Rejeté' ? 'danger' : 'warning') }}">{{ $operation->statut }}</span></td></tr>
-                @empty<tr><td colspan="{{ $user->isSuperAdmin() ? 7 : 6 }}" class="text-center text-muted py-4">Aucune opération enregistrée</td></tr>@endforelse
-            </tbody></table></div>
-        </div>
-    @endif
 </div>
 
 <style>

@@ -31,9 +31,9 @@ class DashboardTest extends TestCase
         $this->actingAs($user)
             ->get(route('dashboard'))
             ->assertOk()
-            ->assertSee('Situation de caisse')
+            ->assertDontSee('Situation de caisse')
             ->assertSee('Entrées vs sorties par mois')
-            ->assertSee('10 dernières opérations')
+            ->assertDontSee('10 dernières opérations')
             ->assertSee('BRC')
             ->assertSee("Bons d'entrée")
             ->assertSee('Nouveau BRC')
@@ -59,9 +59,9 @@ class DashboardTest extends TestCase
             ->assertOk()
             ->assertSee('Statistiques')
             ->assertSee('Situation de trésorerie')
-            ->assertSee('Situation de caisse')
+            ->assertDontSee('Situation de caisse')
             ->assertSee('Entrées vs sorties par mois')
-            ->assertSee('10 dernières opérations')
+            ->assertDontSee('10 dernières opérations')
             ->assertDontSee('Validé par');
     }
 
@@ -83,9 +83,9 @@ class DashboardTest extends TestCase
             ->assertOk()
             ->assertSee('Situation de trésorerie')
             ->assertSee('Disponibilités par compte')
-            ->assertSee('Situation de caisse')
+            ->assertDontSee('Situation de caisse')
             ->assertSee('Entrées vs sorties par mois')
-            ->assertSee('10 dernières opérations')
+            ->assertDontSee('10 dernières opérations')
             ->assertDontSee('Validé par');
     }
 
@@ -99,8 +99,8 @@ class DashboardTest extends TestCase
             ]);
             $this->actingAs($user)->get(route('dashboard'))->assertOk()
                 ->assertSee('Situation de trésorerie')->assertSee('Disponibilités par compte')
-                ->assertSee('Situation de caisse')->assertSee('Entrées vs sorties par mois')
-                ->assertSee('10 dernières opérations')
+                ->assertDontSee('Situation de caisse')->assertSee('Entrées vs sorties par mois')
+                ->assertDontSee('10 dernières opérations')
                 ->assertViewHas('sections', fn ($sections) => collect($sections)->except('needs_only')->every(fn ($visible) => $visible === true));
         }
     }
