@@ -112,8 +112,8 @@
 <div class="receipt">
     {{-- ENTETE --}}
     <div class="text-center">
-        @if(isset($entreprise) && $entreprise->logo)
-            <img src="{{ ($isPdf ?? false) ? public_path('storage/'.$entreprise->logo) : asset('storage/'.$entreprise->logo) }}" class="logo" alt="Logo">
+        @if($logoData ?? null)
+            <img src="{{ $logoData }}" class="logo" alt="Logo">
         @endif
         <div class="bold company-name">
             {{ $entreprise->nom_entreprise ?? 'DOXA SERVICES' }}@include('partials.entreprise-identifiants')
@@ -214,9 +214,9 @@
             <strong>
                 Caissier
             </strong>
-            @if($entreprise?->cachet)
+            @if($cachetData ?? null)
                 <img
-                    src="{{ ($isPdf ?? false) ? public_path('storage/'.$entreprise->cachet) : asset('storage/'.$entreprise->cachet) }}"
+                    src="{{ $cachetData }}"
                     class="receipt-stamp"
                     alt="Cachet de l'entreprise"
                 >

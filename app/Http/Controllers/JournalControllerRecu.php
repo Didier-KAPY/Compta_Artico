@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Entreprise;
 use App\Models\Journaux;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Storage;
 
 class JournalControllerRecu extends Controller
 {
@@ -46,9 +47,26 @@ class JournalControllerRecu extends Controller
             ->first(fn ($nom) => filled($nom));
         $tousValides = $journaux->every(fn (Journaux $ligne) => in_array(mb_strtolower(trim((string) $ligne->statut)), ['validé', 'valide'], true));
 
+        $entreprise = Entreprise::first();
+        $logoData = $this->imageData($entreprise?->logo);
+        $cachetData = $this->imageData($entreprise?->cachet);
+
         return compact(
             'journal', 'journaux', 'montantHt', 'montantTva', 'montantTtc',
-            'tauxTva', 'description', 'nomPartenaire', 'tousValides'
-        ) + ['entreprise' => Entreprise::first()];
+            'tauxTva', 'description', 'nomPartenaire', 'tousValides',
+            'entreprise', 'logoData', 'cachetData'
+        );
+    }
+
+    private function imageData(?string $path): ?string
+    {
+        $disk = Storage::disk('public');
+        if (! $path || ! $disk->exists($path)) {
+            return null;
+        }
+
+        $mime = $disk->mimeType($path) ?: 'image/png';
+
+        return 'data:'.$mime.';base64,'.base64_encode($disk->get($path));
     }
 }
