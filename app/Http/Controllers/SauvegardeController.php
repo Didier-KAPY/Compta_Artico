@@ -12,6 +12,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use ZipArchive;
 use Symfony\Component\Process\Process;
+use Symfony\Component\Process\ExecutableFinder;
 use Throwable;
 
 class SauvegardeController extends Controller
@@ -25,22 +26,17 @@ class SauvegardeController extends Controller
 
     public function store()
     {
-        $db = config('database.connections.'.config('database.default'));
+        $db = DB::connection()->getConfig();
         abort_unless(($db['driver'] ?? null) === 'mysql', 422, 'La sauvegarde automatique est configurée pour MySQL.');
-        $name = 'backups/compta-'.now()->format('Ymd-His').'.sql';
-        Storage::disk('local')->makeDirectory('backups');
-        $path = Storage::disk('local')->path($name);
+        $name = 'backups/compta-'.now()->format('Ymd-His').'-'.Str::random(8).'.sql';
         try {
-            $process = new Process(array_merge(
-                [$this->binary('DB_DUMP_BINARY', 'mysqldump.exe')],
-                $this->connectionArguments($db),
-                ['--single-transaction', '--routines', '--triggers', $db['database'], '--result-file='.$path],
-            ), null, $this->processEnvironment((string) $db['password']), null, 300);
-            $process->mustRun();
+            Storage::disk('local')->makeDirectory('backups');
+            $this->createSqlDump($db, Storage::disk('local')->path($name));
         } catch (Throwable $exception) {
             Storage::disk('local')->delete($name);
+            report($exception);
 
-            throw $exception;
+            return back()->withErrors(['sauvegarde' => 'La sauvegarde SQL a échoué. Vérifiez la configuration de l’outil d’export, la connexion MySQL et les droits du compte de base de données. Le détail est enregistré dans les journaux du serveur.']);
         }
 
         return back()->with('success', 'Sauvegarde créée : '.basename($name));
@@ -49,7 +45,7 @@ class SauvegardeController extends Controller
     public function exportPackage()
     {
         abort_unless(class_exists(ZipArchive::class), 500, 'L’extension PHP ZIP est requise pour les dossiers de travail.');
-        $db = config('database.connections.'.config('database.default'));
+        $db = DB::connection()->getConfig();
         abort_unless(($db['driver'] ?? null) === 'mysql', 422, 'La sauvegarde automatique est configurée pour MySQL.');
 
         $stamp = now()->format('Ymd-His');
@@ -59,12 +55,7 @@ class SauvegardeController extends Controller
         $zipPath = Storage::disk('local')->path($zipName);
 
         try {
-            $process = new Process(array_merge(
-                [$this->binary('DB_DUMP_BINARY', 'mysqldump.exe')],
-                $this->connectionArguments($db),
-                ['--single-transaction', '--routines', '--triggers', $db['database'], '--result-file='.$sqlPath],
-            ), null, $this->processEnvironment((string) $db['password']), null, 300);
-            $process->mustRun();
+            $this->createSqlDump($db, $sqlPath);
 
             $zip = new ZipArchive();
             abort_unless($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true, 500, 'Impossible de créer le paquet de travail.');
@@ -83,6 +74,11 @@ class SauvegardeController extends Controller
             }
             $zip->addFromString('manifest.json', json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
             $zip->close();
+        } catch (Throwable $exception) {
+            Storage::disk('local')->delete($zipName);
+            report($exception);
+
+            return back()->withErrors(['sauvegarde' => 'L’export du dossier de travail a échoué. Le détail est enregistré dans les journaux du serveur.']);
         } finally {
             @unlink($sqlPath);
         }
@@ -370,9 +366,29 @@ class SauvegardeController extends Controller
         Artisan::call('migrate', ['--force' => true]);
     }
 
+    protected function createSqlDump(array $db, string $path): void
+    {
+        $process = $this->dumpProcess($db, $path);
+        $process->mustRun();
+        clearstatcache(true, $path);
+        if (! is_file($path) || filesize($path) === 0) {
+            throw new \RuntimeException('L’outil d’export n’a produit aucun fichier SQL.');
+        }
+    }
+
+    private function dumpProcess(array $db, string $path): Process
+    {
+        return new Process(array_merge(
+            [$this->binary('DB_DUMP_BINARY', 'mysqldump.exe')],
+            $this->connectionArguments($db),
+            ['--single-transaction', '--no-tablespaces', '--routines', '--triggers', '--hex-blob', '--result-file='.$path, $db['database']],
+        ), null, $this->processEnvironment((string) $db['password']), null, 300);
+    }
+
     private function binary(string $environmentKey, string $executable): string
     {
-        if ($configured = env($environmentKey)) {
+        $key = $environmentKey === 'DB_DUMP_BINARY' ? 'dump_binary' : 'client_binary';
+        if ($configured = config('backups.'.$key)) {
             return $configured;
         }
         $xampp = 'C:/xampp/mysql/bin/'.$executable;
@@ -381,7 +397,12 @@ class SauvegardeController extends Controller
         }
         $laragon = glob('C:/laragon/bin/mysql/*/bin/'.$executable) ?: [];
 
-        return end($laragon) ?: pathinfo($executable, PATHINFO_FILENAME);
+        $finder = new ExecutableFinder();
+        $name = pathinfo($executable, PATHINFO_FILENAME);
+
+        return end($laragon) ?: $finder->find($name)
+            ?? $finder->find($name === 'mysqldump' ? 'mariadb-dump' : 'mariadb')
+            ?? $name;
     }
 
     private function connectionArguments(array $db): array
@@ -391,7 +412,7 @@ class SauvegardeController extends Controller
             '--port='.(string) $db['port'],
             '--user='.$db['username'],
         ];
-        $sslCa = env('MYSQL_ATTR_SSL_CA');
+        $sslCa = defined('PDO::MYSQL_ATTR_SSL_CA') ? ($db['options'][\PDO::MYSQL_ATTR_SSL_CA] ?? null) : null;
         if ($sslCa && is_file($sslCa)) {
             $arguments[] = '--ssl-ca='.$sslCa;
         }

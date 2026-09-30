@@ -7,6 +7,7 @@
         <a href="{{ route('parametres.parametre') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Retour</a>
     </div>
     @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
+    @error('sauvegarde')<div class="alert alert-danger" role="alert">{{ $message }}</div>@enderror
 
     <div class="row g-4 mb-4">
         <div class="col-lg-6"><div class="card border-0 shadow-sm h-100"><div class="card-body p-4">
