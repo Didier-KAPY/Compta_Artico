@@ -113,7 +113,7 @@
     {{-- ENTETE --}}
     <div class="text-center">
         @if($logoData ?? null)
-            <img src="{{ $logoData }}" class="logo" alt="Logo">
+            <img src="{{ ($isPdf ?? false) ? $logoData : route('profil.logo', [], false) }}" class="logo" alt="Logo">
         @endif
         <div class="bold company-name">
             {{ $entreprise->nom_entreprise ?? 'DOXA SERVICES' }}@include('partials.entreprise-identifiants')
@@ -216,7 +216,7 @@
             </strong>
             @if($cachetData ?? null)
                 <img
-                    src="{{ $cachetData }}"
+                    src="{{ ($isPdf ?? false) ? $cachetData : route('profil.cachet', [], false) }}"
                     class="receipt-stamp"
                     alt="Cachet de l'entreprise"
                 >

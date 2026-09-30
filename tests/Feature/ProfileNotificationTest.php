@@ -19,27 +19,31 @@ class ProfileNotificationTest extends TestCase
         $disk = \Illuminate\Support\Facades\Storage::disk('public');
         $disk->put('photos/profile.png', $image);
         $disk->put('logos/company.png', $image);
+        $disk->put('cachets/company.png', $image);
         $user = $this->userWithRole('Admin', 'images@test.local');
         $user->update(['photo' => 'photos/profile.png']);
         \App\Models\Entreprise::create([
             'user_id' => $user->id,
             'nom_entreprise' => 'Test',
             'logo' => 'logos/company.png',
+            'cachet' => 'cachets/company.png',
         ]);
 
         $this->get('/profil/photo')->assertRedirect(route('login'));
         $this->get('/profil/logo')->assertRedirect(route('login'));
+        $this->get('/profil/cachet')->assertRedirect(route('login'));
         $this->actingAs($user);
-        foreach (['/profil/photo', '/profil/logo'] as $url) {
+        foreach (['/profil/photo', '/profil/logo', '/profil/cachet'] as $url) {
             $this->get($url)->assertOk()->assertHeader('Content-Type', 'image/png')->assertContent($image);
         }
         $this->get(route('profil.index'))->assertOk()
             ->assertSee('src="/profil/photo"', false)
             ->assertSee('src="/profil/logo"', false);
 
-        $disk->delete(['photos/profile.png', 'logos/company.png']);
+        $disk->delete(['photos/profile.png', 'logos/company.png', 'cachets/company.png']);
         $this->get('/profil/photo')->assertNotFound();
         $this->get('/profil/logo')->assertNotFound();
+        $this->get('/profil/cachet')->assertNotFound();
     }
 
     public function test_profile_saves_postnom(): void

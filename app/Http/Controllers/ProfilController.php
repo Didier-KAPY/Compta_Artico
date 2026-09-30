@@ -27,6 +27,11 @@ class ProfilController extends Controller
         return $this->imageResponse(Entreprise::first()?->logo);
     }
 
+    public function cachet()
+    {
+        return $this->imageResponse(Entreprise::first()?->cachet);
+    }
+
     private function imageResponse(?string $path)
     {
         $disk = Storage::disk('public');

@@ -37,13 +37,27 @@ class JournalTvaTest extends TestCase
         $this->assertEquals(100.0, (float) $journal->montant_ht);
         $this->assertEquals(16.0, (float) $journal->montant_tva);
         $this->assertEquals(16.0, (float) $journal->taux_tva);
+        \Illuminate\Support\Facades\Storage::fake('public');
+        $image = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=');
+        foreach (['logos/company.png', 'cachets/company.png'] as $path) {
+            \Illuminate\Support\Facades\Storage::disk('public')->put($path, $image);
+        }
+        \App\Models\Entreprise::create([
+            'user_id' => $user->id, 'nom_entreprise' => 'Test',
+            'logo' => 'logos/company.png', 'cachet' => 'cachets/company.png',
+        ]);
         $this->actingAs($user)->get(route('journaux.recu', $journal->id))
             ->assertOk()
+            ->assertSee('src="/profil/logo"', false)
+            ->assertSee('src="/profil/cachet"', false)
             ->assertSee('Dénomination')
             ->assertSee('Client')
             ->assertSee('TVA (16,00 %)')
             ->assertSee('100,00')
             ->assertSee('116,00');
+        $this->get(route('journaux.recu.pdf', $journal->id))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf');
     }
 
     public function test_depense_usd_avec_tva_est_convertie_en_cdf_et_reste_equilibree(): void
