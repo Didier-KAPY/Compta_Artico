@@ -2,7 +2,7 @@ FROM php:8.2-apache
 
 WORKDIR /var/www/html
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     unzip \
     curl \
@@ -13,11 +13,6 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-install pdo_mysql \
     && a2enmod rewrite \
     && rm -rf /var/lib/apt/lists/*
-RUN apt-get install -y --no-install-recommends \
-    ca-certificates \
-    curl \
-    default-mysql-client \
-    git \
 
 COPY . .
 
@@ -43,8 +38,6 @@ RUN mkdir -p \
 RUN printf 'upload_max_filesize=512M\npost_max_size=520M\nmax_execution_time=600\nmax_input_time=600\n' \
     > /usr/local/etc/php/conf.d/compta-artico-uploads.ini
 
-RUN a2enmod rewrite
-
 RUN printf '<Directory /var/www/html/public>\n\
 Options FollowSymLinks\n\
 AllowOverride All\n\
@@ -57,7 +50,6 @@ RUN sed -i 's#/var/www/html#/var/www/html/public#g' \
     /etc/apache2/sites-available/000-default.conf
 
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 10000
