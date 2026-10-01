@@ -4,7 +4,7 @@
 <div class="container-fluid py-4">
     <div class="mb-4">
         <h2>Tableau de bord technique</h2>
-        <p class="text-muted">Bonjour {{ $user->prenom }}. Suivi des états de besoins de toutes les directions sauf la Direction financière.</p>
+        <p class="text-muted">Bonjour {{ $user->prenom }}. Suivi des états de besoins de toutes les directions, y compris la Direction générale, sauf la Direction financière.</p>
         <small class="text-muted">Toutes périodes et tous statuts confondus, hors éléments supprimés.</small>
     </div>
     <div class="row g-3 mb-4">
