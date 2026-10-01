@@ -13,6 +13,11 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-install pdo_mysql \
     && a2enmod rewrite \
     && rm -rf /var/lib/apt/lists/*
+RUN apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    default-mysql-client \
+    git \
 
 COPY . .
 
