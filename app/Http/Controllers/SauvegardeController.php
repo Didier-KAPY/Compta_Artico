@@ -19,9 +19,16 @@ class SauvegardeController extends Controller
 {
     public function index()
     {
-        $fichiers = collect(Storage::disk('local')->files('backups'))->filter(fn ($f) => str_ends_with($f, '.sql'))->sortDesc();
+        $erreurLecture = null;
+        try {
+            $fichiers = collect(Storage::disk('local')->files('backups'))->filter(fn ($f) => str_ends_with($f, '.sql'))->sortDesc();
+        } catch (Throwable $exception) {
+            report($exception);
+            $fichiers = collect();
+            $erreurLecture = 'Impossible de lire les sauvegardes. Vérifiez les droits d’accès au dossier de sauvegardes sur le serveur. Le détail est enregistré dans les journaux du serveur.';
+        }
 
-        return view('sauvegardes.index', compact('fichiers'));
+        return view('sauvegardes.index', compact('fichiers', 'erreurLecture'));
     }
 
     public function store()

@@ -8,6 +8,7 @@
     </div>
     @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
     @error('sauvegarde')<div class="alert alert-danger" role="alert">{{ $message }}</div>@enderror
+    @if($erreurLecture)<div class="alert alert-danger" role="alert">{{ $erreurLecture }}</div>@endif
 
     <div class="row g-4 mb-4">
         <div class="col-lg-6"><div class="card border-0 shadow-sm h-100"><div class="card-body p-4">
@@ -40,7 +41,7 @@
 
     <div class="card border-0 shadow-sm"><div class="card-header bg-white py-3"><strong>Sauvegardes disponibles</strong></div><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Fichier</th><th>Taille</th><th>Actions</th></tr></thead><tbody>
         @forelse($fichiers as $f)<tr><td><i class="bi bi-file-earmark-code text-primary me-2"></i>{{ basename($f) }}</td><td>{{ number_format(Storage::disk('local')->size($f)/1024,1,',',' ') }} Ko</td><td><div class="d-flex flex-wrap gap-2"><a class="btn btn-sm btn-outline-primary" href="{{ route('parametres.sauvegardes.download',basename($f)) }}" data-no-loading><i class="bi bi-download me-1"></i>Télécharger</a><form method="POST" action="{{ route('parametres.sauvegardes.restore') }}" class="d-flex flex-wrap gap-2" data-confirm="Cette restauration remplacera les données actuelles. Continuer ?">@csrf<input type="hidden" name="fichier" value="{{ basename($f) }}"><input type="hidden" name="confirmation" value="1"><input type="password" name="password" class="form-control form-control-sm" style="width:180px" placeholder="Votre mot de passe" autocomplete="current-password" required><button class="btn btn-sm btn-outline-danger"><i class="bi bi-arrow-counterclockwise me-1"></i>Restaurer</button></form></div></td></tr>
-        @empty<tr><td colspan="3" class="text-center text-muted py-5"><i class="bi bi-database-x d-block fs-2 mb-2"></i>Aucune sauvegarde disponible.</td></tr>@endforelse
+        @empty<tr><td colspan="3" class="text-center text-muted py-5"><i class="bi bi-database-x d-block fs-2 mb-2"></i>{{ $erreurLecture ? 'Liste des sauvegardes indisponible.' : 'Aucune sauvegarde disponible.' }}</td></tr>@endforelse
     </tbody></table></div></div>
 </div>
 <script>

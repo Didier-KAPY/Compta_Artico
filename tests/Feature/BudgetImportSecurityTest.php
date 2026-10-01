@@ -51,6 +51,32 @@ class BudgetImportSecurityTest extends TestCase
         ])->assertForbidden();
     }
 
+    public function test_super_admin_peut_afficher_les_sauvegardes_existantes(): void
+    {
+        Storage::fake('local');
+        Storage::disk('local')->put('backups/base.sql', str_repeat('a', 1024));
+
+        $this->actingAs($this->admin())->get(route('parametres.sauvegardes.index'))
+            ->assertOk()
+            ->assertSee('base.sql')
+            ->assertSee('1,0 Ko')
+            ->assertSee(route('parametres.sauvegardes.download', 'base.sql'));
+    }
+
+    public function test_un_dossier_inaccessible_ne_bloque_pas_la_page_du_super_admin(): void
+    {
+        $disk = \Mockery::mock(\Illuminate\Filesystem\FilesystemAdapter::class);
+        $disk->shouldReceive('files')->once()->with('backups')
+            ->andThrow(\League\Flysystem\UnableToListContents::atLocation('backups', false, new \RuntimeException('Permission denied')));
+        Storage::shouldReceive('disk')->with('local')->andReturn($disk);
+
+        $this->actingAs($this->admin())->get(route('parametres.sauvegardes.index'))
+            ->assertOk()
+            ->assertSee('Impossible de lire les sauvegardes.')
+            ->assertSee('Liste des sauvegardes indisponible.')
+            ->assertDontSee('Aucune sauvegarde disponible.');
+    }
+
     public function test_import_de_sauvegarde_exige_un_fichier_sql_et_le_mot_de_passe(): void
     {
         $user = $this->admin();
