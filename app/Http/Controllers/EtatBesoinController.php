@@ -44,6 +44,9 @@ class EtatBesoinController extends Controller
         }
 
     $this->limiterAuDepartement($query);
+    if ($request->boolean('sans_piece')) {
+        $query->sansPieceJustificative();
+    }
     $peutVoirTout = auth()->user()->hasRole(['Super Admin', 'Admin', 'Gérant', 'Gerant'])
         || $this->estChargeFinances(auth()->user());
     if ($peutVoirTout && $request->filled('departement_id')) {
@@ -581,21 +584,7 @@ private function limiterAuDepartement($query): void
     }
 
     if ($user->hasRole('Directeur Technique')) {
-        $departementsFinanciers = Departement::all(['id', 'designation'])
-            ->filter(fn ($departement) => in_array(
-                \Illuminate\Support\Str::lower(\Illuminate\Support\Str::ascii(trim($departement->designation))),
-                ['direction financiere'], true
-            ))->pluck('id');
-        $query->where(function ($query) use ($departementsFinanciers) {
-            $query->whereNotNull('departement_id')->whereNotIn('departement_id', $departementsFinanciers)
-                ->orWhere(function ($legacy) {
-                    $legacy->whereNull('departement_id')->where(function ($service) {
-                        $service->whereNull('service')->orWhereRaw("LOWER(TRIM(service)) NOT IN (?, ?)", [
-                            'direction financiere', 'direction financière',
-                        ]);
-                    });
-                });
-        });
+        $query->perimetreTechnique();
         return;
     }
 

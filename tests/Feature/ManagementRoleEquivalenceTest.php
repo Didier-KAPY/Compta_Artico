@@ -14,7 +14,7 @@ class ManagementRoleEquivalenceTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_charge_technique_est_redirige_vers_les_etats_de_besoin_apres_connexion(): void
+    public function test_charge_technique_est_redirige_vers_son_dashboard_apres_connexion(): void
     {
         foreach (['Chargé technique', 'Charge Technique', 'Chargé Technique', 'Charger Technique'] as $index => $designation) {
             $role = Role::firstOrCreate(['designation' => $designation]);
@@ -28,7 +28,7 @@ class ManagementRoleEquivalenceTest extends TestCase
             $this->post(route('handlelogin'), [
                 'email' => $user->email,
                 'password' => 'password',
-            ])->assertRedirect(route('etat-besoins.index'));
+            ])->assertRedirect(route('dashboard'));
 
             $this->post(route('logout'));
         }
@@ -201,8 +201,12 @@ class ManagementRoleEquivalenceTest extends TestCase
             $this->actingAs($user)->get(route($route))->assertOk();
         }
 
-        $this->actingAs($user)->get(route('dashboard'))
-            ->assertRedirect(route('etat-besoins.index'));
+        $response = $this->actingAs($user)->get(route('dashboard'));
+        if ($user->isTechnicalOfficer()) {
+            $response->assertOk()->assertSee('Tableau de bord technique');
+        } else {
+            $response->assertRedirect(route('etat-besoins.index'));
+        }
 
         foreach (['entree-caisses.index', 'sortie-caisses.index', 'journaux.create', 'journaux.releve', 'journaux.tresorerie', 'ecritures.liste'] as $route) {
             $this->actingAs($user)->get(route($route))->assertForbidden();
@@ -223,7 +227,6 @@ class ManagementRoleEquivalenceTest extends TestCase
             ->assertOk()
             ->assertSee(route('etat-besoins.create'), false)
             ->assertSee(route('journaux.index'), false)
-            ->assertDontSee(route('dashboard'), false)
             ->assertSee(route('parametres.parametre'), false);
         }
     }

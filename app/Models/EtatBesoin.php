@@ -31,6 +31,30 @@ class EtatBesoin extends Model
 
     protected $casts = ['pieces_justificatives' => 'array', 'date' => 'date', 'date_validation' => 'datetime', 'restaure_le' => 'datetime'];
 
+    public function scopeSansPieceJustificative($query)
+    {
+        return $query->where(fn ($q) => $q->whereNull('piece_justificative')->orWhere('piece_justificative', ''))
+            ->where(fn ($q) => $q->whereNull('pieces_justificatives')->orWhereJsonLength('pieces_justificatives', 0));
+    }
+
+    public function scopePerimetreTechnique($query)
+    {
+        $finances = Departement::all(['id', 'designation'])->filter(fn ($departement) =>
+            \Illuminate\Support\Str::lower(\Illuminate\Support\Str::ascii(trim($departement->designation))) === 'direction financiere'
+        )->pluck('id');
+
+        return $query->where(function ($q) use ($finances) {
+            $q->whereNotNull('departement_id')->whereNotIn('departement_id', $finances)
+                ->orWhere(function ($legacy) {
+                    $legacy->whereNull('departement_id')->where(function ($service) {
+                        $service->whereNull('service')->orWhereRaw('LOWER(TRIM(service)) NOT IN (?, ?)', [
+                            'direction financiere', 'direction financière',
+                        ]);
+                    });
+                });
+        });
+    }
+
     /**
      * Relation avec l'utilisateur
      */

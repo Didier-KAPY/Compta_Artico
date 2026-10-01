@@ -28,6 +28,9 @@ class ProfileNotificationService
             callable $title,
             callable $description
         ) use ($modules, $items, $user, $canSeeAll): void {
+            if ($user->isTechnicalOfficer() && $query->getModel() instanceof EtatBesoin) {
+                $query->perimetreTechnique();
+            }
             if (! $canSeeAll && $query->getModel()->isFillable('user_id')) {
                 $query->where('user_id', $user->id);
             }

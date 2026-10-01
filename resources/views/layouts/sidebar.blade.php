@@ -6,6 +6,10 @@
     $role = strtolower($user->role?->designation ?? '');
 @endphp
 
+@if($user->isTechnicalOfficer())
+    <li><a href="{{ route('dashboard') }}" class="nav-link {{ request()->routeIs('dashboard') ? 'active-menu' : '' }}"><i class="bi bi-speedometer2 me-2"></i>Tableau de bord</a></li>
+@endif
+
 
 
 {{-- ADMINISTRATION --}}

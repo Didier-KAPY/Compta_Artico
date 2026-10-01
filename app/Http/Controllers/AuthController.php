@@ -127,6 +127,10 @@ protected function authenticated($user)
 
 
     // Direction technique et chefs → États de besoin par défaut.
+    if ($user->isTechnicalOfficer()) {
+        return redirect()->route('dashboard');
+    }
+
     if ($user->hasRole([
         'Chef de Service',
         'Chef de Département',

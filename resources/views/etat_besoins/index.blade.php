@@ -42,6 +42,13 @@
 
                 <div class="row g-3">
 
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="sans_piece" id="sansPiece" value="1" @checked(request()->boolean('sans_piece'))>
+                            <label class="form-check-label" for="sansPiece">Sans pièce justificative uniquement</label>
+                        </div>
+                    </div>
+
                     <div class="col-md-4">
                         <label class="form-label">
                             Recherche par numéro

@@ -16,7 +16,7 @@
                 <i class="bi bi-list"></i>
             </button>
 
-            <a href="{{ $user?->hasRole(['Directeur Technique', 'Chef de Service', 'Chef de Département']) ? route('etat-besoins.index') : route('dashboard') }}" class="topbar-brand text-decoration-none">
+            <a href="{{ ! $user?->isTechnicalOfficer() && $user?->hasRole(['Directeur Technique', 'Chef de Service', 'Chef de Département']) ? route('etat-besoins.index') : route('dashboard') }}" class="topbar-brand text-decoration-none">
                 <span class="topbar-logo">
                     @if(!empty($entreprise?->logo))
                         <img src="{{ route('profil.logo', [], false) }}" alt="Logo {{ $entreprise->nom_entreprise ?? 'entreprise' }}">
