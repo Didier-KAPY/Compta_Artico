@@ -124,7 +124,7 @@ class SauvegardeController extends Controller
     public function import(Request $request)
     {
         $data = $request->validate([
-            'fichier' => ['required', 'file', 'max:102400'],
+            'fichier' => ['required', 'file', 'max:1048576'],
             'password' => ['required', 'string'],
             'confirmation' => ['accepted'],
         ]);
@@ -159,8 +159,8 @@ class SauvegardeController extends Controller
     {
         $data = $request->validate([
             'nom' => ['required', 'string', 'max:255', 'regex:/\.(sql|zip)$/i'],
-            'taille' => ['required', 'integer', 'min:1', 'max:524288000'],
-            'nombre_blocs' => ['required', 'integer', 'min:1', 'max:125'],
+            'taille' => ['required', 'integer', 'min:1', 'max:'.(str_ends_with(strtolower((string) $request->input('nom')), '.sql') ? 1073741824 : 524288000)],
+            'nombre_blocs' => ['required', 'integer', 'min:1', 'max:256'],
         ]);
         $uploadId = (string) Str::uuid();
         $directory = 'backup-imports/'.$request->user()->id.'/'.$uploadId;

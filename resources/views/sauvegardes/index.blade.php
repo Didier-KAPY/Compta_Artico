@@ -18,7 +18,7 @@
             <small class="text-muted d-block mt-2">Inclut la base, les images, JPG/PNG et PDF des pièces justificatives.</small>
         </div></div></div>
         <div class="col-lg-6"><div class="card border-danger-subtle shadow-sm h-100"><div class="card-body p-4">
-            <div class="d-flex align-items-start gap-3 mb-3"><span class="rounded-circle bg-danger-subtle text-danger p-3"><i class="bi bi-database-up fs-4"></i></span><div><h5 class="mb-1">Importer une base</h5><p class="text-muted mb-0">Le fichier SQL remplacera les données actuelles. Taille maximale : 100 Mo.</p></div></div>
+            <div class="d-flex align-items-start gap-3 mb-3"><span class="rounded-circle bg-danger-subtle text-danger p-3"><i class="bi bi-database-up fs-4"></i></span><div><h5 class="mb-1">Importer une base</h5><p class="text-muted mb-0">Le fichier SQL remplacera les données actuelles. Taille maximale : 1 Go.</p></div></div>
             <form id="databaseImportForm" method="POST" enctype="multipart/form-data" action="{{ route('parametres.sauvegardes.import') }}" onsubmit="return false;" data-no-loading>@csrf
                 <div class="mb-3"><label for="fichierImport" class="form-label">Fichier SQL</label><input id="fichierImport" type="file" name="fichier" accept=".sql,application/sql,text/plain" class="form-control @error('fichier') is-invalid @enderror" required>@error('fichier')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
                 <div class="mb-3"><label for="passwordImport" class="form-label">Votre mot de passe</label><input id="passwordImport" type="password" name="password" class="form-control @error('password') is-invalid @enderror" autocomplete="current-password" required>@error('password')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
@@ -98,7 +98,7 @@ configuredForm?.querySelector('[data-import-trigger]')?.addEventListener('click'
     function showError(text) { message.className = 'alert alert-danger'; message.textContent = text; }
 });
 }
-configureChunkedImport('databaseImportForm', 'databaseImportProgress', 'databaseImportMessage', 'sql', 100 * 1024 * 1024, 'Cette importation remplacera les données actuelles. Continuer ?');
+configureChunkedImport('databaseImportForm', 'databaseImportProgress', 'databaseImportMessage', 'sql', 1024 * 1024 * 1024, 'Cette importation remplacera les données actuelles. Continuer ?');
 configureChunkedImport('workspaceImportForm', 'workspaceImportProgress', 'workspaceImportMessage', 'zip', 500 * 1024 * 1024, 'Le dossier remplacera la base et les fichiers actuels. Continuer ?');
 </script>
 @endsection
