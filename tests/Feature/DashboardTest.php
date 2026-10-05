@@ -190,11 +190,13 @@ class DashboardTest extends TestCase
 
         $this->actingAs($user)->get(route('dashboard'))->assertOk()
             ->assertSee('Mois à consulter')->assertViewHas('selectedMonth', '2026-10')
+            ->assertSee('Utilisateurs et comptes comptables : totaux généraux.')
+            ->assertViewHas('statistics', fn ($stats) => $stats['users'] === User::count() && $stats['accounts'] === ListeDesComptes::count())
             ->assertViewHas('cash', fn ($cash) => $cash['in_cdf'] === 2000.0)
             ->assertViewHas('charts', fn ($charts) => count($charts['labels']) === 12 && array_sum($charts['in_cdf']) === 1000.0);
         $this->get(route('dashboard', ['mois' => '2025-02']))->assertOk()
             ->assertViewHas('selectedMonth', '2025-02')
-            ->assertViewHas('statistics', fn ($stats) => $stats['needs'] === 1)
+            ->assertViewHas('statistics', fn ($stats) => $stats['needs'] === 1 && $stats['users'] === User::count() && $stats['accounts'] === ListeDesComptes::count())
             ->assertViewHas('cash', fn ($cash) => $cash['in_cdf'] === 2000.0)
             ->assertViewHas('treasury_situation', fn ($data) => $data['totals']['total_cdf'] === 2000.0)
             ->assertViewHas('validations', fn ($data) => $data['journals'] === 4)
@@ -209,7 +211,7 @@ class DashboardTest extends TestCase
         }
         $this->get(route('dashboard', ['mois' => '2025-13']))->assertSessionHasErrors('mois');
         $this->get(route('dashboard', ['mois' => '2025-01']))->assertOk()
-            ->assertViewHas('statistics', fn ($stats) => $stats['needs'] === 0)
+            ->assertViewHas('statistics', fn ($stats) => $stats['needs'] === 0 && $stats['users'] === User::count() && $stats['accounts'] === ListeDesComptes::count())
             ->assertViewHas('cash', fn ($cash) => $cash['in_cdf'] === 2000.0)
             ->assertViewHas('charts', fn ($charts) => array_sum($charts['in_cdf']) === 1000.0);
     }

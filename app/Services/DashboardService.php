@@ -32,12 +32,12 @@ class DashboardService
 
         if ($sections['statistics']) {
             $data['statistics'] = [
-                'users' => User::whereBetween('created_at', [$month, $month->endOfMonth()->endOfDay()])->count(),
+                'users' => User::count(),
                 'brc' => BRC::whereBetween('date', [$debutMois, $finMois])->count(),
                 'cash_in' => EntreeCaisse::whereBetween('date', [$debutMois, $finMois])->count(),
                 'cash_out' => SortieCaisse::whereBetween('date', [$debutMois, $finMois])->count(),
                 'needs' => EtatBesoin::whereBetween('date', [$debutMois, $finMois])->count(),
-                'accounts' => ListeDesComptes::whereBetween('created_at', [$month, $month->endOfMonth()->endOfDay()])->count(),
+                'accounts' => ListeDesComptes::count(),
             ];
         }
 
