@@ -6,5 +6,5 @@
     </div>
     <button type="submit" class="btn btn-primary">Afficher</button>
     <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary">Mois en cours</a>
-    <span class="text-muted pb-2">Période affichée : {{ $monthLabel }}</span>
+    <span class="text-muted pb-2">{{ $periodDescription ?? 'Période affichée' }} : {{ $monthLabel }}</span>
 </form>

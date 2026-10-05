@@ -299,7 +299,7 @@ class BrcTest extends TestCase
             ->assertViewHas('ouverture', fn ($o) => $o->cdf == 100)
             ->assertViewHas('totaux', fn ($t) => $t['solde_cdf'] == 70 && $t['solde_usd'] == 20);
         $dashboard = app(\App\Services\DashboardService::class)->getData($user);
-        $this->assertEquals(-30, $dashboard['cash']['balance_cdf']);
+        $this->assertEquals(70, $dashboard['cash']['balance_cdf']);
         $this->assertEquals(20, $dashboard['treasury_situation']['totals']['caisse_usd']);
         foreach (['tresorerie', 'releve'] as $report) {
             $this->get(route('exports.periode', $period + ['rapport' => $report, 'format' => 'excel']))
@@ -347,7 +347,7 @@ class BrcTest extends TestCase
         $this->get(route('journaux.releve', $period))->assertOk()->assertSee('55221')
             ->assertViewHas('totaux', fn ($t) => $t['solde_usd'] == 4480);
         $dashboard = app(\App\Services\DashboardService::class)->getData($user);
-        $this->assertEquals(0, $dashboard['cash']['balance_usd']);
+        $this->assertEquals(4480, $dashboard['cash']['balance_usd']);
         $dashboard = app(\App\Services\DashboardService::class)->getData($user, \Carbon\CarbonImmutable::parse('2026-08-01'));
         $this->assertEquals(4480, $dashboard['cash']['balance_usd']);
         $this->assertEquals(4480, $dashboard['treasury_situation']['totals']['mobile_usd']);

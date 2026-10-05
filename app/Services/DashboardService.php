@@ -43,7 +43,6 @@ class DashboardService
 
         if ($sections['cash']) {
             $totals = app(\App\Services\TreasuryMovementService::class)->query()
-                ->whereBetween('date', [$debutMois, $finMois])
                 ->where('statut', 'Validé')
                 ->whereHas('journalType', fn ($query) => $query->where('est_tresorerie', true))
                 ->whereDate('date', '<=', now()->toDateString())
@@ -65,7 +64,6 @@ class DashboardService
 
         if ($sections['treasury_situation']) {
             $positions = app(\App\Services\TreasuryMovementService::class)->query()
-                ->whereBetween('date', [$debutMois, $finMois])
                 ->select('journal_type_id')
                 ->selectRaw('COALESCE(SUM(entrees_cdf), 0) AS entree_cdf')
                 ->selectRaw('COALESCE(SUM(sorties_cdf), 0) AS sortie_cdf')
@@ -102,29 +100,28 @@ class DashboardService
         }
 
         if ($sections['charts']) {
-            $daily = Journaux::query()
-                ->selectRaw($this->dayExpression().' AS day')
+            $monthly = Journaux::query()
+                ->selectRaw($this->monthExpression().' AS month')
                 ->selectRaw('SUM(entrees_cdf) AS in_cdf, SUM(sorties_cdf) AS out_cdf')
                 ->selectRaw('SUM(entrees_usd) AS in_usd, SUM(sorties_usd) AS out_usd')
-                ->whereBetween('date', [$debutMois, $finMois])
-                ->groupBy(DB::raw($this->dayExpression()))
-                ->get()->keyBy('day');
+                ->whereYear('date', now()->year)
+                ->groupBy(DB::raw($this->monthExpression()))
+                ->get()->keyBy('month');
             $operations = Journaux::query()
-                ->whereBetween('date', [$debutMois, $finMois])
                 ->select('type')->selectRaw('SUM(montant_ttc) AS total')
                 ->whereIn('type', ['recette', 'achat', 'depense', 'vente'])
                 ->groupBy('type')->pluck('total', 'type');
             $payments = Journaux::query()
-                ->whereBetween('date', [$debutMois, $finMois])
                 ->select('mode_paiement')->selectRaw('COUNT(*) AS total')
                 ->groupBy('mode_paiement')->pluck('total', 'mode_paiement');
 
             $data['charts'] = [
-                'labels' => range(1, $month->daysInMonth),
-                'in_cdf' => $this->days($daily, 'in_cdf', $month->daysInMonth),
-                'out_cdf' => $this->days($daily, 'out_cdf', $month->daysInMonth),
-                'in_usd' => $this->days($daily, 'in_usd', $month->daysInMonth),
-                'out_usd' => $this->days($daily, 'out_usd', $month->daysInMonth),
+                'labels' => ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'],
+                'in_cdf' => $this->months($monthly, 'in_cdf'),
+                'out_cdf' => $this->months($monthly, 'out_cdf'),
+                'in_usd' => $this->months($monthly, 'in_usd'),
+                'out_usd' => $this->months($monthly, 'out_usd'),
+                'treasury' => array_map(fn ($month): float => (float) (($month?->in_cdf ?? 0) - ($month?->out_cdf ?? 0)), array_values($monthly->all())),
                 'operations' => collect(['recette', 'achat', 'depense', 'vente'])->map(fn ($type) => (float) ($operations[$type] ?? 0))->all(),
                 'payments' => [
                     (int) ($payments['espèces'] ?? 0),
@@ -137,16 +134,15 @@ class DashboardService
 
         if ($sections['validations']) {
             $data['validations'] = [
-                'brc' => BRC::whereBetween('date', [$debutMois, $finMois])->where('statut', 'En attente')->count(),
-                'cash_in' => EntreeCaisse::whereBetween('date', [$debutMois, $finMois])->where('statut', 'En attente')->count(),
-                'needs' => EtatBesoin::whereBetween('date', [$debutMois, $finMois])->where('statut', 'En attente')->count(),
-                'cash_out' => SortieCaisse::whereBetween('date', [$debutMois, $finMois])->where('statut', 'En attente')->count(),
-                'entries' => EcritureComptable::whereBetween('date', [$debutMois, $finMois])->where('statut', 'En attente')->count(),
-                'journals' => Journaux::whereBetween('date', [$debutMois, $finMois])->where('statut', 'En attente')->count(),
+                'brc' => BRC::where('statut', 'En attente')->count(),
+                'cash_in' => EntreeCaisse::where('statut', 'En attente')->count(),
+                'needs' => EtatBesoin::where('statut', 'En attente')->count(),
+                'cash_out' => SortieCaisse::where('statut', 'En attente')->count(),
+                'entries' => EcritureComptable::where('statut', 'En attente')->count(),
+                'journals' => Journaux::where('statut', 'En attente')->count(),
             ];
             $data['accounting_alerts'] = [
                 'etats_besoin_sans_piece' => EtatBesoin::query()
-                    ->whereBetween('date', [$debutMois, $finMois])
                     ->where('statut', 'Validé')
                     ->where(fn ($query) => $query->whereNull('piece_justificative')->orWhere('piece_justificative', ''))
                     ->where(fn ($query) => $query->whereNull('pieces_justificatives')->orWhereJsonLength('pieces_justificatives', 0))
@@ -156,13 +152,12 @@ class DashboardService
 
         if ($sections['operations']) {
             $data['latest_operations'] = Journaux::query()
-                ->whereBetween('date', [$debutMois, $finMois])
                 ->with('validateur:id,nom,prenom')
                 ->latest('date')->latest('id')->limit(10)->get();
         }
 
         if ($sections['exchange']) {
-            $data['exchange_rate'] = TauxDeChange::query()->whereBetween('updated_at', [$month, $month->endOfMonth()->endOfDay()])->latest('updated_at')->first();
+            $data['exchange_rate'] = TauxDeChange::query()->latest('updated_at')->first();
         }
 
         return $data;
@@ -193,16 +188,16 @@ class DashboardService
         ];
     }
 
-    private function dayExpression(): string
+    private function monthExpression(): string
     {
         return DB::connection()->getDriverName() === 'sqlite'
-            ? "CAST(strftime('%d', date) AS INTEGER)"
-            : 'DAY(date)';
+            ? "CAST(strftime('%m', date) AS INTEGER)"
+            : 'MONTH(date)';
     }
 
-    private function days($daily, string $field, int $days): array
+    private function months($monthly, string $field): array
     {
-        return collect(range(1, $days))->map(fn ($day): float => (float) ($daily->get($day)?->{$field} ?? 0))->all();
+        return collect(range(1, 12))->map(fn ($month): float => (float) ($monthly->get($month)?->{$field} ?? 0))->all();
     }
 
     private function runningBalance(array $entries, array $outputs): array
