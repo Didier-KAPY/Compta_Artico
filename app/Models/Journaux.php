@@ -27,6 +27,7 @@ class Journaux extends Model
             }
         });
         static::deleting(function (self $journal) {
+            if (auth()->user()?->isSuperAdmin()) return;
             if ($journal->constatation()->exists()) throw \Illuminate\Validation\ValidationException::withMessages(['constatation'=>'Le règlement lié à une constatation validée ne peut pas être supprimé.']);
         });
     }

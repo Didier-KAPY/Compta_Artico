@@ -7,6 +7,12 @@
         <a href="{{ route('parametres.parametre') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Retour</a>
     </div>
     @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
+    @if(session('workspace_download'))
+        <div class="alert alert-success" role="status">
+            <a id="workspaceDownload" href="{{ route('parametres.sauvegardes.download', session('workspace_download')) }}" class="btn btn-success" data-no-loading download><i class="bi bi-download me-1"></i>Télécharger le dossier de travail (.zip)</a>
+            <span class="ms-2">Si le téléchargement ne démarre pas, cliquez sur ce bouton.</span>
+        </div>
+    @endif
     @error('sauvegarde')<div class="alert alert-danger" role="alert">{{ $message }}</div>@enderror
     @if($erreurLecture)<div class="alert alert-danger" role="alert">{{ $erreurLecture }}</div>@endif
 
@@ -45,6 +51,7 @@
     </tbody></table></div></div>
 </div>
 <script>
+document.getElementById('workspaceDownload')?.click();
 function configureChunkedImport(formId, progressId, messageId, extension, maxSize, confirmationText) {
 const configuredForm = document.getElementById(formId);
 configuredForm?.addEventListener('submit', event => event.preventDefault());

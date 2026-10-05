@@ -57,7 +57,7 @@ class SauvegardeController extends Controller
 
         $stamp = now()->format('Ymd-His');
         $sqlPath = tempnam(sys_get_temp_dir(), 'compta-sql-');
-        $zipName = 'backups/compta-workspace-'.$stamp.'.zip';
+        $zipName = 'backups/compta-workspace-'.$stamp.'-'.Str::random(8).'.zip';
         Storage::disk('local')->makeDirectory('backups');
         $zipPath = Storage::disk('local')->path($zipName);
 
@@ -66,22 +66,31 @@ class SauvegardeController extends Controller
 
             $zip = new ZipArchive();
             abort_unless($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true, 500, 'Impossible de créer le paquet de travail.');
-            $zip->addFile($sqlPath, 'database.sql');
+            if (! $zip->addFile($sqlPath, 'database.sql')) {
+                throw new \RuntimeException('Impossible d’ajouter la base SQL au dossier de travail.');
+            }
             $manifest = ['format' => 'compta-artico-workspace-v1', 'created_at' => now()->toIso8601String(), 'files' => []];
             foreach (['public' => Storage::disk('public'), 'private' => Storage::disk('local')] as $prefix => $disk) {
                 foreach ($disk->allFiles() as $file) {
-                    if ($prefix === 'private' && str_starts_with($file, 'backups/')) continue;
+                    if ($prefix === 'private' && (str_starts_with($file, 'backups/') || str_starts_with($file, 'backup-imports/'))) continue;
                     $absolute = $disk->path($file);
                     if (is_file($absolute)) {
                         $archiveName = 'storage/'.$prefix.'/'.$file;
-                        $zip->addFile($absolute, $archiveName);
+                        if (! $zip->addFile($absolute, $archiveName)) {
+                            throw new \RuntimeException('Impossible d’ajouter un fichier au dossier de travail.');
+                        }
                         $manifest['files'][] = $archiveName;
                     }
                 }
             }
-            $zip->addFromString('manifest.json', json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-            $zip->close();
+            if (! $zip->addFromString('manifest.json', json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR))) {
+                throw new \RuntimeException('Impossible d’ajouter le manifeste au dossier de travail.');
+            }
+            if (! $zip->close()) {
+                throw new \RuntimeException('Impossible de finaliser le dossier de travail. Vérifiez l’espace disque disponible.');
+            }
         } catch (Throwable $exception) {
+            unset($zip);
             Storage::disk('local')->delete($zipName);
             report($exception);
 
@@ -90,7 +99,9 @@ class SauvegardeController extends Controller
             @unlink($sqlPath);
         }
 
-        return Storage::disk('local')->download($zipName, basename($zipName), ['Content-Type' => 'application/zip']);
+        return redirect()->route('parametres.sauvegardes.index')
+            ->with('success', 'Dossier de travail prêt. Vous pouvez télécharger la base et les pièces jointes.')
+            ->with('workspace_download', basename($zipName));
     }
 
     public function download(string $fichier)
@@ -501,17 +512,38 @@ class SauvegardeController extends Controller
                         $sql = trim(substr($statement, 0, -strlen($delimiter)));
                         $statement = '';
                         if ($sql !== '') {
-                            $pdo->exec($sql);
+                            $this->executeRestoreStatement($pdo, $sql);
                         }
                     }
                 }
             }
 
             if (trim($statement) !== '') {
-                $pdo->exec(trim($statement));
+                $this->executeRestoreStatement($pdo, trim($statement));
             }
         } finally {
             fclose($handle);
+            // Discard dump session state (LOCK TABLES, foreign key checks, etc.),
+            // including when an import fails before its cleanup statements.
+            DB::purge(config('database.default'));
+        }
+    }
+
+    private function executeRestoreStatement(\PDO $pdo, string $sql): void
+    {
+        try {
+            $pdo->exec($sql);
+        } catch (\PDOException $exception) {
+            if (($exception->errorInfo[1] ?? null) !== 3105
+                || ! preg_match('/\bINSERT\s+INTO\s+(`(?:``|[^`])+`)/i', $sql, $match)) {
+                throw $exception;
+            }
+
+            $columns = $pdo->query('SHOW FULL COLUMNS FROM '.$match[1])->fetchAll(\PDO::FETCH_ASSOC);
+            $normalized = (new \App\Services\SqlGeneratedColumnNormalizer())->normalize($sql, $columns);
+            if ($normalized === null || $normalized === $sql) throw $exception;
+
+            $pdo->exec($normalized);
         }
     }
 

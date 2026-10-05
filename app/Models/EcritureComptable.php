@@ -25,6 +25,7 @@ class EcritureComptable extends Model
             }
         });
         static::deleting(function (self $line) {
+            if (auth()->user()?->isSuperAdmin()) return;
             if ($line->constatation_id) throw \Illuminate\Validation\ValidationException::withMessages(['constatation'=>'Une écriture liée à une constatation validée ne peut pas être supprimée.']);
         });
     }

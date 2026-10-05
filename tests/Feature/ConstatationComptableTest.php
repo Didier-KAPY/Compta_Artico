@@ -136,6 +136,59 @@ class ConstatationComptableTest extends TestCase
         $source->fresh()->update(['credit_cdf'=>1]);
     }
 
+    public function test_super_admin_can_delete_a_validated_payment_in_cascade(): void
+    {
+        [$user, $company, $source, $accounts] = $this->context();
+        $this->post(route('ecritures.constatation.store', $source), $this->payload($accounts))->assertSessionHasNoErrors();
+        $journal = $source->fresh()->journal;
+        $entries = $journal->ecritures()->get();
+        $otherJournal = $journal->replicate();
+        $otherJournal->reference = 'AUTRE-REGLEMENT';
+        $otherJournal->sortie_caisse_id = null;
+        $otherJournal->save();
+        $otherEntry = $source->fresh()->replicate();
+        $otherEntry->journal_id = $otherJournal->id;
+        $otherEntry->constatation_id = null;
+        $otherEntry->role_constatation = null;
+        $otherEntry->save();
+        $role = Role::create(['designation' => 'Super Admin']);
+        $user->update(['role_id' => $role->id]);
+        $user->unsetRelation('role');
+        $request = \Illuminate\Http\Request::create('/', 'DELETE');
+        $request->setUserResolver(fn () => $user);
+
+        app(\App\Services\FinancialDocumentService::class)->delete($journal, 'Correction du document', 'cascade', $request);
+
+        $this->assertSoftDeleted($journal);
+        $this->assertNotSoftDeleted($otherJournal);
+        $this->assertNotSoftDeleted($otherEntry);
+        foreach ($entries as $entry) {
+            $this->assertSoftDeleted($entry);
+            $this->assertDatabaseHas('ecritures_comptables', ['id' => $entry->id, 'supprime_par' => $user->id]);
+            $this->assertDatabaseHas('audit_logs', ['action' => 'suppression_cascade', 'model_id' => $entry->id, 'model_type' => EcritureComptable::class]);
+        }
+    }
+
+    public function test_other_roles_cannot_delete_entries_or_journals_linked_to_a_constatation(): void
+    {
+        [$user, $company, $source, $accounts] = $this->context();
+        $this->post(route('ecritures.constatation.store', $source), $this->payload($accounts))->assertSessionHasNoErrors();
+        foreach (['Comptable', 'Admin'] as $designation) {
+            $role = Role::firstOrCreate(['designation' => $designation]);
+            $user->update(['role_id' => $role->id]);
+            $user->unsetRelation('role');
+            foreach ([$source->fresh(), $source->fresh()->journal] as $document) {
+                try {
+                    $document->delete();
+                    $this->fail('Expected deletion to be blocked');
+                } catch (\Illuminate\Validation\ValidationException $exception) {
+                    $this->assertArrayHasKey('constatation', $exception->errors());
+                }
+                $this->assertNotSoftDeleted($document);
+            }
+        }
+    }
+
     public function test_generic_product_constatation_completes_an_incoming_payment(): void
     {
         [$u,$c,$source,$accounts]=$this->context();

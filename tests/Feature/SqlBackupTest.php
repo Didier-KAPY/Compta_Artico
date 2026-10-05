@@ -9,6 +9,22 @@ use Tests\TestCase;
 
 class SqlBackupTest extends TestCase
 {
+    public function test_failed_pdo_restore_discards_the_import_connection(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'restore-test-');
+        file_put_contents($path, 'INVALID SQL;');
+        $pdo = $this->createMock(\PDO::class);
+        $pdo->expects($this->once())->method('exec')->willThrowException(new \PDOException('Import failed'));
+        DB::shouldReceive('connection->getPdo')->once()->andReturn($pdo);
+        DB::shouldReceive('purge')->once()->with(config('database.default'));
+        try {
+            $this->expectException(\PDOException::class);
+            (new \ReflectionMethod(SauvegardeController::class, 'restoreWithPdo'))->invoke(new SauvegardeController(), $path);
+        } finally {
+            unlink($path);
+        }
+    }
+
     public function test_dump_uses_resolved_connection_and_managed_database_options(): void
     {
         config(['backups.dump_binary' => '/usr/bin/mariadb-dump']);

@@ -34,7 +34,7 @@ Modifiés : `EcritureComptable`, `Journaux`, `ListeDesComptes`, `PiecesJustifica
 - Le formulaire n'impose aucun nombre maximal de lignes ou de retenues. Les limites HTTP/PHP restent celles du serveur.
 - La transaction verrouille le journal puis la source. Les contraintes uniques sur la source et le journal protègent contre les doublons. Le crédit ou débit de trésorerie initial est conservé sans modification.
 - L'audit, la constatation, ses lignes et le complément du règlement sont atomiques. Un échec entraîne leur rollback.
-- Les écritures et le règlement liés à une constatation validée sont verrouillés pour empêcher une modification, suppression ou réouverture isolée. Aucun circuit d'annulation ou de contrepassation n'est ajouté.
+- Les écritures et le règlement liés à une constatation validée sont verrouillés pour empêcher une modification ou réouverture isolée. Leur suppression est réservée au Super Admin, y compris lors d'une suppression en cascade par le circuit existant avec motif et audit. Aucun circuit d'annulation ou de contrepassation n'est ajouté.
 
 Le taux affiché est le taux effectif déduit du montant CDF déjà enregistré et du montant USD du bon. Le taux actuel n'est jamais utilisé pour recalculer le paiement historique.
 
