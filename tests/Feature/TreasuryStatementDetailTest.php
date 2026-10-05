@@ -50,7 +50,7 @@ class TreasuryStatementDetailTest extends TestCase
         $this->get(route('exports.periode', $parameters + ['rapport' => 'releve', 'format' => 'excel']))->assertOk()
             ->assertSee('SORTIE-MM')->assertSee('VARIATION DE LA PÉRIODE (HORS OUVERTURE)')->assertSee('-834,20');
         $this->get(route('exports.periode', $period + ['rapport' => 'tresorerie', 'format' => 'excel']))->assertOk()
-            ->assertSee('Ouverture USD')->assertSee('100,00')->assertSee('-734,20');
+            ->assertSee('Solde d’ouvert USD')->assertSee('100,00')->assertSee('-734,20');
         $october = ['date_debut' => '2026-10-01', 'date_fin' => '2026-10-31', 'journal_type_id' => $mobile->id];
         $this->get(route('journaux.releve', $october))->assertOk()
             ->assertViewHas('ouverture', fn ($row) => round((float) $row->usd, 2) === -734.20)

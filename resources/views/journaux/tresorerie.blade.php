@@ -39,7 +39,7 @@
 
     <div class="sage-panel mt-3">
         <div class="sage-panel-head"><div><strong>Position par compte de trésorerie</strong><small>Solde de clôture = ouverture + entrées − sorties. Mouvements validés uniquement.</small></div><span>{{ $tresorerie->total() }} compte(s)</span></div>
-        <div class="table-responsive"><table class="table sage-grid mb-0"><thead><tr><th>Code journal</th><th>Compte</th><th>Désignation</th><th>Nature</th><th class="text-end">Ouverture CDF</th><th class="text-end">Entrées CDF</th><th class="text-end">Sorties CDF</th><th class="text-end">Solde CDF</th><th class="text-end">Ouverture USD</th><th class="text-end">Entrées USD</th><th class="text-end">Sorties USD</th><th class="text-end">Solde USD</th></tr></thead><tbody>
+        <div class="table-responsive"><table class="table sage-grid mb-0"><thead><tr><th>Code journal</th><th>Compte</th><th>Désignation</th><th>Nature</th><th class="text-end">Solde d’ouvert CDF</th><th class="text-end">Entrées CDF</th><th class="text-end">Sorties CDF</th><th class="text-end">Solde CDF</th><th class="text-end">Solde d’ouvert USD</th><th class="text-end">Entrées USD</th><th class="text-end">Sorties USD</th><th class="text-end">Solde USD</th></tr></thead><tbody>
             @forelse($tresorerie as $ligne)
                 @php $cdf = (float)$ligne->solde_cdf; $usd = (float)$ligne->solde_usd; @endphp
                 @php $releveUrl = route('journaux.releve', ['date_debut' => $dateDebut, 'date_fin' => $dateFin, 'journal_type_id' => $ligne->journal_type_id]); @endphp
