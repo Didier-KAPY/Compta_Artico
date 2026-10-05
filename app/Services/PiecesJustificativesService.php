@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\EcritureComptable;
+use App\Models\{BRC, ConstatationComptable, EntreeCaisse, EtatBesoin, Journaux, SortieCaisse};
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -13,31 +14,43 @@ class PiecesJustificativesService
 {
     public function liste(Model $document): Collection
     {
-        $pieces = collect($document->pieces_justificatives ?? []);
-        if ($document->piece_justificative) {
-            $pieces->push(['path' => $document->piece_justificative, 'nom' => $document->piece_justificative_nom ?: basename($document->piece_justificative)]);
-        }
-        if ($document instanceof EcritureComptable) {
-            if ($document->role_constatation === 'constatation' && $document->constatation?->source) {
-                $pieces = $pieces->concat($this->liste($document->constatation->source));
-            }
-            $journal = $document->journal;
-            if ($journal?->piece_justificatif) {
-                $pieces->push(['path' => $journal->piece_justificatif, 'nom' => basename($journal->piece_justificatif)]);
-            }
-            if ($etat = $journal?->sortieCaisse?->etatBesoin) {
-                $pieces = $pieces->concat($this->liste($etat));
-            }
-            if (filled($document->piece)) {
-                foreach (EcritureComptable::whereRaw('UPPER(TRIM(piece)) = ?', [mb_strtoupper(trim($document->piece))])->get() as $ligne) {
-                    $pieces = $pieces->concat($ligne->pieces_justificatives ?? []);
-                    if ($ligne->piece_justificative) {
-                        $pieces->push(['path' => $ligne->piece_justificative, 'nom' => basename($ligne->piece_justificative)]);
-                    }
+        $pieces = collect();
+        $pending = collect([$document]);
+        $visited = [];
+        while ($current = $pending->shift()) {
+            $key = $current::class.'#'.$current->getKey();
+            if (isset($visited[$key])) continue;
+            $visited[$key] = true;
+            $local = collect($current->pieces_justificatives ?? []);
+            foreach (['piece_justificative', 'piece_justificatif'] as $attribute) {
+                if ($path = $current->getAttribute($attribute)) {
+                    $local->push(['path' => $path, 'nom' => $current->piece_justificative_nom ?: basename($path)]);
                 }
             }
+            foreach ($local as $piece) {
+                if (!is_array($piece) || empty($piece['path'])) continue;
+                $pieces->push($piece + ['nom' => basename($piece['path']), 'owner_model' => $current::class, 'owner_id' => $current->getKey()]);
+            }
+            $pending = $pending->concat($this->documentsLies($current)->filter());
         }
         return $pieces->unique('path')->values();
+    }
+
+    private function documentsLies(Model $document): Collection
+    {
+        return match (true) {
+            $document instanceof EtatBesoin => $document->sortieCaisses()->get(),
+            $document instanceof SortieCaisse => $document->journaux()->get()->concat([$document->etatBesoin]),
+            $document instanceof EntreeCaisse => $document->journaux()->get(),
+            $document instanceof Journaux => $document->ecritures()->get()
+                ->concat([$document->sortieCaisse, $document->entreeCaisse, $document->constatation])
+                ->concat($document->brcs()->get())->concat(BRC::where('journal_id', $document->id)->get()),
+            $document instanceof BRC => $document->journaux()->get()->concat([$document->journal]),
+            $document instanceof EcritureComptable => collect([$document->journal, $document->constatation]),
+            $document instanceof ConstatationComptable => $document->lignes()->get()
+                ->concat($document->reglement()->get())->concat([$document->source, $document->journalReglement]),
+            default => collect(),
+        };
     }
 
     public function ajouter(Request $request, Model $document, string $directory, string $mimes, int $max): void
@@ -80,7 +93,7 @@ class PiecesJustificativesService
             ? $pieces->first(fn ($piece) => hash('sha256', $piece['path']) === $request->query('piece'))
             : $pieces->first(fn ($piece) => Storage::disk('public')->exists($piece['path']));
         abort_unless($piece && Storage::disk('public')->exists($piece['path']), 404);
-        return $request->boolean('telecharger')
+        return ($request->boolean('telecharger') || $request->boolean('download'))
             ? Storage::disk('public')->download($piece['path'], $piece['nom'])
             : Storage::disk('public')->response($piece['path'], $piece['nom'], [
                 'Content-Disposition' => 'inline; filename="'.str_replace(["\r", "\n", '"', '\\'], '', $piece['nom']).'"',

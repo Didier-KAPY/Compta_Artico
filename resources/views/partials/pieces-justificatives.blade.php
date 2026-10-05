@@ -2,9 +2,9 @@
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <span><i class="bi bi-file-earmark-check text-success me-1"></i>{{ $pieceJointe['nom'] }}</span>
         <div class="d-flex gap-2">
-            <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" href="{{ route($pieceRoute, ['id' => $document->id, 'piece' => hash('sha256', $pieceJointe['path'])]) }}">Consulter</a>
-            <a class="btn btn-sm btn-outline-secondary" data-no-loading href="{{ route($pieceRoute, ['id' => $document->id, 'piece' => hash('sha256', $pieceJointe['path']), 'telecharger' => 1]) }}">Télécharger</a>
-            @if(($canDeletePiece ?? false) && isset($pieceDeleteRoute))
+            <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" href="{{ route($pieceRoute, [($pieceRouteParameter ?? 'id') => $document->id, 'piece' => hash('sha256', $pieceJointe['path'])]) }}">Consulter</a>
+            <a class="btn btn-sm btn-outline-secondary" data-no-loading href="{{ route($pieceRoute, [($pieceRouteParameter ?? 'id') => $document->id, 'piece' => hash('sha256', $pieceJointe['path']), 'telecharger' => 1]) }}">Télécharger</a>
+            @if(($canDeletePiece ?? false) && isset($pieceDeleteRoute) && $pieceJointe['owner_model'] === $document::class && (int) $pieceJointe['owner_id'] === (int) $document->id)
                 <form method="POST" action="{{ route($pieceDeleteRoute, ['id' => $document->id, 'piece' => hash('sha256', $pieceJointe['path'])]) }}" data-confirm="Supprimer cette pièce justificative ?">
                     @csrf
                     @method('DELETE')

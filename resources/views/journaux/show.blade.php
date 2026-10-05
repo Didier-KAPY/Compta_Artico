@@ -96,29 +96,7 @@
             <i class="bi bi-paperclip text-primary"></i><strong>Pièce justificative</strong>
         </div>
         <div class="card-body">
-            @if($pieceExiste)
-                @if(str_starts_with($pieceMime, 'image/'))
-                    <a href="{{ $pieceUrl }}" target="_blank" class="d-inline-block mb-3">
-                        <img src="{{ $pieceUrl }}" alt="Pièce justificative {{ $journal->reference }}" class="img-fluid rounded border" style="max-height: 360px">
-                    </a>
-                @endif
-                <div class="d-flex flex-wrap align-items-center gap-2">
-                    <span class="text-muted">{{ $pieceNom }}</span>
-                    <a href="{{ $pieceUrl }}" target="_blank" class="btn btn-primary btn-sm">
-                        <i class="bi bi-eye me-1"></i>Consulter la pièce
-                    </a>
-                    <a href="{{ $pieceUrl }}?download=1" class="btn btn-outline-secondary btn-sm">
-                        <i class="bi bi-download me-1"></i>Télécharger
-                    </a>
-                </div>
-            @elseif($piecePath)
-                <div class="alert alert-light border mb-0">
-                    <i class="bi bi-file-earmark-text me-2"></i>
-                    Référence de la pièce : <strong>{{ $piecePath }}</strong>
-                </div>
-            @else
-                <span class="text-muted"><i class="bi bi-file-earmark-x me-2"></i>Aucune pièce justificative jointe.</span>
-            @endif
+            @include('partials.pieces-justificatives', ['document' => $journal, 'pieceRoute' => 'journaux.piece', 'pieceRouteParameter' => 'journal'])
         </div>
     </div>
 

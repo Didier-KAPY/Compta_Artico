@@ -150,13 +150,9 @@ class BRCController extends Controller
         return redirect()->route('brc.show', $brc)->with('success', 'BRC modifié sans changement des montants.');
     }
 
-    public function pieceJustificative(BRC $brc)
+    public function pieceJustificative(Request $request, BRC $brc)
     {
-        abort_unless($brc->piece_justificative && Storage::disk('public')->exists($brc->piece_justificative), 404);
-
-        return Storage::disk('public')->response($brc->piece_justificative, basename($brc->piece_justificative), [
-            'Content-Disposition' => 'inline; filename="'.basename($brc->piece_justificative).'"',
-        ]);
+        return app(\App\Services\PiecesJustificativesService::class)->consulter($request, $brc);
     }
 
     public function telechargerPdf(BRC $brc)

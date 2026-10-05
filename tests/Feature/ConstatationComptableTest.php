@@ -57,6 +57,20 @@ class ConstatationComptableTest extends TestCase
         $this->assertSame(6,EcritureComptable::count());
     }
 
+    public function test_constatation_and_payment_share_all_supporting_documents(): void
+    {
+        [$user, $company, $source, $accounts] = $this->context();
+        $source->update(['pieces_justificatives' => [['path' => 'paiement.pdf', 'nom' => 'Paiement.pdf']]]);
+        $this->post(route('ecritures.constatation.store', $source), $this->payload($accounts))->assertSessionHasNoErrors();
+        $record = ConstatationComptable::firstOrFail();
+        $line = $record->lignes()->firstOrFail();
+        $line->update(['pieces_justificatives' => [['path' => 'constatation.pdf', 'nom' => 'Constatation.pdf']]]);
+        $service = app(\App\Services\PiecesJustificativesService::class);
+        foreach ([$source->fresh(), $source->fresh()->journal, $source->fresh()->journal->sortieCaisse, $line->fresh()] as $document) {
+            $this->assertSame(['constatation.pdf', 'paiement.pdf'], $service->liste($document)->pluck('path')->sort()->values()->all());
+        }
+    }
+
     public function test_salary_without_retention_is_supported(): void
     {
         [$u,$c,$source,$accounts]=$this->context();

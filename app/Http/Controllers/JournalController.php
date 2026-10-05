@@ -1033,16 +1033,6 @@ private function showParNature($id, FinancialDocumentService $documents, ?string
     // Dernier taux de change
     $tauxActuel = TauxDeChange::latest()->first();
 
-    $pieceEtatBesoin = $journal->sortieCaisse?->etatBesoin?->piece_justificative;
-    $piecePath = collect([$journal->piece_justificatif, $pieceEtatBesoin])
-        ->filter()
-        ->first(fn (string $chemin) => Storage::disk('public')->exists($chemin));
-    $pieceExiste = filled($piecePath) && Storage::disk('public')->exists($piecePath);
-    $pieceUrl = $pieceExiste ? route('journaux.piece', $journal) : null;
-    $pieceMime = $pieceExiste ? (Storage::disk('public')->mimeType($piecePath) ?: '') : '';
-    $pieceNom = filled($pieceEtatBesoin) && $piecePath === $pieceEtatBesoin
-        ? ($journal->sortieCaisse?->etatBesoin?->piece_justificative_nom ?: basename($piecePath))
-        : ($piecePath ? basename($piecePath) : null);
     $beneficiaireTraitement = $journal->nom_partenaire
         ?: $journal->sortieCaisse?->beneficiaire
         ?: $journal->sortieCaisse?->etatBesoin?->demandeur;
@@ -1114,11 +1104,6 @@ private function showParNature($id, FinancialDocumentService $documents, ?string
         'totalSortieUSD',
         'journalTypes',
         'comptes'
-        ,'piecePath'
-        ,'pieceExiste'
-        ,'pieceUrl'
-        ,'pieceMime'
-        ,'pieceNom'
         ,'beneficiaireTraitement'
         ,'telephoneTraitement'
         ,'suppressionDependencies'
@@ -1130,24 +1115,7 @@ public function pieceJustificative(Request $request, Journaux $journal)
 {
     Gate::authorize('manageJournaux');
 
-    $journal->loadMissing('sortieCaisse.etatBesoin');
-    $etat = $journal->sortieCaisse?->etatBesoin;
-    $path = collect([$journal->piece_justificatif, $etat?->piece_justificative])
-        ->filter()
-        ->first(fn (string $chemin) => Storage::disk('public')->exists($chemin));
-    abort_unless(filled($path) && Storage::disk('public')->exists($path), 404, 'Pièce justificative introuvable.');
-
-    $nom = $etat && $path === $etat->piece_justificative
-        ? ($etat->piece_justificative_nom ?: basename($path))
-        : basename($path);
-    if ($request->boolean('download')) {
-        return Storage::disk('public')->download($path, $nom);
-    }
-
-    return response()->file(Storage::disk('public')->path($path), [
-        'Content-Type' => Storage::disk('public')->mimeType($path) ?: 'application/octet-stream',
-        'Content-Disposition' => 'inline; filename="'.$nom.'"',
-    ]);
+    return app(\App\Services\PiecesJustificativesService::class)->consulter($request, $journal);
 }
 
 public function edit($id)

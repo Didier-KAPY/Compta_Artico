@@ -301,6 +301,59 @@ class EtatBesoinManagementTest extends TestCase
         $this->assertModelExists($etat);
     }
 
+    public function test_toutes_les_pieces_du_processus_sont_visibles_et_consultables_sur_chaque_document(): void
+    {
+        Storage::fake('public');
+        $user = $this->user(Role::firstOrCreate(['designation' => 'Super Admin']), 91);
+        $this->actingAs($user);
+        $etat = $this->etat($user, Departement::create(['designation' => 'Achats']), 'EB-PROCESSUS', 'Validé');
+        $etat->update(['piece_justificative' => 'ancienne.pdf', 'piece_justificative_nom' => 'Ancienne.pdf',
+            'pieces_justificatives' => [['path' => 'facture.pdf', 'nom' => 'Facture.pdf'], ['path' => 'recu.pdf', 'nom' => 'Recu.pdf']]]);
+        $sortie = $this->sortie($user, $etat, 'BSC-PROCESSUS', 'Validé');
+        $account = ListeDesComptes::create(['user_id' => $user->id, 'compte' => '571100', 'designation' => 'Caisse', 'nature' => 'Actif']);
+        $type = JournalType::create(['user_id' => $user->id, 'code' => 'CAI', 'libelle' => 'Caisse', 'liste_des_comptes_id' => $account->id, 'nature' => 'caisse', 'est_tresorerie' => true]);
+        $journal = Journaux::create(['user_id' => $user->id, 'journal_type_id' => $type->id, 'sortie_caisse_id' => $sortie->id,
+            'date' => now(), 'reference' => $sortie->numero, 'type' => 'depense', 'monnaie' => 'CDF', 'statut' => 'Validé', 'piece_justificatif' => 'journal.pdf']);
+        $entry = EcritureComptable::create(['user_id' => $user->id, 'journal_id' => $journal->id, 'liste_des_comptes_id' => $account->id,
+            'date' => now(), 'piece' => $sortie->numero, 'libelle' => 'Test', 'debit_cdf' => 100, 'credit_cdf' => 0,
+            'pieces_justificatives' => [['path' => 'ecriture.pdf', 'nom' => 'Ecriture.pdf'], ['path' => 'facture.pdf', 'nom' => 'Facture.pdf']]]);
+        $brc = \App\Models\BRC::create(['user_id' => $user->id, 'journal_type_id' => $type->id, 'journal_id' => $journal->id,
+            'date' => now(), 'reference' => 'BRC-PROCESSUS', 'monnaie' => 'CDF', 'sens' => 'debit', 'total' => 100, 'piece_justificative' => 'brc.pdf']);
+        $brc->journaux()->attach($journal);
+        $foreign = $entry->replicate();
+        $foreign->journal_id = null;
+        $foreign->pieces_justificatives = [['path' => 'autre-processus.pdf', 'nom' => 'Autre processus.pdf']];
+        $foreign->save();
+        $expected = ['ancienne.pdf', 'brc.pdf', 'ecriture.pdf', 'facture.pdf', 'journal.pdf', 'recu.pdf'];
+        foreach (array_merge($expected, ['autre-processus.pdf']) as $path) Storage::disk('public')->put($path, '%PDF-1.4 test');
+
+        $service = app(\App\Services\PiecesJustificativesService::class);
+        foreach ([$etat, $sortie, $journal, $entry, $brc] as $document) {
+            $this->assertSame($expected, $service->liste($document)->pluck('path')->sort()->values()->all());
+        }
+        foreach ([route('etat-besoins.show', $etat), route('sortie-caisses.show', $sortie), route('journaux.show', $journal),
+            route('ecritures.show', $entry), route('brc.show', $brc)] as $url) {
+            $response = $this->get($url)->assertOk();
+            foreach ($expected as $path) $response->assertSee(hash('sha256', $path));
+            $response->assertDontSee('Autre processus.pdf');
+        }
+        foreach (['etat-besoins.piece-justificative.show' => ['id' => $etat->id], 'journaux.piece' => ['journal' => $journal->id],
+            'ecritures.piece' => ['id' => $entry->id], 'brc.piece' => ['brc' => $brc->id]] as $route => $parameters) {
+            foreach ($expected as $path) {
+                $this->get(route($route, $parameters + ['piece' => hash('sha256', $path)]))->assertOk();
+                $this->get(route($route, $parameters + ['piece' => hash('sha256', $path), 'telecharger' => 1]))->assertOk()->assertDownload();
+            }
+            $this->get(route($route, $parameters + ['piece' => hash('sha256', 'autre-processus.pdf')]))->assertNotFound();
+        }
+        $this->get(route('etat-besoins.show', $etat))->assertDontSee('action="'.route('etat-besoins.piece-justificative.destroy',
+            ['id' => $etat->id, 'piece' => hash('sha256', 'ecriture.pdf')]).'"', false);
+        $this->delete(route('etat-besoins.piece-justificative.destroy', ['id' => $etat->id, 'piece' => hash('sha256', 'ecriture.pdf')]))->assertNotFound();
+        Storage::disk('public')->assertExists('ecriture.pdf');
+        $etat->update(['piece_justificative' => null, 'pieces_justificatives' => []]);
+        $this->get(route('sortie-caisses.show', $sortie))->assertOk()
+            ->assertSee('Ecriture.pdf')->assertSee('journal.pdf')->assertSee('brc.pdf');
+    }
+
     private function user(Role $role, int $index): User
     {
         return User::create(['nom' => 'Test', 'prenom' => 'Gestion', 'email' => 'gestion'.$index.'@test.local',

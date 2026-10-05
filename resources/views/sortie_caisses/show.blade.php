@@ -255,7 +255,7 @@ Informations générales
 
 </div>
 
-@if($sortie->etatBesoin?->piece_justificative)
+@if($sortie->etatBesoin)
 <div class="card shadow-sm border-success mb-3">
     <div class="card-header bg-light fw-bold"><i class="bi bi-paperclip me-2"></i>Pièce justificative de l’état de besoin</div>
     <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
