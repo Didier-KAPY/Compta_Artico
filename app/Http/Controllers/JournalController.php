@@ -115,7 +115,8 @@ public function tresorerie(Request $request)
         ->whereHas('journalType', function ($query) {
             $query->where('est_tresorerie', true);
         })
-        ->whereBetween('date', [$dateDebut, $dateFin])
+        ->whereDate('date', '>=', $dateDebut)
+        ->whereDate('date', '<=', $dateFin)
         ->groupBy('journal_type_id')
         ->get();
 
@@ -220,7 +221,8 @@ public function releve(Request $request)
 
     $journaux = (clone $baseQuery)
         ->with(['journalType.compte', 'compte'])
-        ->whereBetween('date', [$dateDebut, $dateFin])
+        ->whereDate('date', '>=', $dateDebut)
+        ->whereDate('date', '<=', $dateFin)
         ->orderBy('date')
         ->orderBy('id')
         ->get();

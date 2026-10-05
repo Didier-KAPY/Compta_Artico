@@ -12,6 +12,21 @@
         <div class="row g-2 align-items-end"><div class="col-md-3 col-xl-2"><label class="form-label">Du</label><input type="date" name="date_debut" class="form-control" value="{{ $dateDebut }}"></div><div class="col-md-3 col-xl-2"><label class="form-label">Au</label><input type="date" name="date_fin" class="form-control" value="{{ $dateFin }}"></div><div class="col-md-4 col-xl-5"><label class="form-label">Journal / compte</label><select name="journal_type_id" class="form-select"><option value="">Tous les journaux</option>@foreach($comptesTresorerie as $journalType)<option value="{{ $journalType->id }}" {{ request('journal_type_id') == $journalType->id ? 'selected' : '' }}>{{ $journalType->code }} — {{ $journalType->compte?->compte }} {{ $journalType->compte?->designation }}</option>@endforeach</select></div><div class="col-md-2 col-xl-3 d-flex gap-2"><button class="btn btn-primary flex-grow-1"><i class="bi bi-funnel me-1"></i> Appliquer</button><a href="{{ route('journaux.releve') }}" class="btn btn-light border"><i class="bi bi-x-lg"></i></a></div></div>
     </form>
 
+    @php $compteSelectionne = $comptesTresorerie->firstWhere('id', request('journal_type_id')); @endphp
+    @if($compteSelectionne)
+    <div class="sage-panel mt-3">
+        <div class="sage-panel-head"><div><strong>Synthèse du compte {{ $compteSelectionne->code }}</strong><small>Mouvements de la période, hors solde d’ouverture</small></div></div>
+        <div class="table-responsive"><table class="table sage-grid mb-0">
+            <thead><tr><th>Journal</th><th>Compte</th><th>Désignation</th><th>Nature</th><th class="text-end">Entrées CDF</th><th class="text-end">Sorties CDF</th><th class="text-end">Solde de la période CDF</th><th class="text-end">Entrées USD</th><th class="text-end">Sorties USD</th><th class="text-end">Solde de la période USD</th></tr></thead>
+            <tbody><tr>
+                <td>{{ $compteSelectionne->code }}</td><td>{{ $compteSelectionne->compte?->compte }}</td><td>{{ $compteSelectionne->compte?->designation }}</td><td>{{ ucfirst(str_replace('_', ' ', $compteSelectionne->nature ?? '')) }}</td>
+                <td class="text-end">{{ number_format($totaux['entree_cdf'], 2, ',', ' ') }}</td><td class="text-end">{{ number_format($totaux['sortie_cdf'], 2, ',', ' ') }}</td><td class="text-end fw-bold">{{ number_format($totaux['entree_cdf'] - $totaux['sortie_cdf'], 2, ',', ' ') }}</td>
+                <td class="text-end">{{ number_format($totaux['entree_usd'], 2, ',', ' ') }}</td><td class="text-end">{{ number_format($totaux['sortie_usd'], 2, ',', ' ') }}</td><td class="text-end fw-bold">{{ number_format($totaux['entree_usd'] - $totaux['sortie_usd'], 2, ',', ' ') }}</td>
+            </tr></tbody>
+        </table></div>
+    </div>
+    @endif
+
     <div class="sage-panel mt-3">
         <div class="sage-panel-head"><div><strong>Relevé du {{ \Carbon\Carbon::parse($dateDebut)->format('d/m/Y') }} au {{ \Carbon\Carbon::parse($dateFin)->format('d/m/Y') }}</strong><small>{{ $journaux->total() }} mouvement(s) validé(s)</small></div><span>Montants par devise</span></div>
         <div class="table-responsive"><table class="table sage-grid statement-grid mb-0"><thead><tr><th>Date</th><th>Pièce / Référence</th><th>Journal</th><th>Compte</th><th>Libellé</th><th class="text-end">Entrée CDF</th><th class="text-end">Sortie CDF</th><th class="text-end">Solde CDF</th><th class="text-end">Entrée USD</th><th class="text-end">Sortie USD</th><th class="text-end">Solde USD</th></tr></thead><tbody>

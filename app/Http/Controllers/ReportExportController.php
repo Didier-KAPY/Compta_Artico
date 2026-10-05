@@ -210,7 +210,7 @@ class ReportExportController extends Controller
         [$debut,$fin] = $this->periode($request);
         $base = app(\App\Services\TreasuryMovementService::class)->query()->where('statut', 'Validé')->whereHas('journalType', fn ($q) => $q->where('est_tresorerie', true))->when($request->filled('journal_type_id'), fn ($q) => $q->where('journal_type_id', $request->integer('journal_type_id')));
         $ouv = (clone $base)->whereDate('date', '<', $debut)->selectRaw('COALESCE(SUM(entrees_cdf),0)-COALESCE(SUM(sorties_cdf),0) cdf, COALESCE(SUM(entrees_usd),0)-COALESCE(SUM(sorties_usd),0) usd')->first();
-        $records = (clone $base)->with(['journalType.compte', 'compte'])->whereBetween('date', [$debut, $fin])->orderBy('date')->orderBy('id')->get();
+        $records = (clone $base)->with(['journalType.compte', 'compte'])->whereDate('date', '>=', $debut)->whereDate('date', '<=', $fin)->orderBy('date')->orderBy('id')->get();
         $cdf = (float) $ouv->cdf;
         $usd = (float) $ouv->usd;
         $headers = ['Date', 'Référence', 'Journal', 'Compte', 'Libellé', 'Entrée CDF', 'Sortie CDF', 'Solde CDF', 'Entrée USD', 'Sortie USD', 'Solde USD'];
@@ -222,6 +222,10 @@ class ReportExportController extends Controller
         }
 
         $rows->push(['', 'TOTAL DE LA PÉRIODE', '', '', '', $this->montant($records->sum('entrees_cdf')), $this->montant($records->sum('sorties_cdf')), $this->montant($cdf), $this->montant($records->sum('entrees_usd')), $this->montant($records->sum('sorties_usd')), $this->montant($usd)]);
+
+        $rows->push(['', 'VARIATION DE LA PÉRIODE (HORS OUVERTURE)', '', '', '', '', '',
+            $this->montant($records->sum('entrees_cdf') - $records->sum('sorties_cdf')), '', '',
+            $this->montant($records->sum('entrees_usd') - $records->sum('sorties_usd'))]);
 
         return $this->telecharger($format, 'Relevé journalier des mouvements', 'releve-tresorerie', $headers, $rows, $request, 'landscape');
     }
