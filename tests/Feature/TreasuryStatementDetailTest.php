@@ -37,7 +37,10 @@ class TreasuryStatementDetailTest extends TestCase
         $parameters = $period + ['journal_type_id' => $mobile->id];
         $this->get(route('journaux.tresorerie', $period))->assertOk()
             ->assertSee(e(route('journaux.releve', $parameters)), false)
-            ->assertViewHas('tresorerie', fn ($rows) => (float) $rows->firstWhere('journal_type_id', $mobile->id)->sortie_usd === 1405.94);
+            ->assertViewHas('tresorerie', fn ($rows) => (float) $rows->firstWhere('journal_type_id', $mobile->id)->sortie_usd === 1405.94
+                && (float) $rows->firstWhere('journal_type_id', $mobile->id)->ouverture_usd === 100.0
+                && round((float) $rows->firstWhere('journal_type_id', $mobile->id)->solde_usd, 2) === -734.20)
+            ->assertViewHas('totaux', fn ($totals) => round((float) $totals['usd_solde'], 2) === 264.80);
         $this->get(route('journaux.releve', $parameters))->assertOk()
             ->assertSee('Synthèse du compte MM USD')->assertSee('55221')
             ->assertSee('571,74')->assertSee('1 405,94')->assertSee('-834,20')
@@ -46,5 +49,16 @@ class TreasuryStatementDetailTest extends TestCase
             ->assertViewHas('journaux', fn ($rows) => $rows->pluck('reference')->all() === ['ENTREE-MM', 'SORTIE-MM']);
         $this->get(route('exports.periode', $parameters + ['rapport' => 'releve', 'format' => 'excel']))->assertOk()
             ->assertSee('SORTIE-MM')->assertSee('VARIATION DE LA PÉRIODE (HORS OUVERTURE)')->assertSee('-834,20');
+        $this->get(route('exports.periode', $period + ['rapport' => 'tresorerie', 'format' => 'excel']))->assertOk()
+            ->assertSee('Ouverture USD')->assertSee('100,00')->assertSee('-734,20');
+        $october = ['date_debut' => '2026-10-01', 'date_fin' => '2026-10-31', 'journal_type_id' => $mobile->id];
+        $this->get(route('journaux.releve', $october))->assertOk()
+            ->assertViewHas('ouverture', fn ($row) => round((float) $row->usd, 2) === -734.20)
+            ->assertViewHas('totaux', fn ($totals) => round($totals['solde_usd'], 2) === 264.80);
+        $this->get(route('journaux.tresorerie', ['date_debut' => '2026-11-01', 'date_fin' => '2026-11-30']))->assertOk()
+            ->assertViewHas('tresorerie', fn ($rows) => $rows->count() === 2
+                && (float) $rows->firstWhere('journal_type_id', $mobile->id)->entree_usd === 0.0
+                && round((float) $rows->firstWhere('journal_type_id', $mobile->id)->ouverture_usd, 2) === 264.80
+                && round((float) $rows->firstWhere('journal_type_id', $mobile->id)->solde_usd, 2) === 264.80);
     }
 }

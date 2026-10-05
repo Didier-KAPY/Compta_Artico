@@ -104,49 +104,21 @@ public function tresorerie(Request $request)
     $dateDebut = $request->input('date_debut', now()->startOfMonth()->toDateString());
     $dateFin = $request->input('date_fin', now()->toDateString());
 
-    $tresorerie = app(\App\Services\TreasuryMovementService::class)->query()
-        ->select('journal_type_id')
-        ->selectRaw('SUM(entrees_cdf) as entree_cdf')
-        ->selectRaw('SUM(sorties_cdf) as sortie_cdf')
-        ->selectRaw('SUM(entrees_usd) as entree_usd')
-        ->selectRaw('SUM(sorties_usd) as sortie_usd')
-        ->with('journalType.compte')
-        ->where('statut', 'Validé')
-        ->whereHas('journalType', function ($query) {
-            $query->where('est_tresorerie', true);
-        })
-        ->whereDate('date', '>=', $dateDebut)
-        ->whereDate('date', '<=', $dateFin)
-        ->groupBy('journal_type_id')
-        ->get();
-
-    // Le solde disponible inclut tous les mouvements jusqu'à la date de fin.
-    // La requête ci-dessus reste limitée à la période pour alimenter le tableau.
-    $positions = app(\App\Services\TreasuryMovementService::class)->query()
-        ->select('journal_type_id')
-        ->selectRaw('SUM(entrees_cdf) as entree_cdf')
-        ->selectRaw('SUM(sorties_cdf) as sortie_cdf')
-        ->selectRaw('SUM(entrees_usd) as entree_usd')
-        ->selectRaw('SUM(sorties_usd) as sortie_usd')
-        ->with('journalType')
-        ->where('statut', 'Validé')
-        ->whereHas('journalType', function ($query) {
-            $query->where('est_tresorerie', true);
-        })
-        ->whereDate('date', '<=', $dateFin)
-        ->groupBy('journal_type_id')
-        ->get();
+    $tresorerie = app(\App\Services\TreasuryMovementService::class)->positions($dateDebut, $dateFin);
+    $positions = $tresorerie;
 
     $etatCaisse = $tresorerie->map(function ($ligne) {
         return [
             'compte' => $ligne->journalType?->compte?->compte ?? '',
             'designation' => $ligne->journalType?->compte?->designation ?? '',
-            'solde_cdf' => $ligne->entree_cdf - $ligne->sortie_cdf,
-            'solde_usd' => $ligne->entree_usd - $ligne->sortie_usd,
+            'solde_cdf' => $ligne->solde_cdf,
+            'solde_usd' => $ligne->solde_usd,
         ];
     });
 
     $totaux = [
+        'ouverture_cdf' => $tresorerie->sum('ouverture_cdf'),
+        'ouverture_usd' => $tresorerie->sum('ouverture_usd'),
         'cdf_entree' => $tresorerie->sum('entree_cdf'),
         'cdf_sortie' => $tresorerie->sum('sortie_cdf'),
         'usd_entree' => $tresorerie->sum('entree_usd'),
@@ -154,8 +126,8 @@ public function tresorerie(Request $request)
         'etat_caisse' => $etatCaisse,
     ];
 
-    $totaux['cdf_solde'] = $totaux['cdf_entree'] - $totaux['cdf_sortie'];
-    $totaux['usd_solde'] = $totaux['usd_entree'] - $totaux['usd_sortie'];
+    $totaux['cdf_solde'] = $tresorerie->sum('solde_cdf');
+    $totaux['usd_solde'] = $tresorerie->sum('solde_usd');
 
     foreach ([
         'caisse' => 'caisse',
@@ -167,9 +139,9 @@ public function tresorerie(Request $request)
         );
 
         $totaux[$cle.'_cdf'] =
-            $lignes->sum('entree_cdf') - $lignes->sum('sortie_cdf');
+            $lignes->sum('solde_cdf');
         $totaux[$cle.'_usd'] =
-            $lignes->sum('entree_usd') - $lignes->sum('sortie_usd');
+            $lignes->sum('solde_usd');
     }
 
     $page = LengthAwarePaginator::resolveCurrentPage('page');

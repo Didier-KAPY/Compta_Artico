@@ -197,9 +197,9 @@ class ReportExportController extends Controller
     {
         $this->autoriser($request, ['Super Admin', 'Admin', 'Directeur Général', 'DAF', 'Comptable', 'Caissier', 'Caissière', 'Trésorier', 'Trésorière']);
         [$debut,$fin] = $this->periode($request);
-        $records = app(\App\Services\TreasuryMovementService::class)->query()->select('journal_type_id')->selectRaw('SUM(entrees_cdf) entree_cdf, SUM(sorties_cdf) sortie_cdf, SUM(entrees_usd) entree_usd, SUM(sorties_usd) sortie_usd')->with('journalType.compte')->where('statut', 'Validé')->whereHas('journalType', fn ($q) => $q->where('est_tresorerie', true))->whereBetween('date', [$debut, $fin])->groupBy('journal_type_id')->get();
-        $headers = ['Journal', 'Compte', 'Désignation', 'Nature', 'Entrées CDF', 'Sorties CDF', 'Solde CDF', 'Entrées USD', 'Sorties USD', 'Solde USD'];
-        $rows = $records->map(fn ($i) => [$i->journalType?->code ?? '-', $i->journalType?->compte?->compte ?? '-', $i->journalType?->compte?->designation ?? '-', ucfirst(str_replace('_', ' ', $i->journalType?->nature ?? '-')), $this->montant($i->entree_cdf), $this->montant($i->sortie_cdf), $this->montant($i->entree_cdf - $i->sortie_cdf), $this->montant($i->entree_usd), $this->montant($i->sortie_usd), $this->montant($i->entree_usd - $i->sortie_usd)]);
+        $records = app(\App\Services\TreasuryMovementService::class)->positions($debut, $fin);
+        $headers = ['Journal', 'Compte', 'Désignation', 'Nature', 'Ouverture CDF', 'Entrées CDF', 'Sorties CDF', 'Clôture CDF', 'Ouverture USD', 'Entrées USD', 'Sorties USD', 'Clôture USD'];
+        $rows = $records->map(fn ($i) => [$i->journalType?->code ?? '-', $i->journalType?->compte?->compte ?? '-', $i->journalType?->compte?->designation ?? '-', ucfirst(str_replace('_', ' ', $i->journalType?->nature ?? '-')), $this->montant($i->ouverture_cdf), $this->montant($i->entree_cdf), $this->montant($i->sortie_cdf), $this->montant($i->solde_cdf), $this->montant($i->ouverture_usd), $this->montant($i->entree_usd), $this->montant($i->sortie_usd), $this->montant($i->solde_usd)]);
 
         return $this->telecharger($format, 'Situation de trésorerie', 'situation-tresorerie', $headers, $rows, $request, 'landscape');
     }

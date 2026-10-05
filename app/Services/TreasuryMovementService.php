@@ -8,6 +8,21 @@ use Illuminate\Support\Facades\DB;
 
 class TreasuryMovementService
 {
+    public function positions(string $debut, string $fin): \Illuminate\Support\Collection
+    {
+        return $this->query()->select('journal_type_id')->with('journalType.compte')
+            ->where('statut', 'Validé')->whereHas('journalType', fn ($query) => $query->where('est_tresorerie', true))
+            ->whereDate('date', '<=', $fin)
+            ->selectRaw('SUM(CASE WHEN DATE(date) < ? THEN entrees_cdf - sorties_cdf ELSE 0 END) AS ouverture_cdf', [$debut])
+            ->selectRaw('SUM(CASE WHEN DATE(date) < ? THEN entrees_usd - sorties_usd ELSE 0 END) AS ouverture_usd', [$debut])
+            ->selectRaw('SUM(CASE WHEN DATE(date) >= ? THEN entrees_cdf ELSE 0 END) AS entree_cdf', [$debut])
+            ->selectRaw('SUM(CASE WHEN DATE(date) >= ? THEN sorties_cdf ELSE 0 END) AS sortie_cdf', [$debut])
+            ->selectRaw('SUM(CASE WHEN DATE(date) >= ? THEN entrees_usd ELSE 0 END) AS entree_usd', [$debut])
+            ->selectRaw('SUM(CASE WHEN DATE(date) >= ? THEN sorties_usd ELSE 0 END) AS sortie_usd', [$debut])
+            ->selectRaw('SUM(entrees_cdf - sorties_cdf) AS solde_cdf, SUM(entrees_usd - sorties_usd) AS solde_usd')
+            ->groupBy('journal_type_id')->get();
+    }
+
     /** Read-only projection: BRC imputations retain their original currency. */
     public function query(): Builder
     {

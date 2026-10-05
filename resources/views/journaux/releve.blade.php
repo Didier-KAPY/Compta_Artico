@@ -15,15 +15,16 @@
     @php $compteSelectionne = $comptesTresorerie->firstWhere('id', request('journal_type_id')); @endphp
     @if($compteSelectionne)
     <div class="sage-panel mt-3">
-        <div class="sage-panel-head"><div><strong>Synthèse du compte {{ $compteSelectionne->code }}</strong><small>Mouvements de la période, hors solde d’ouverture</small></div></div>
+        <div class="sage-panel-head"><div><strong>Synthèse du compte {{ $compteSelectionne->code }}</strong><small>Solde de clôture = solde d’ouverture + entrées − sorties</small></div></div>
         <div class="table-responsive"><table class="table sage-grid mb-0">
-            <thead><tr><th>Journal</th><th>Compte</th><th>Désignation</th><th>Nature</th><th class="text-end">Entrées CDF</th><th class="text-end">Sorties CDF</th><th class="text-end">Solde de la période CDF</th><th class="text-end">Entrées USD</th><th class="text-end">Sorties USD</th><th class="text-end">Solde de la période USD</th></tr></thead>
+            <thead><tr><th>Journal</th><th>Compte</th><th>Désignation</th><th>Nature</th><th class="text-end">Ouverture CDF</th><th class="text-end">Entrées CDF</th><th class="text-end">Sorties CDF</th><th class="text-end">Clôture CDF</th><th class="text-end">Ouverture USD</th><th class="text-end">Entrées USD</th><th class="text-end">Sorties USD</th><th class="text-end">Clôture USD</th></tr></thead>
             <tbody><tr>
                 <td>{{ $compteSelectionne->code }}</td><td>{{ $compteSelectionne->compte?->compte }}</td><td>{{ $compteSelectionne->compte?->designation }}</td><td>{{ ucfirst(str_replace('_', ' ', $compteSelectionne->nature ?? '')) }}</td>
-                <td class="text-end">{{ number_format($totaux['entree_cdf'], 2, ',', ' ') }}</td><td class="text-end">{{ number_format($totaux['sortie_cdf'], 2, ',', ' ') }}</td><td class="text-end fw-bold">{{ number_format($totaux['entree_cdf'] - $totaux['sortie_cdf'], 2, ',', ' ') }}</td>
-                <td class="text-end">{{ number_format($totaux['entree_usd'], 2, ',', ' ') }}</td><td class="text-end">{{ number_format($totaux['sortie_usd'], 2, ',', ' ') }}</td><td class="text-end fw-bold">{{ number_format($totaux['entree_usd'] - $totaux['sortie_usd'], 2, ',', ' ') }}</td>
+                <td class="text-end">{{ number_format($ouverture->cdf, 2, ',', ' ') }}</td><td class="text-end">{{ number_format($totaux['entree_cdf'], 2, ',', ' ') }}</td><td class="text-end">{{ number_format($totaux['sortie_cdf'], 2, ',', ' ') }}</td><td class="text-end fw-bold">{{ number_format($totaux['solde_cdf'], 2, ',', ' ') }}</td>
+                <td class="text-end">{{ number_format($ouverture->usd, 2, ',', ' ') }}</td><td class="text-end">{{ number_format($totaux['entree_usd'], 2, ',', ' ') }}</td><td class="text-end">{{ number_format($totaux['sortie_usd'], 2, ',', ' ') }}</td><td class="text-end fw-bold">{{ number_format($totaux['solde_usd'], 2, ',', ' ') }}</td>
             </tr></tbody>
         </table></div>
+        <div class="p-3 small text-muted">Variation de la période hors ouverture : {{ number_format($totaux['entree_cdf'] - $totaux['sortie_cdf'], 2, ',', ' ') }} CDF / {{ number_format($totaux['entree_usd'] - $totaux['sortie_usd'], 2, ',', ' ') }} USD</div>
     </div>
     @endif
 
