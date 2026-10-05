@@ -52,6 +52,7 @@ class TechnicalDashboardTest extends TestCase
         $create('EB-FINANCE', ['departement_id' => $finance->id]);
         $create('EB-FINANCE-LEGACY', ['departement_id' => null, 'service' => 'Direction financière']);
         $create('EB-DELETED')->delete();
+        $create('EB-PREVIOUS-MONTH', ['date' => now()->startOfMonth()->subDay()->toDateString()]);
 
         $this->actingAs($user)->get(route('dashboard'))->assertOk()
             ->assertViewHas('total', 4)->assertViewHas('sansPiece', 2)
@@ -61,8 +62,13 @@ class TechnicalDashboardTest extends TestCase
             ->assertDontSee('EB-DELETED')
             ->assertSee(route('parametres.rh.presences'), false);
 
+        $this->get(route('dashboard', ['mois' => now()->startOfMonth()->subMonth()->format('Y-m')]))->assertOk()
+            ->assertViewHas('total', 1)->assertViewHas('sansPiece', 1)
+            ->assertSee('EB-PREVIOUS-MONTH')
+            ->assertViewHas('derniersSansPiece', fn ($rows) => $rows->pluck('numero')->all() === ['EB-PREVIOUS-MONTH']);
+
         $this->get(route('etat-besoins.index', ['statut' => '', 'sans_piece' => 1]))->assertOk()
-            ->assertViewHas('etatBesoins', fn ($etats) => $etats->pluck('numero')->sort()->values()->all() === ['EB-EMPTY', 'EB-MISSING'])
+            ->assertViewHas('etatBesoins', fn ($etats) => $etats->pluck('numero')->sort()->values()->all() === ['EB-EMPTY', 'EB-MISSING', 'EB-PREVIOUS-MONTH'])
             ->assertSee('EB-MISSING')->assertSee('EB-EMPTY')->assertDontSee('EB-FINANCE')
             ->assertDontSee('EB-DELETED');
     }

@@ -2,6 +2,7 @@
 
 @section('content')
 <div class="dashboard-shell">
+    @include('partials.dashboard-month')
     <section class="welcome-panel mb-4">
         <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
             <div class="d-flex align-items-center gap-3">
@@ -26,9 +27,9 @@
 
     @if($sections['exchange'])
         <div class="rate-card mb-4">
-            <span class="eyebrow rate-title">Taux du jour</span>
+            <span class="eyebrow rate-title">Dernier taux du mois</span>
             <i class="bi bi-currency-exchange"></i>
-            <h3>1 USD = {{ number_format((float) ($exchange_rate?->taux_de_change ?? 0), 2, ',', ' ') }} CDF</h3>
+            <h3>{{ $exchange_rate ? '1 USD = '.number_format((float) $exchange_rate->taux_de_change, 2, ',', ' ').' CDF' : 'Aucun taux enregistré pour ce mois' }}</h3>
             <div class="rate-help">Taux utilisé pour convertir les opérations en USD vers le CDF.</div>
             <small>Mis à jour {{ $exchange_rate?->updated_at?->translatedFormat('d/m/Y à H:i') ?? '—' }}</small>
         </div>
@@ -48,7 +49,7 @@
                 ? $operationalCards
                 : array_merge($configurationCards, $operationalCards);
         @endphp
-        <div class="section-heading"><div><span class="eyebrow">{{ $user->isAccounting() ? 'Activité financière' : 'Vue globale' }}</span><h4>Statistiques</h4><small class="section-note">Opérations datées du mois en cours ({{ now()->format('m/Y') }}). Utilisateurs et comptes comptables : totaux généraux.</small></div></div>
+        <div class="section-heading"><div><span class="eyebrow">{{ $user->isAccounting() ? 'Activité financière' : 'Vue globale' }}</span><h4>Statistiques</h4><small class="section-note">Opérations de {{ $monthLabel }}. Utilisateurs et comptes comptables : créations du mois.</small></div></div>
         <div class="row g-3 mb-4">
             @foreach($cards as [$key, $label, $icon, $color])
                 <div class="col-6 col-lg-4 col-xl-3">
@@ -70,8 +71,8 @@
             ];
         @endphp
         <div class="section-heading">
-            <div><span class="eyebrow">Liquidités disponibles</span><h4>Situation de trésorerie</h4><small class="section-note">Mouvements validés jusqu’à aujourd’hui. Solde = entrées − sorties.</small></div>
-            <a href="{{ route('journaux.tresorerie') }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye me-1"></i> Voir le détail</a>
+            <div><span class="eyebrow">Mouvements du mois</span><h4>Situation de trésorerie</h4><small class="section-note">Mouvements validés de {{ $monthLabel }}, jusqu’à aujourd’hui. Variation du mois = entrées − sorties.</small></div>
+            <a href="{{ route('journaux.tresorerie', $monthFilters) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye me-1"></i> Voir le détail</a>
         </div>
         <div class="row g-3 mb-3">
             @foreach($treasuryCards as [$label, $key, $icon, $color])
@@ -89,7 +90,7 @@
         </div>
         <div class="panel-card mb-4">
             <div class="panel-title">
-                <div><span class="eyebrow">Solde à ce jour</span><h5>Disponibilités par compte</h5></div>
+                <div><span class="eyebrow">Variation du mois</span><h5>Mouvements nets par compte</h5></div>
                 <div class="text-end">
                     <strong class="d-block">{{ number_format($treasury_situation['totals']['total_cdf'], 2, ',', ' ') }} CDF</strong>
                     <strong class="d-block">{{ number_format($treasury_situation['totals']['total_usd'], 2, ',', ' ') }} USD</strong>
@@ -97,7 +98,7 @@
             </div>
             <div class="table-responsive">
                 <table class="table dashboard-table align-middle mb-0">
-                    <thead><tr><th>Journal</th><th>Compte</th><th>Désignation</th><th>Nature</th><th class="text-end">Solde CDF</th><th class="text-end">Solde USD</th></tr></thead>
+                    <thead><tr><th>Journal</th><th>Compte</th><th>Désignation</th><th>Nature</th><th class="text-end">Variation CDF</th><th class="text-end">Variation USD</th></tr></thead>
                     <tbody>
                         @forelse(collect($treasury_situation['accounts'])->filter(fn ($account) => round((float) $account['balance_cdf'], 2) != 0 || round((float) $account['balance_usd'], 2) != 0) as $account)
                             <tr>
@@ -143,9 +144,9 @@
     @if($sections['charts'])
         <div class="section-heading"><div><span class="eyebrow">Analyse</span><h4>Indicateurs graphiques</h4><small class="section-note">Évolution des mouvements, répartition des opérations et modes de paiement.</small></div></div>
         <div class="row g-3 mb-4">
-            <div class="col-xl-7"><div class="panel-card chart-card"><h5>Entrées vs sorties par mois</h5><canvas id="cashFlowChart"></canvas></div></div>
+            <div class="col-xl-7"><div class="panel-card chart-card"><h5>Entrées vs sorties par jour</h5><canvas id="cashFlowChart"></canvas></div></div>
             <div class="col-xl-5"><div class="panel-card chart-card"><h5>Activité par opération</h5><canvas id="operationsChart"></canvas></div></div>
-            <div class="col-xl-7"><div class="panel-card chart-card"><h5>Évolution mensuelle de la trésorerie (CDF)</h5><canvas id="treasuryChart"></canvas></div></div>
+            <div class="col-xl-7"><div class="panel-card chart-card"><h5>Évolution de la trésorerie du mois (CDF)</h5><canvas id="treasuryChart"></canvas></div></div>
             <div class="col-xl-5"><div class="panel-card chart-card"><h5>Modes de paiement</h5><canvas id="paymentChart"></canvas></div></div>
         </div>
     @endif

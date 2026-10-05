@@ -2,10 +2,11 @@
 @section('title', 'Tableau de bord technique')
 @section('content')
 <div class="container-fluid py-4">
+    @include('partials.dashboard-month')
     <div class="mb-4">
         <h2>Tableau de bord technique</h2>
         <p class="text-muted">Bonjour {{ $user->prenom }}. Suivi des états de besoins de toutes les directions, y compris la Direction générale, sauf la Direction financière.</p>
-        <small class="text-muted">Toutes périodes et tous statuts confondus, hors éléments supprimés.</small>
+        <small class="text-muted">{{ $monthLabel }}, tous statuts confondus, hors éléments supprimés.</small>
     </div>
     <div class="row g-3 mb-4">
         @foreach([
@@ -16,7 +17,7 @@
             ['Sans pièce justificative', $sansPiece, ['statut' => '', 'sans_piece' => 1], 'danger'],
         ] as [$label, $nombre, $filtres, $couleur])
             <div class="col-12 col-sm-6 col-xl">
-                <a href="{{ route('etat-besoins.index', $filtres) }}" class="card h-100 shadow-sm text-decoration-none border-{{ $couleur }}">
+                <a href="{{ route('etat-besoins.index', $filtres + $monthFilters) }}" class="card h-100 shadow-sm text-decoration-none border-{{ $couleur }}">
                     <div class="card-body"><span class="text-body">{{ $label }}</span><strong class="d-block fs-2 text-{{ $couleur }}">{{ number_format($nombre, 0, ',', ' ') }}</strong></div>
                 </a>
             </div>
@@ -32,7 +33,7 @@
     <div class="card shadow-sm">
         <div class="card-header d-flex flex-wrap justify-content-between gap-2 align-items-center">
             <div><h5 class="mb-1">États de besoins sans pièce justificative</h5><small>Les 10 plus récents, tous statuts confondus.</small></div>
-            <a href="{{ route('etat-besoins.index', ['statut' => '', 'sans_piece' => 1]) }}" class="btn btn-sm btn-outline-danger">Voir tous ({{ $sansPiece }})</a>
+            <a href="{{ route('etat-besoins.index', ['statut' => '', 'sans_piece' => 1] + $monthFilters) }}" class="btn btn-sm btn-outline-danger">Voir tous ({{ $sansPiece }})</a>
         </div>
         <div class="table-responsive"><table class="table align-middle mb-0">
             <thead><tr><th>Numéro</th><th>Date</th><th>Direction / service</th><th>Demandeur</th><th>Statut</th><th>Action</th></tr></thead>

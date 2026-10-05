@@ -32,7 +32,7 @@ class DashboardTest extends TestCase
             ->get(route('dashboard'))
             ->assertOk()
             ->assertDontSee('Situation de caisse')
-            ->assertSee('Entrées vs sorties par mois')
+            ->assertSee('Entrées vs sorties par jour')
             ->assertDontSee('10 dernières opérations')
             ->assertSee('BRC')
             ->assertSee("Bons d'entrée")
@@ -60,7 +60,7 @@ class DashboardTest extends TestCase
             ->assertSee('Statistiques')
             ->assertSee('Situation de trésorerie')
             ->assertDontSee('Situation de caisse')
-            ->assertSee('Entrées vs sorties par mois')
+            ->assertSee('Entrées vs sorties par jour')
             ->assertDontSee('10 dernières opérations')
             ->assertDontSee('Validé par');
     }
@@ -82,9 +82,9 @@ class DashboardTest extends TestCase
             ->get(route('dashboard'))
             ->assertOk()
             ->assertSee('Situation de trésorerie')
-            ->assertSee('Disponibilités par compte')
+            ->assertSee('Mouvements nets par compte')
             ->assertDontSee('Situation de caisse')
-            ->assertSee('Entrées vs sorties par mois')
+            ->assertSee('Entrées vs sorties par jour')
             ->assertDontSee('10 dernières opérations')
             ->assertDontSee('Validé par');
     }
@@ -98,8 +98,8 @@ class DashboardTest extends TestCase
                 'password' => bcrypt('password'), 'role_id' => $role->id, 'password_default' => 0, 'statut' => 'Actif',
             ]);
             $this->actingAs($user)->get(route('dashboard'))->assertOk()
-                ->assertSee('Situation de trésorerie')->assertSee('Disponibilités par compte')
-                ->assertDontSee('Situation de caisse')->assertSee('Entrées vs sorties par mois')
+                ->assertSee('Situation de trésorerie')->assertSee('Mouvements nets par compte')
+                ->assertDontSee('Situation de caisse')->assertSee('Entrées vs sorties par jour')
                 ->assertDontSee('10 dernières opérations')
                 ->assertViewHas('sections', fn ($sections) => collect($sections)->except('needs_only')->every(fn ($visible) => $visible === true));
         }
@@ -107,6 +107,7 @@ class DashboardTest extends TestCase
 
     public function test_cash_situation_only_includes_validated_treasury_movements_up_to_today(): void
     {
+        $this->travelTo(\Carbon\Carbon::parse('2026-10-05 12:00:00'));
         $role = Role::create(['designation' => 'Admin']);
         $user = User::create([
             'nom' => 'Test',
@@ -147,6 +148,7 @@ class DashboardTest extends TestCase
             [$brc, 'Validé', now()->toDateString(), 900],
             [$tresorerie, 'En attente', now()->toDateString(), 800],
             [$tresorerie, 'Validé', now()->addDay()->toDateString(), 700],
+            [$tresorerie, 'Validé', now()->startOfMonth()->subDay()->toDateString(), 600],
         ] as $index => [$journalType, $statut, $date, $montant]) {
             Journaux::create([
                 'user_id' => $user->id,
@@ -165,5 +167,44 @@ class DashboardTest extends TestCase
 
         $this->assertSame(100.0, $cash['in_cdf']);
         $this->assertSame(100.0, $cash['balance_cdf']);
+    }
+
+    public function test_dashboard_defaults_to_current_month_and_can_display_another_year(): void
+    {
+        $this->travelTo(\Carbon\Carbon::parse('2026-10-05 12:00:00'));
+        $role = Role::create(['designation' => 'Admin']);
+        $user = User::create(['nom' => 'Test', 'prenom' => 'Mois', 'email' => 'month@test.local',
+            'password' => bcrypt('password'), 'role_id' => $role->id, 'password_default' => 0, 'statut' => 'Actif']);
+        $account = ListeDesComptes::create(['user_id' => $user->id, 'compte' => '571100', 'designation' => 'Caisse', 'nature' => 'Actif']);
+        $type = JournalType::create(['user_id' => $user->id, 'code' => 'CAI', 'libelle' => 'Caisse',
+            'liste_des_comptes_id' => $account->id, 'nature' => 'caisse', 'monnaie' => 'CDF', 'est_tresorerie' => true]);
+        foreach (['2026-10-01' => 100, '2026-09-30' => 900, '2025-02-28' => 200, '2025-03-01' => 800] as $date => $amount) {
+            Journaux::create(['user_id' => $user->id, 'journal_type_id' => $type->id, 'liste_des_comptes_id' => $account->id,
+                'reference' => $date, 'date' => $date, 'type' => 'recette', 'monnaie' => 'CDF', 'mode_paiement' => 'banque',
+                'entrees_cdf' => $amount, 'montant_ttc' => $amount, 'statut' => 'Validé']);
+            Journaux::create(['user_id' => $user->id, 'journal_type_id' => $type->id, 'liste_des_comptes_id' => $account->id,
+                'reference' => 'WAIT-'.$date, 'date' => $date, 'type' => 'depense', 'monnaie' => 'CDF', 'statut' => 'En attente']);
+            \App\Models\EtatBesoin::create(['user_id' => $user->id, 'numero' => 'EB-'.$date, 'date' => $date,
+                'service' => 'Test', 'demandeur' => 'Test', 'motif' => 'Test', 'monnaie' => 'CDF', 'statut' => 'Validé']);
+        }
+
+        $this->actingAs($user)->get(route('dashboard'))->assertOk()
+            ->assertSee('Mois à consulter')->assertViewHas('selectedMonth', '2026-10')
+            ->assertViewHas('cash', fn ($cash) => $cash['in_cdf'] === 100.0)
+            ->assertViewHas('charts', fn ($charts) => count($charts['labels']) === 31 && array_sum($charts['in_cdf']) === 100.0);
+        $this->get(route('dashboard', ['mois' => '2025-02']))->assertOk()
+            ->assertViewHas('selectedMonth', '2025-02')
+            ->assertViewHas('statistics', fn ($stats) => $stats['needs'] === 1)
+            ->assertViewHas('cash', fn ($cash) => $cash['in_cdf'] === 200.0)
+            ->assertViewHas('treasury_situation', fn ($data) => $data['totals']['total_cdf'] === 200.0)
+            ->assertViewHas('validations', fn ($data) => $data['journals'] === 1)
+            ->assertViewHas('accounting_alerts', fn ($data) => $data['etats_besoin_sans_piece'] === 1)
+            ->assertViewHas('latest_operations', fn ($rows) => $rows->count() === 2 && $rows->every(fn ($row) => $row->date->format('Y-m') === '2025-02'))
+            ->assertViewHas('charts', fn ($charts) => count($charts['labels']) === 28 && $charts['in_cdf'][27] === 200.0
+                && array_sum($charts['in_cdf']) === 200.0 && $charts['operations'][0] === 200.0 && $charts['payments'][1] === 1);
+        $this->get(route('dashboard', ['mois' => '2025-13']))->assertSessionHasErrors('mois');
+        $this->get(route('dashboard', ['mois' => '2025-01']))->assertOk()
+            ->assertViewHas('cash', fn ($cash) => $cash['in_cdf'] === 0.0)
+            ->assertViewHas('charts', fn ($charts) => array_sum($charts['in_cdf']) === 0.0);
     }
 }
