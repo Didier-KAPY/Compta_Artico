@@ -19,7 +19,11 @@ class SyscohadaEtatFinancierService
         $actuel = $this->mouvements($debut, $fin);
         $precedent = $this->mouvements($debutPrecedente, $finPrecedente);
         $resultat = $this->compteResultat($actuel, $precedent);
-        $bilan = $this->bilan($actuel, $precedent, $resultat);
+        // Un bilan est une situation à la date de clôture : les comptes de bilan
+        // doivent inclure leur solde d'ouverture et tous les mouvements antérieurs.
+        $soldesBilanActuel = $this->mouvements(null, $fin);
+        $soldesBilanPrecedent = $this->mouvements(null, $finPrecedente);
+        $bilan = $this->bilan($soldesBilanActuel, $soldesBilanPrecedent, $resultat);
 
         return [
             'date_debut' => $debut->toDateString(), 'date_fin' => $fin->toDateString(),
@@ -36,12 +40,16 @@ class SyscohadaEtatFinancierService
         ];
     }
 
-    private function mouvements(CarbonImmutable $debut, CarbonImmutable $fin): Collection
+    private function mouvements(?CarbonImmutable $debut, CarbonImmutable $fin): Collection
     {
         $query = EcritureComptable::query()
             ->with('compte')
             ->where('statut', 'Validé')
-            ->whereBetween('date', [$debut->toDateString(), $fin->toDateString()]);
+            ->when(
+                $debut,
+                fn ($query) => $query->whereBetween('date', [$debut->toDateString(), $fin->toDateString()]),
+                fn ($query) => $query->whereDate('date', '<=', $fin->toDateString())
+            );
 
         return $query->get()
             ->groupBy(fn (EcritureComptable $e): string => $e->compte ? 'compte-'.$e->liste_des_comptes_id : 'sans-compte-'.$e->liste_des_comptes_id)
