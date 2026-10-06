@@ -8,6 +8,7 @@ use App\Models\Entreprise;
 use App\Models\EtatBesoin;
 use App\Models\Journaux;
 use App\Models\JournalType;
+use App\Models\ListeDesComptes;
 use App\Models\SortieCaisse;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -176,12 +177,22 @@ class ReportExportController extends Controller
     {
         $this->autoriser($request, ['Super Admin', 'Admin', 'Directeur Général', 'DAF', 'Comptable']);
         $request->validate(['liste_des_comptes_id' => ['required', 'exists:liste_des_comptes,id']]);
+        [$debut, $fin] = $this->periode($request);
+        $compteId = $request->integer('liste_des_comptes_id');
+        $compte = ListeDesComptes::findOrFail($compteId);
+        $ouverture = EcritureComptable::query()
+            ->where('statut', 'Validé')
+            ->where('liste_des_comptes_id', $compteId)
+            ->whereDate('date', '<', $debut)
+            ->selectRaw('COALESCE(SUM(debit_cdf), 0) - COALESCE(SUM(credit_cdf), 0) AS solde')
+            ->value('solde');
         $query = EcritureComptable::with(['compte', 'journal', 'user'])
-            ->where('statut', 'Validé')->where('liste_des_comptes_id', $request->integer('liste_des_comptes_id'))
-            ->whereBetween('date', $this->periode($request));
+            ->where('statut', 'Validé')->where('liste_des_comptes_id', $compteId)
+            ->whereBetween('date', [$debut, $fin]);
         $records = $query->orderBy('date')->orderBy('id')->get();
         $headers = ['Date', 'Compte', 'Désignation', 'Débit CDF', 'Crédit CDF', 'Solde CDF'];
-        $solde = 0;
+        $soldeOuverture = (float) $ouverture;
+        $solde = $soldeOuverture;
         $rows = $records->map(function ($item) use (&$solde) {
             $solde += (float) $item->debit_cdf - (float) $item->credit_cdf;
 
@@ -189,6 +200,16 @@ class ReportExportController extends Controller
                 $this->montant($item->debit_cdf), $this->montant($item->credit_cdf), $this->montant($solde)];
         });
         $this->ajouterUtilisateurs($headers, $rows, $records, 1);
+        $ligneOuverture = [
+            $this->date($debut), $compte->compte, 'Solde d’ouverture',
+            $this->montant(max($soldeOuverture, 0)),
+            $this->montant(max(-$soldeOuverture, 0)),
+            $this->montant($soldeOuverture),
+        ];
+        if (auth()->user()?->hasRole('Super Admin')) {
+            array_splice($ligneOuverture, 1, 0, ['Report']);
+        }
+        $rows->prepend($ligneOuverture);
 
         return $this->telecharger($format, 'Grand livre', 'grand-livre', $headers, $rows, $request, 'landscape');
     }
