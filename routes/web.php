@@ -448,7 +448,7 @@ Route::middleware(['auth', 'force.password.change', 'accounting.open'])->group(f
         ->name('entree-caisse.update');
     Route::resource('entree-caisses', EntreeCaisseController::class)
         ->only(['index', 'show'])
-        ->middleware('role:Super Admin,Admin,Directeur Général,DAF,Comptable,Caissier,Caissière,Trésorier,Trésorière');
+        ->middleware('role:Super Admin,Admin,Directeur Général,DAF,Comptable,Caissier,Caissière,Trésorier,Trésorière,Chargé des finances,Chargé de finance,Charge de finance,Charger de finance');
 
     Route::prefix('journaux')->name('journaux.')->group(function () {
         Route::get('/banque', [JournalController::class, 'banque'])
