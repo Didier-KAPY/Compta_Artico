@@ -159,11 +159,12 @@
                     $roleName = mb_strtolower($user->role?->designation ?? '');
                     $isAdmin = $user->isSuperAdmin() || $user->isManagement();
                     $isCash = in_array($roleName, ['caissier', 'caissière', 'trésorier', 'trésorière']);
+                    $isFinance = in_array($roleName, ['chargé des finances', 'chargé de finance', 'charge de finance', 'charger de finance'], true);
                     $isAccounting = $user->isAccounting();
                 @endphp
                 @can('createEtatBesoin')<a href="{{ route('etat-besoins.create') }}"><i class="bi bi-clipboard-plus"></i><span>Nouvel état de besoin</span></a>@endcan
                 @can('manageEntreeCaisse')<a href="{{ route('entree-caisses.create') }}"><i class="bi bi-box-arrow-in-down"></i><span>Nouvelle entrée</span></a>@endcan
-                @if($isAdmin || $isCash)<a href="{{ route('sortie-caisses.create') }}"><i class="bi bi-box-arrow-up"></i><span>Nouvelle sortie</span></a>@endif
+                @if($isAdmin || $isCash || $isFinance)<a href="{{ route('sortie-caisses.create') }}"><i class="bi bi-box-arrow-up"></i><span>Nouvelle sortie</span></a>@endif
                 @can('manageJournaux')<a href="{{ route('journaux.create') }}"><i class="bi bi-journal-plus"></i><span>Nouveau journal</span></a>@endcan
                 @if(in_array($roleName, ['super admin', 'admin', 'comptable', 'chargé des finances', 'chargé de finance', 'charge de finance', 'charger de finance'], true))<a href="{{ route('brc.create') }}"><i class="bi bi-file-earmark-plus"></i><span>Nouveau BRC</span></a>@endif
                 @if(config('features.accounting') && ($isAdmin || $isAccounting))<a href="{{ route('balance.index') }}"><i class="bi bi-bar-chart"></i><span>Balance</span></a><a href="{{ route('grandlivre.index') }}"><i class="bi bi-book"></i><span>Grand livre</span></a><a href="{{ route('comptabilite.etats-financiers.index') }}"><i class="bi bi-file-earmark-bar-graph"></i><span>États financiers</span></a>@endif

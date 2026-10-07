@@ -4,7 +4,7 @@
         $isActive = request()->routeIs('sortie-caisses.*');
         $canCreateSortie = in_array(
             auth()->user()?->role?->designation,
-            ['Super Admin', 'Admin', 'Directeur Général', 'Caissier', 'Caissière', 'Trésorier', 'Trésorière'],
+            ['Super Admin', 'Admin', 'Directeur Général', 'Chargé des finances', 'Chargé de finance', 'charge de finance', 'charger de finance', 'Caissier', 'Caissière', 'Trésorier', 'Trésorière'],
             true
         );
     @endphp

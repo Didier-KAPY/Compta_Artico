@@ -396,7 +396,7 @@ Route::middleware(['auth', 'force.password.change', 'accounting.open'])->group(f
         ->name('sortie-caisses.pdf');
     Route::resource('sortie-caisses', SortieCaisseController::class)
         ->only(['create', 'store'])
-        ->middleware('role:Super Admin,Admin,Directeur Général,Caissier,Caissière,Trésorier,Trésorière');
+        ->middleware('role:Super Admin,Admin,Directeur Général,Chargé des finances,Caissier,Caissière,Trésorier,Trésorière');
     Route::resource('sortie-caisses', SortieCaisseController::class)
         ->only(['edit', 'update'])
         ->middleware('role:Super Admin,Admin,Directeur Général');

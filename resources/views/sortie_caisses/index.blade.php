@@ -12,7 +12,7 @@ $role = strtolower(auth()->user()->role?->designation ?? '');
 $isSuperAdmin = $role == 'super admin';
 $canValidateSortie = in_array($role, ['chargé des finances', 'chargé de finance', 'charge de finance', 'charger de finance'], true);
 $showActions = ! auth()->user()->isAccounting() || $canValidateSortie;
-$canCreateSortie = auth()->user()->isSuperAdmin() || auth()->user()->isManagement() || in_array($role, ['caissier', 'caissière', 'trésorier', 'trésorière'], true);
+$canCreateSortie = auth()->user()->isSuperAdmin() || auth()->user()->isManagement() || in_array($role, ['chargé des finances', 'chargé de finance', 'charge de finance', 'charger de finance', 'caissier', 'caissière', 'trésorier', 'trésorière'], true);
 $canManageSortie = auth()->user()->isSuperAdmin() || auth()->user()->isManagement();
 
 
