@@ -15,6 +15,7 @@ use App\Services\FinancialDocumentService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
@@ -66,10 +67,12 @@ class BRCController extends Controller
         abort_unless(request()->user()?->isSuperAdmin(), 403);
 
         $brc->load(['lignes.compte', 'journalType.compte']);
-        $journaux = JournalType::with('compte')->whereNotNull('liste_des_comptes_id')->orderBy('code')->get();
+        $journaux = JournalType::with('compte')->where('nature', 'od')->where('est_tresorerie', false)
+            ->whereNotNull('liste_des_comptes_id')->orderBy('code')->get();
+        $journalCourantDisponible = $journaux->contains('id', (int) $brc->journal_type_id);
         $comptes = ListeDesComptes::orderBy('compte')->get();
 
-        return view('BRC.edit', compact('brc', 'journaux', 'comptes'));
+        return view('BRC.edit', compact('brc', 'journaux', 'comptes', 'journalCourantDisponible'));
     }
 
     public function update(Request $request, BRC $brc)
@@ -79,7 +82,7 @@ class BRCController extends Controller
 
         $data = $request->validate([
             'date' => ['required', 'date'],
-            'journal_type_id' => ['required', 'exists:journal_types,id'],
+            'journal_type_id' => ['required', Rule::exists('journal_types', 'id')->where(fn ($query) => $query->where('nature', 'od')->where('est_tresorerie', false))],
             'monnaie' => ['required', 'in:CDF,USD'],
             'sens' => ['required', 'in:debit,credit'],
             'mode_paiement' => ['required', 'in:espèces,banque,mobile_money'],
@@ -104,7 +107,7 @@ class BRCController extends Controller
                 throw ValidationException::withMessages(['lignes' => 'Le compte du journal ne peut pas être utilisé comme imputation.']);
             }
 
-            $brc->update(['date' => $data['date'], 'journal_type_id' => $journalType->id, 'monnaie' => $data['monnaie'], 'sens' => $data['sens'], 'mode_paiement' => $data['mode_paiement']]);
+            $brc->update(['date' => $data['date'], 'journal_type_id' => $journalType->id, 'monnaie' => $data['monnaie'], 'sens' => $data['sens'], 'mode_paiement' => $data['mode_paiement'], 'origine' => 'REGULARISATION']);
             foreach ($brc->lignes as $ligne) {
                 $nouvelleLigne = $lignesSoumises->get($ligne->id);
                 $ligne->update(['liste_des_comptes_id' => $nouvelleLigne['compte_id'], 'libelle' => trim($nouvelleLigne['libelle'])]);
@@ -122,10 +125,8 @@ class BRCController extends Controller
                 $journal->update([
                     'journal_type_id' => $journalType->id, 'liste_des_comptes_id' => $journalType->compte->id,
                     'date' => $data['date'], 'description' => $libelle, 'monnaie' => $data['monnaie'], 'mode_paiement' => $data['mode_paiement'],
-                    'entrees_cdf' => $data['monnaie'] === 'CDF' && $data['sens'] === 'debit' ? $brc->total : 0,
-                    'sorties_cdf' => $data['monnaie'] === 'CDF' && $data['sens'] === 'credit' ? $brc->total : 0,
-                    'entrees_usd' => $data['monnaie'] === 'USD' && $data['sens'] === 'debit' ? $brc->total : 0,
-                    'sorties_usd' => $data['monnaie'] === 'USD' && $data['sens'] === 'credit' ? $brc->total : 0,
+                    'entrees_cdf' => 0, 'sorties_cdf' => 0,
+                    'entrees_usd' => 0, 'sorties_usd' => 0,
                 ]);
                 if ($ecritures->isEmpty()) continue;
                 $ecritures->first()->update([
@@ -178,6 +179,7 @@ class BRCController extends Controller
     public function create()
     {
         $journaux = JournalType::with('compte')
+            ->where('nature', 'od')->where('est_tresorerie', false)
             ->whereNotNull('liste_des_comptes_id')->orderBy('code')->get();
         $comptes = ListeDesComptes::orderBy('compte')->get();
         $taux = TauxDeChange::latest()->first();
@@ -190,7 +192,7 @@ class BRCController extends Controller
         $request->merge(['mode_paiement' => $request->input('mode_paiement', 'mobile_money')]);
         $data = $request->validate([
             'date' => ['required', 'date'],
-            'journal_type_id' => ['required', 'exists:journal_types,id'],
+            'journal_type_id' => ['required', Rule::exists('journal_types', 'id')->where(fn ($query) => $query->where('nature', 'od')->where('est_tresorerie', false))],
             'monnaie' => ['required', 'in:CDF,USD'],
             'sens' => ['required', 'in:debit,credit'],
             'mode_paiement' => ['required', 'in:espèces,banque,mobile_money'],
@@ -224,6 +226,7 @@ class BRCController extends Controller
                 'monnaie' => $data['monnaie'],
                 'sens' => $data['sens'],
                 'mode_paiement' => $data['mode_paiement'],
+                'origine' => 'REGULARISATION',
                 'total' => collect($data['lignes'])->sum(fn ($ligne) => (float) $ligne['montant']),
                 'piece_justificative' => $piecePath,
                 'statut' => 'En attente',
@@ -285,10 +288,8 @@ class BRCController extends Controller
                 'mode_paiement' => $brc->mode_paiement,
                 'montant_ht' => $brc->total,
                 'montant_ttc' => $brc->total,
-                'entrees_cdf' => $brc->monnaie === 'CDF' && $brc->sens === 'debit' ? $brc->total : 0,
-                'sorties_cdf' => $brc->monnaie === 'CDF' && $brc->sens === 'credit' ? $brc->total : 0,
-                'entrees_usd' => $brc->monnaie === 'USD' && $brc->sens === 'debit' ? $brc->total : 0,
-                'sorties_usd' => $brc->monnaie === 'USD' && $brc->sens === 'credit' ? $brc->total : 0,
+                'entrees_cdf' => 0, 'sorties_cdf' => 0,
+                'entrees_usd' => 0, 'sorties_usd' => 0,
                 'statut' => 'Validé',
                 'date_validation' => now(),
                 'valide_par' => auth()->id(),

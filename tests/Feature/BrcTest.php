@@ -275,7 +275,7 @@ class BrcTest extends TestCase
         $this->assertSame(250.0, (float) $ligne->fresh()->montant);
     }
 
-    public function test_cash_imputations_update_treasury_statement_and_dashboard_in_original_currency(): void
+    public function test_cash_imputations_from_brc_never_change_treasury_statement_or_dashboard(): void
     {
         $this->travelTo('2026-09-09 12:00:00');
         [$user, $od, , $other] = $this->contexte('Admin');
@@ -294,17 +294,13 @@ class BrcTest extends TestCase
             ])->assertSessionHasNoErrors()->assertRedirect();
         }
         $period = ['date_debut' => '2026-09-01', 'date_fin' => '2026-09-09', 'journal_type_id' => $type->id];
-        $this->get(route('journaux.tresorerie', $period))->assertOk()->assertViewHas('totaux', fn ($t) => $t['caisse_cdf'] == 70 && $t['caisse_usd'] == 20 && $t['cdf_sortie'] == 30);
+        $this->get(route('journaux.tresorerie', $period))->assertOk()->assertViewHas('totaux', fn ($t) => $t['caisse_cdf'] == 0 && $t['caisse_usd'] == 0 && $t['cdf_sortie'] == 0);
         $this->get(route('journaux.releve', $period))->assertOk()
-            ->assertViewHas('ouverture', fn ($o) => $o->cdf == 100)
-            ->assertViewHas('totaux', fn ($t) => $t['solde_cdf'] == 70 && $t['solde_usd'] == 20);
+            ->assertViewHas('ouverture', fn ($o) => $o->cdf == 0)
+            ->assertViewHas('totaux', fn ($t) => $t['solde_cdf'] == 0 && $t['solde_usd'] == 0);
         $dashboard = app(\App\Services\DashboardService::class)->getData($user);
-        $this->assertEquals(70, $dashboard['cash']['balance_cdf']);
-        $this->assertEquals(20, $dashboard['treasury_situation']['totals']['caisse_usd']);
-        foreach (['tresorerie', 'releve'] as $report) {
-            $this->get(route('exports.periode', $period + ['rapport' => $report, 'format' => 'excel']))
-                ->assertOk()->assertSee('30,00')->assertSee('20,00');
-        }
+        $this->assertEquals(0, $dashboard['cash']['balance_cdf']);
+        $this->assertEquals(0, $dashboard['treasury_situation']['totals']['caisse_usd']);
         $this->assertDatabaseCount('journaux', 3);
         $this->assertDatabaseCount('ecritures_comptables', 9);
 
@@ -318,13 +314,13 @@ class BrcTest extends TestCase
             ->assertViewHas('totaux', fn ($t) => $t['caisse_cdf'] == 0 && $t['caisse_usd'] == 0);
         $brcs[2]->restore();
         $this->get(route('journaux.tresorerie', $period))->assertOk()
-            ->assertViewHas('totaux', fn ($t) => $t['caisse_usd'] == 20);
+            ->assertViewHas('totaux', fn ($t) => $t['caisse_usd'] == 0);
         $brcs[2]->lignes()->where('liste_des_comptes_id', $cash->id)->update(['liste_des_comptes_id' => $other->id]);
         $this->get(route('journaux.tresorerie', $period))->assertOk()
             ->assertViewHas('totaux', fn ($t) => $t['caisse_usd'] == 0);
     }
 
-    public function test_brc_debit_of_mobile_account_increases_its_linked_usd_balance(): void
+    public function test_brc_imputation_sur_compte_mobile_ne_modifie_pas_son_solde_de_tresorerie(): void
     {
         $this->travelTo('2026-09-09 12:00:00');
         [$user, $od, $account, $partner] = $this->contexte('Admin');
@@ -343,16 +339,16 @@ class BrcTest extends TestCase
         ])->assertSessionHasNoErrors()->assertRedirect();
         $period = ['date_debut' => '2026-08-01', 'date_fin' => '2026-08-31', 'journal_type_id' => $mobile->id];
         $this->get(route('journaux.tresorerie', $period))->assertOk()
-            ->assertViewHas('totaux', fn ($t) => $t['mobile_usd'] == 4480 && $t['caisse_usd'] == 0 && $t['usd_entree'] == 4480);
+            ->assertViewHas('totaux', fn ($t) => $t['mobile_usd'] == 0 && $t['caisse_usd'] == 0 && $t['usd_entree'] == 0);
         $this->get(route('journaux.releve', $period))->assertOk()->assertSee('55221')
-            ->assertViewHas('totaux', fn ($t) => $t['solde_usd'] == 4480);
+            ->assertViewHas('totaux', fn ($t) => $t['solde_usd'] == 0);
         $dashboard = app(\App\Services\DashboardService::class)->getData($user);
-        $this->assertEquals(4480, $dashboard['cash']['balance_usd']);
+        $this->assertEquals(0, $dashboard['cash']['balance_usd']);
         $dashboard = app(\App\Services\DashboardService::class)->getData($user, \Carbon\CarbonImmutable::parse('2026-08-01'));
-        $this->assertEquals(4480, $dashboard['cash']['balance_usd']);
-        $this->assertEquals(4480, $dashboard['treasury_situation']['totals']['mobile_usd']);
+        $this->assertEquals(0, $dashboard['cash']['balance_usd']);
+        $this->assertEquals(0, $dashboard['treasury_situation']['totals']['mobile_usd']);
         $this->get(route('exports.periode', $period + ['rapport' => 'releve', 'format' => 'excel']))
-            ->assertOk()->assertSee('4 480,00')->assertSee('55221');
+            ->assertOk()->assertSee('55221');
     }
 
     public function test_validated_transfer_counterpart_is_counted_once_with_fees_and_historical_rate(): void
@@ -392,7 +388,7 @@ class BrcTest extends TestCase
             ->assertViewHas('totaux',fn($t)=>$t['caisse_cdf']==0 && $t['mobile_cdf']==0);
     }
 
-    public function test_brc_can_move_multiple_treasury_accounts_from_a_treasury_journal(): void
+    public function test_brc_ne_propose_pas_les_journaux_de_tresorerie_comme_journal_comptable(): void
     {
         $this->travelTo('2026-09-09 12:00:00');
         [$user, $source, $sourceAccount, $other] = $this->contexte('Admin');
@@ -404,7 +400,7 @@ class BrcTest extends TestCase
             $accounts[] = $account;
         }
         $this->actingAs($user)->get(route('brc.create'))->assertOk()
-            ->assertViewHas('journaux', fn($types)=>$types->contains('id',$source->id));
+            ->assertViewHas('journaux', fn($types)=>!$types->contains('id',$source->id));
         $this->post(route('brc.store'),[
             'date'=>'2026-09-01','journal_type_id'=>$source->id,'monnaie'=>'CDF','sens'=>'credit',
             'lignes'=>[
@@ -412,14 +408,41 @@ class BrcTest extends TestCase
                 ['compte_id'=>$accounts[1]->id,'libelle'=>'Vers mobile','montant'=>30],
                 ['compte_id'=>$other->id,'libelle'=>'Autre contrepartie','montant'=>10],
             ],
-        ])->assertSessionHasNoErrors()->assertRedirect();
-        $period = ['date_debut'=>'2026-09-01','date_fin'=>'2026-09-09'];
-        $this->get(route('journaux.tresorerie',$period))->assertOk()
-            ->assertViewHas('totaux',fn($t)=>$t['banque_cdf']==-100 && $t['caisse_cdf']==60 && $t['mobile_cdf']==30 && $t['cdf_solde']==-10);
-        $this->get(route('journaux.releve',$period))->assertOk()
-            ->assertViewHas('journaux',fn($rows)=>$rows->total()==3);
-        $this->assertDatabaseCount('journaux',1);
-        $this->assertDatabaseCount('ecritures_comptables',4);
+        ])->assertSessionHasErrors('journal_type_id');
+        $this->assertDatabaseCount('brcs', 0);
+        $this->assertDatabaseCount('journaux', 0);
+    }
+
+    public function test_regularisation_sur_comptes_571_ne_modifie_pas_la_caisse_mais_reste_comptable(): void
+    {
+        $this->travelTo('2026-09-09 12:00:00');
+        [$user, $od, , $other] = $this->contexte('Admin');
+        TauxDeChange::create(['user_id' => $user->id, 'taux_de_change' => 2800, 'date_taux' => '2026-09-01']);
+        $cashAccounts = [];
+        foreach (['571100' => 'CDF', '571200' => 'USD'] as $number => $currency) {
+            $account = ListeDesComptes::create(['user_id' => $user->id, 'compte' => $number, 'designation' => 'Caisse '.$currency, 'nature' => 'Actif']);
+            JournalType::create(['user_id' => $user->id, 'code' => 'CAI'.$currency, 'libelle' => 'Caisse '.$currency, 'liste_des_comptes_id' => $account->id, 'nature' => 'caisse', 'monnaie' => $currency, 'est_tresorerie' => true]);
+            $cashAccounts[$number] = $account;
+            $this->actingAs($user)->post(route('brc.store'), [
+                'date' => '2026-09-09', 'journal_type_id' => $od->id, 'monnaie' => $currency, 'sens' => 'debit',
+                'lignes' => [['compte_id' => $account->id, 'libelle' => 'Régularisation '.$number, 'montant' => 125]],
+            ])->assertSessionHasNoErrors()->assertRedirect();
+        }
+
+        $this->assertDatabaseHas('brcs', ['origine' => 'REGULARISATION']);
+        $this->assertDatabaseHas('journaux', ['type' => 'od', 'entrees_cdf' => 0, 'sorties_cdf' => 0, 'entrees_usd' => 0, 'sorties_usd' => 0]);
+        $cashRows = app(\App\Services\TreasuryMovementService::class)->query()
+            ->whereIn('liste_des_comptes_id', collect($cashAccounts)->pluck('id'))->get();
+        $this->assertCount(0, $cashRows);
+
+        foreach ($cashAccounts as $account) {
+            $this->get(route('grandlivre.index', ['compte' => $account->compte, 'mois' => '2026-09']))
+                ->assertOk()->assertViewHas('resume', fn ($resume) => $resume['mouvement_debit'] + $resume['mouvement_credit'] > 0);
+        }
+        foreach ($cashAccounts as $account) {
+            $this->assertDatabaseHas('ecritures_comptables', ['liste_des_comptes_id' => $account->id, 'statut' => 'Validé']);
+        }
+        $this->get(route('balance.index', ['mois' => '2026-09']))->assertOk();
     }
 
     public function test_totaux_od_separent_les_devises_dans_la_page_et_les_exports(): void
