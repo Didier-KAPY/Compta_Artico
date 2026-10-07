@@ -143,7 +143,7 @@ class WorkflowComptableService
             if (! $locked->entree_caisse_id && ! $locked->sortie_caisse_id && ! $brcCloture) {
                 $this->fail('Ce journal ne possède aucun Bon lié.');
             }
-            if ($locked->entreeCaisse && $locked->entreeCaisse->statut !== 'Validé') {
+            if ($locked->entreeCaisse && ! $locked->entreeCaisse->estValidee()) {
                 $this->fail('Le Bon d’entrée lié doit être validé.');
             }
             if ($locked->sortieCaisse && $locked->sortieCaisse->statut !== 'Validé') {

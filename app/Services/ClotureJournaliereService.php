@@ -101,7 +101,7 @@ class ClotureJournaliereService
                 throw ValidationException::withMessages(['statut' => 'Seule une clôture terminée peut être vérifiée.']);
             }
             $journaux = $locked->journaux()->get();
-            if ($locked->entrees()->where('statut', '!=', 'Validé')->exists()
+            if ($locked->entrees()->nonValidee()->exists()
                 || $locked->sorties()->where('statut', '!=', 'Validé')->exists()
                 || $locked->brcs()->where('statut', '!=', 'Validé')->exists()
                 || $journaux->contains(fn ($journal) => $journal->statut !== 'Validé' || ! $journal->ecritures()->exists())) {

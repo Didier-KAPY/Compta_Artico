@@ -149,7 +149,7 @@
                             </td>
 
                             <td>
-                                @if($entree->statut == 'Validé')
+                                @if($entree->estValidee())
                                     <span class="badge bg-success">Validé</span>
                                 @elseif($entree->statut == 'Rejeté')
                                     <span class="badge bg-danger">Rejeté</span>
@@ -237,7 +237,7 @@
                             <td><span class="badge bg-secondary">{{ $entree->monnaie }}</span></td>
 
                             <td>
-                                @if($entree->statut == 'Validé')
+                                @if($entree->estValidee())
                                     <span class="badge bg-success">Validé</span>
                                 @elseif($entree->statut == 'Rejeté')
                                     <span class="badge bg-danger">Rejeté</span>

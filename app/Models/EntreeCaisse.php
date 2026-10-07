@@ -35,6 +35,29 @@ class EntreeCaisse extends Model
 
     protected $casts = ['date' => 'date', 'appliquer_tva' => 'boolean', 'taux_tva' => 'decimal:2', 'montant_ht' => 'decimal:2', 'montant_tva' => 'decimal:2', 'date_validation' => 'datetime', 'restaure_le' => 'datetime', 'genere_automatiquement_le' => 'datetime'];
 
+    public function getStatutAttribute($value): ?string
+    {
+        return mb_strtolower(trim((string) $value), 'UTF-8') === 'validé' ? 'Validé' : $value;
+    }
+
+    public function estValidee(): bool
+    {
+        return $this->statut === 'Validé';
+    }
+
+    public function scopeValidee($query)
+    {
+        return $query->whereRaw("LOWER(REPLACE(TRIM(statut), 'É', 'é')) = ?", ['validé']);
+    }
+
+    public function scopeNonValidee($query)
+    {
+        return $query->where(function ($query) {
+            $query->whereNull('statut')
+                ->orWhereRaw("LOWER(REPLACE(TRIM(statut), 'É', 'é')) <> ?", ['validé']);
+        });
+    }
+
     /**
      * Utilisateur créateur
      */

@@ -190,7 +190,7 @@ class EntreeCaisseController extends Controller
 
         $totalEntrees = (clone $query)->count();
         $enAttente = (clone $query)->where('statut', 'En attente')->count();
-        $totalValidees = (clone $query)->where('statut', 'Validé')->count();
+        $totalValidees = (clone $query)->validee()->count();
         $totalRejetees = (clone $query)->where('statut', 'Rejeté')->count();
 
         $labels = [];
@@ -234,9 +234,14 @@ class EntreeCaisseController extends Controller
 
     try {
 
-        // Récupération de l'entrée de caisse
-        $caisse = EntreeCaisse::with('lignes')
-            ->findOrFail($id);
+        // Récupération et verrouillage de l'entrée de caisse.
+        $caisse = EntreeCaisse::with('lignes')->lockForUpdate()->findOrFail($id);
+
+        if ($caisse->estValidee() && $this->journauxDuBon($caisse)->exists()) {
+            DB::commit();
+
+            return back()->with('success', 'Ce bon d’entrée est déjà validé et son journal existe.');
+        }
 
 
         // Calcul du montant
@@ -418,7 +423,7 @@ public function edit($id)
 {
     $entree = EntreeCaisse::with('lignes')->findOrFail($id);
 
-    if ($entree->statut === 'Validé') {
+    if ($entree->estValidee()) {
         return back()->with('error', 'Ce Bon validé doit d’abord être réouvert.');
     }
 
@@ -434,7 +439,7 @@ public function update(Request $request, $id)
 
         $entree = EntreeCaisse::findOrFail($id);
 
-        if ($entree->statut === 'Validé') {
+        if ($entree->estValidee()) {
             return back()->with('error', 'Ce Bon validé doit d’abord être réouvert.');
         }
 
@@ -442,7 +447,7 @@ public function update(Request $request, $id)
             $statut = \App\Models\Journaux::where('reference', $entree->numero)
     ->value('statut');
 
-    if ($statut === 'Validé') {
+    if ($this->statutEstValide($statut)) {
 
         return redirect()
             ->back()
@@ -572,6 +577,6 @@ private function normaliserChampsNumeriques(Request $request): void
 
 private function statutEstValide(?string $statut): bool
 {
-    return mb_strtolower(trim((string) $statut)) === 'validé';
+    return mb_strtolower(trim((string) $statut), 'UTF-8') === 'validé';
 }
 }

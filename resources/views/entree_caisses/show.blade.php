@@ -76,7 +76,7 @@
                     <br>
 
                     <span class="badge
-                    @if($entree->statut=='Validé')
+                    @if($entree->estValidee())
                     bg-success
                     @elseif($entree->statut=='Rejeté')
                     bg-danger
@@ -340,7 +340,7 @@
 <div class="card shadow-sm border-0 mt-4">
     <div class="card-body text-center py-5">
 
-        @if($entree->statut == 'Validé')
+        @if($entree->estValidee())
             <i class="bi bi-check-circle-fill text-success"
                style="font-size:70px"></i>
         @else
@@ -357,7 +357,7 @@
             <strong>{{ $entree->statut }}</strong>
         </p>
 
-        @if($entree->statut === 'Validé')
+        @if($entree->estValidee())
             @can('reouvrir', $entree)
                 @if($journalValide)
                     <div class="alert alert-danger">
