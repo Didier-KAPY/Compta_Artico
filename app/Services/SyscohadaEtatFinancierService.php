@@ -13,9 +13,8 @@ class SyscohadaEtatFinancierService
 
     public function generer(CarbonImmutable $debut, CarbonImmutable $fin): array
     {
-        $duree = $debut->diffInDays($fin) + 1;
-        $finPrecedente = $debut->subDay();
-        $debutPrecedente = $finPrecedente->subDays($duree - 1);
+        $debutPrecedente = $debut->subYear();
+        $finPrecedente = $fin->subYear();
         $actuel = $this->mouvements($debut, $fin);
         $precedent = $this->mouvements($debutPrecedente, $finPrecedente);
         $resultat = $this->compteResultat($actuel, $precedent);
@@ -90,6 +89,10 @@ class SyscohadaEtatFinancierService
         $sortie['total_passif'] = collect($sortie['passif'])->sum('total_actuel');
         $sortie['ecart'] = $sortie['total_actif'] - $sortie['total_passif'];
         $sortie['equilibre'] = abs($sortie['ecart']) <= (float) config('syscohada.equilibrium_tolerance', 0.01);
+        $sortie['total_actif_precedent'] = collect($sortie['actif'])->sum('total_precedent');
+        $sortie['total_passif_precedent'] = collect($sortie['passif'])->sum('total_precedent');
+        $sortie['ecart_precedent'] = $sortie['total_actif_precedent'] - $sortie['total_passif_precedent'];
+        $sortie['equilibre_precedent'] = abs($sortie['ecart_precedent']) <= (float) config('syscohada.equilibrium_tolerance', 0.01);
 
         return $sortie;
     }
@@ -100,7 +103,9 @@ class SyscohadaEtatFinancierService
 
         foreach ($sections as &$section) {
             $section['lignes'] = collect($section['lignes'])
-                ->filter(fn (array $ligne): bool => abs((float) $ligne['actuel']) > $tolerance)
+                ->filter(fn (array $ligne): bool => abs((float) $ligne['actuel']) > $tolerance
+                    || abs((float) $ligne['precedent']) > $tolerance
+                )
                 ->values()
                 ->all();
         }

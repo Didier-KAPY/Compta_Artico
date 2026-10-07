@@ -190,18 +190,19 @@ class ReportExportController extends Controller
             ->where('statut', 'Validé')->where('liste_des_comptes_id', $compteId)
             ->whereBetween('date', [$debut, $fin]);
         $records = $query->orderBy('date')->orderBy('id')->get();
-        $headers = ['Date', 'Compte', 'Désignation', 'Débit CDF', 'Crédit CDF', 'Solde CDF'];
+        $headers = ['Date', 'Compte', 'Désignation du compte', 'Libellé de l’opération', 'Débit CDF', 'Crédit CDF', 'Solde CDF'];
         $soldeOuverture = (float) $ouverture;
         $solde = $soldeOuverture;
         $rows = $records->map(function ($item) use (&$solde) {
             $solde += (float) $item->debit_cdf - (float) $item->credit_cdf;
 
             return [$this->date($item->date), $item->compte?->compte ?? '-', $item->compte?->designation ?? '-',
+                $item->libelle ?: $item->journal?->description ?: '—',
                 $this->montant($item->debit_cdf), $this->montant($item->credit_cdf), $this->montant($solde)];
         });
         $this->ajouterUtilisateurs($headers, $rows, $records, 1);
         $ligneOuverture = [
-            $this->date($debut), $compte->compte, 'Solde d’ouverture',
+            $this->date($debut), $compte->compte, $compte->designation, 'Solde d’ouverture',
             $this->montant(max($soldeOuverture, 0)),
             $this->montant(max(-$soldeOuverture, 0)),
             $this->montant($soldeOuverture),
@@ -276,7 +277,9 @@ class ReportExportController extends Controller
             }
         }
 
-        return $this->telecharger($format, 'Bilan', 'bilan-final', ['Type', 'Réf.', 'Libellé', 'Exercice N', 'Exercice N-1'], $rows, $request, 'landscape');
+        return $this->telecharger($format, 'Bilan', 'bilan-final', ['Type', 'Réf.', 'Libellé', 'Exercice N', 'Exercice N-1'], $rows, $request, 'landscape', [
+            $data['etats']['date_debut_precedente'], $data['etats']['date_fin_precedente'],
+        ]);
     }
 
     public function compteResultat(Request $request, string $format)
@@ -294,7 +297,9 @@ class ReportExportController extends Controller
         $net = $data['etats']['compte_resultat']['resultat_net'];
         $rows->push(['', 'RÉSULTAT NET', $this->montant($net['actuel']), $this->montant($net['precedent'])]);
 
-        return $this->telecharger($format, 'Compte de résultat', 'compte-resultat', ['Réf.', 'Libellé', 'Exercice N', 'Exercice N-1'], $rows, $request, 'landscape');
+        return $this->telecharger($format, 'Compte de résultat', 'compte-resultat', ['Réf.', 'Libellé', 'Exercice N', 'Exercice N-1'], $rows, $request, 'landscape', [
+            $data['etats']['date_debut_precedente'], $data['etats']['date_fin_precedente'],
+        ]);
     }
 
     private function periode(Request $request): array
@@ -358,11 +363,12 @@ class ReportExportController extends Controller
         abort_unless($request->user()?->hasRole($roles), 403);
     }
 
-    private function telecharger(string $format, string $titre, string $nom, array $headers, Collection $rows, Request $request, string $orientation = 'portrait')
+    private function telecharger(string $format, string $titre, string $nom, array $headers, Collection $rows, Request $request, string $orientation = 'portrait', ?array $periodeN1 = null)
     {
         abort_unless(in_array($format, ['pdf', 'excel'], true), 404);
         $data = ['titre' => $titre, 'headers' => $headers, 'rows' => $rows, 'entreprise' => Entreprise::first(),
-            'dateDebut' => $request->date_debut, 'dateFin' => $request->date_fin];
+            'dateDebut' => $request->date_debut, 'dateFin' => $request->date_fin,
+            'dateDebutN1' => $periodeN1[0] ?? null, 'dateFinN1' => $periodeN1[1] ?? null];
         if ($nom === 'releve-tresorerie' && $request->filled('journal_type_id')) {
             $selection = JournalType::with('compte')->where('est_tresorerie', true)->find($request->integer('journal_type_id'));
             if ($selection) {
@@ -377,6 +383,9 @@ class ReportExportController extends Controller
                 unset($data['signaturesReleve']['cachet']);
             }
         }
+        $logoPath = $data['entreprise']?->logo ? public_path('storage/'.$data['entreprise']->logo) : null;
+        $data['logoPdfSource'] = $logoPath && file_exists($logoPath) ? $logoPath : null;
+        $data['logoUrl'] = $data['entreprise']?->logo ? asset('storage/'.$data['entreprise']->logo) : null;
         $suffixe = $request->date_debut.'_'.$request->date_fin;
         if ($format === 'pdf') {
             return Pdf::loadView('exports.table', $data)->setPaper('a4', $orientation)->download($nom.'_'.$suffixe.'.pdf');

@@ -143,6 +143,9 @@ class EtatFinancierController extends Controller
             $data['signaturesReleve'] = app(\App\Services\ReportSignatureService::class)->forCompany($data['entreprise']);
             $data['signatureLabels'] = ['gerant'=>'Le gérant', 'finances'=>'Le chargé des finances'];
         }
+        $logoPath = $data['entreprise']?->logo ? public_path('storage/'.$data['entreprise']->logo) : null;
+        $data['logoPdfSource'] = $logoPath && file_exists($logoPath) ? $logoPath : null;
+
         return $data;
     }
 
@@ -160,6 +163,7 @@ class EtatFinancierController extends Controller
                     $section['lignes'] = array_values(array_filter(
                         $section['lignes'],
                         fn (array $ligne): bool => round((float) $ligne['actuel'], 2) != 0.0
+                            || round((float) $ligne['precedent'], 2) != 0.0
                     ));
                 }
             }
