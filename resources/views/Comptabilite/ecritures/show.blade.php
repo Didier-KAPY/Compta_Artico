@@ -4,7 +4,12 @@
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div><span class="text-uppercase text-muted small fw-bold">Imputation comptable</span><h3 class="mb-0">{{ $ecriture->piece ?: 'Écriture #'.$ecriture->id }}</h3></div>
-        <a href="{{ route('ecritures.liste') }}" class="btn btn-secondary"><i class="bi bi-arrow-left me-1"></i>Retour</a>
+        <div class="d-flex gap-2">
+            @can('deleteFinancialDocument')
+                <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalSuppressionDocument"><i class="bi bi-trash me-1"></i>Supprimer</button>
+            @endcan
+            <a href="{{ route('ecritures.liste') }}" class="btn btn-secondary"><i class="bi bi-arrow-left me-1"></i>Retour</a>
+        </div>
     </div>
     @include('partials.document-navigation')
     <div class="mb-3">@include('Comptabilite.ecritures._constatation_action')</div>
@@ -128,6 +133,13 @@
     </div>
     @endunless
 </div>
+@include('partials.financial-delete-modal', [
+    'documentType' => 'Écriture comptable',
+    'documentReference' => $ecriture->piece ?: 'Écriture #'.$ecriture->id,
+    'documentStatus' => $ecriture->statut,
+    'suppressionDependencies' => $suppressionDependencies,
+    'deleteRoute' => route('ecritures.destroy', $ecriture),
+])
 @endsection
 
 @push('scripts')
