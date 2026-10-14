@@ -35,6 +35,130 @@ class JournalController extends Controller
         return redirect()->route('journaux.create.caisse');
     }
 
+public function transfertsInternes(Request $request)
+{
+    abort_unless(Auth::user()?->hasRole(['Super Admin', 'Admin', 'Directeur Général', 'DAF', 'Comptable', 'Caissier', 'Caissière', 'Trésorier', 'Trésorière']), 403);
+    $request->validate([
+        'date_debut' => ['nullable', 'date'],
+        'date_fin' => ['nullable', 'date', 'after_or_equal:date_debut'],
+    ]);
+
+    $transferts = Journaux::with(['journalType.compte', 'user'])
+        ->where('reference', 'like', 'TRI-%')
+        ->where(fn ($query) => $query->where('sorties_cdf', '>', 0)->orWhere('sorties_usd', '>', 0))
+        ->when($request->filled('date_debut'), fn ($query) => $query->whereDate('date', '>=', $request->date_debut))
+        ->when($request->filled('date_fin'), fn ($query) => $query->whereDate('date', '<=', $request->date_fin))
+        ->orderByDesc('date')->orderByDesc('id')->paginate(20)->withQueryString();
+
+    $references = $transferts->getCollection()->pluck('reference');
+    $contreparties = Journaux::with('journalType.compte')->whereIn('reference', $references)
+        ->where(fn ($query) => $query->where('entrees_cdf', '>', 0)->orWhere('entrees_usd', '>', 0))
+        ->get()->keyBy('reference');
+    $transferts->getCollection()->each(function ($transfert) use ($contreparties) {
+        $transfert->setRelation('contrepartieTransfert', $contreparties->get($transfert->reference));
+    });
+
+    $comptesTresorerie = JournalType::with('compte')
+        ->where('est_tresorerie', true)->whereNotNull('liste_des_comptes_id')->orderBy('code')->get();
+
+    return view('journaux.transferts-internes', compact('transferts', 'comptesTresorerie'));
+}
+
+public function bonTransfertInterne(string $reference)
+{
+    abort_unless(Auth::user()?->hasRole(['Super Admin', 'Admin', 'Directeur Général', 'DAF', 'Comptable', 'Caissier', 'Caissière', 'Trésorier', 'Trésorière']), 403);
+    abort_unless(preg_match('/^TRI-\d{8}-\d+$/', $reference) === 1, 404);
+
+    $journaux = Journaux::with(['journalType.compte', 'user', 'validateur'])
+        ->where('reference', $reference)->get();
+    abort_unless($journaux->count() === 2, 404);
+    $sortie = $journaux->first(fn ($journal) => (float) $journal->sorties_cdf > 0 || (float) $journal->sorties_usd > 0);
+    $entree = $journaux->first(fn ($journal) => (float) $journal->entrees_cdf > 0 || (float) $journal->entrees_usd > 0);
+    abort_unless($sortie && $entree, 404);
+
+    return view('journaux.bon-transfert-interne', compact('sortie', 'entree'));
+}
+
+public function enregistrerTransfertInterne(Request $request)
+{
+    abort_unless(Auth::user()?->hasRole(['Super Admin', 'Admin', 'DAF', 'Comptable', 'Caissier', 'Caissière', 'Trésorier', 'Trésorière']), 403);
+    $data = $request->validate([
+        'date' => ['required', 'date'],
+        'monnaie' => ['required', 'in:CDF,USD'],
+        'source_id' => ['required', 'integer', 'different:destination_id', 'exists:journal_types,id'],
+        'destination_id' => ['required', 'integer', 'exists:journal_types,id'],
+        'montant' => ['required', 'numeric', 'gt:0'],
+        'description' => ['nullable', 'string', 'max:255'],
+    ]);
+    $source = JournalType::whereKey($data['source_id'])->where('est_tresorerie', true)->where('monnaie', $data['monnaie'])->whereNotNull('liste_des_comptes_id')->firstOrFail();
+    $destination = JournalType::whereKey($data['destination_id'])->where('est_tresorerie', true)->where('monnaie', $data['monnaie'])->whereNotNull('liste_des_comptes_id')->firstOrFail();
+    if ($source->monnaie !== $destination->monnaie || $source->monnaie !== $data['monnaie']) {
+        throw ValidationException::withMessages(['monnaie' => 'La monnaie sélectionnée doit correspondre aux deux comptes.']);
+    }
+    if ((int) $source->liste_des_comptes_id === (int) $destination->liste_des_comptes_id) {
+        throw ValidationException::withMessages(['destination_id' => 'La source et la destination doivent être deux comptes différents.']);
+    }
+
+    $journal = DB::transaction(function () use ($data, $source, $destination) {
+        $date = Carbon::parse($data['date']);
+        $monnaie = $source->monnaie;
+        $montant = round((float) $data['montant'], 2);
+        $description = trim((string) ($data['description'] ?? '')) ?: 'Transfert interne de trésorerie';
+        $referenceTemporaire = 'TRI-TEMP-'.uniqid();
+        $commun = [
+            'user_id' => Auth::id(), 'date' => $date->toDateString(), 'type' => 'od',
+            'monnaie' => $monnaie, 'montant_ht' => $montant, 'montant_ttc' => $montant,
+            'description' => $description, 'statut' => 'Validé', 'date_validation' => now(),
+            'valide_par' => Auth::id(), 'entrees_cdf' => 0, 'sorties_cdf' => 0,
+            'entrees_usd' => 0, 'sorties_usd' => 0,
+        ];
+        $sortie = Journaux::create(array_merge($commun, [
+            'journal_type_id' => $source->id, 'liste_des_comptes_id' => $source->liste_des_comptes_id,
+            'reference' => $referenceTemporaire,
+            'sorties_cdf' => $monnaie === 'CDF' ? $montant : 0,
+            'sorties_usd' => $monnaie === 'USD' ? $montant : 0,
+        ]));
+        $entree = Journaux::create(array_merge($commun, [
+            'journal_type_id' => $destination->id, 'liste_des_comptes_id' => $destination->liste_des_comptes_id,
+            'reference' => $referenceTemporaire,
+            'entrees_cdf' => $monnaie === 'CDF' ? $montant : 0,
+            'entrees_usd' => $monnaie === 'USD' ? $montant : 0,
+        ]));
+        $reference = 'TRI-'.$date->format('Ymd').'-'.str_pad((string) $sortie->id, 6, '0', STR_PAD_LEFT);
+        $sortie->update(['reference' => $reference]);
+        $entree->update(['reference' => $reference]);
+
+        $montantCdf = $montant;
+        if ($monnaie === 'USD') {
+            $taux = (float) (TauxDeChange::latest()->value('taux_de_change') ?? 0);
+            if ($taux <= 0) {
+                throw ValidationException::withMessages(['montant' => 'Aucun taux de change valide n’est configuré pour comptabiliser ce transfert en USD.']);
+            }
+            $montantCdf = round($montant * $taux, 2);
+        }
+        $libelle = $description.' — '.$source->code.' vers '.$destination->code;
+        EcritureComptable::create([
+            'user_id' => Auth::id(), 'journal_id' => $sortie->id,
+            'liste_des_comptes_id' => $destination->liste_des_comptes_id,
+            'date' => $date->toDateString(), 'piece' => $reference, 'libelle' => $libelle,
+            'debit_cdf' => $montantCdf, 'credit_cdf' => 0, 'statut' => 'Validé',
+            'date_validation' => now(), 'valide_par' => Auth::id(),
+        ]);
+        EcritureComptable::create([
+            'user_id' => Auth::id(), 'journal_id' => $sortie->id,
+            'liste_des_comptes_id' => $source->liste_des_comptes_id,
+            'date' => $date->toDateString(), 'piece' => $reference, 'libelle' => $libelle,
+            'debit_cdf' => 0, 'credit_cdf' => $montantCdf, 'statut' => 'Validé',
+            'date_validation' => now(), 'valide_par' => Auth::id(),
+        ]);
+
+        return $sortie;
+    });
+
+    return redirect()->route('journaux.transferts-internes.bon', $journal->reference)
+        ->with('success', 'Transfert '.$journal->reference.' enregistré en '.$journal->monnaie.'.');
+}
+
 public function banque(Request $request)
 {
     return $this->afficherJournalTresorerieParNature(

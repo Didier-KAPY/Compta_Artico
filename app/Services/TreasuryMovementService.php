@@ -63,6 +63,7 @@ class TreasuryMovementService
                 (SELECT MIN(c.id) FROM journal_types c WHERE c.est_tresorerie = 1
                  AND c.liste_des_comptes_id = e.liste_des_comptes_id))")
             ->whereNull('e.deleted_at')->whereNull('j.deleted_at')
+            ->where('j.reference', 'not like', 'TRI-%')
             ->where('e.statut', 'Validé')->where('j.statut', 'Validé')
             // The source treasury account is already counted by ordinary journals.
             ->where(fn ($q) => $q->where('source.est_tresorerie', false)

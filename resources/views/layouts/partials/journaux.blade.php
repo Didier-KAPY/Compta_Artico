@@ -45,6 +45,11 @@
                 <i class="bi bi-phone me-2"></i>Journal Mobile Money
             </a>
         </li>
+        <li>
+            <a href="{{ route('journaux.transferts-internes') }}" class="nav-link {{ request()->routeIs('journaux.transferts-internes*') ? 'active-menu' : '' }}">
+                <i class="bi bi-arrow-left-right me-2"></i>Transferts internes de trésorerie
+            </a>
+        </li>
 
         @endcan
         <!-- Relevé -->

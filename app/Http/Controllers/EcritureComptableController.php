@@ -96,7 +96,12 @@ public function imputationCompte(Request $request)
             'user', 'validateur',
         ])
         ->where('statut', 'Validé')
-        ->whereHas('brcs')
+        ->where(function ($query) {
+            $query->whereHas('brcs')
+                ->orWhere(function ($operation) {
+                    $operation->where('type', 'od')->where('reference', 'not like', 'TRI-%')->whereDoesntHave('brcs');
+                });
+        })
         ->when($request->filled('reference'), function ($query) use ($request) {
             $reference = trim((string) $request->input('reference'));
             $query->where('reference', 'like', '%'.$reference.'%');
@@ -113,6 +118,105 @@ public function imputationCompte(Request $request)
     $comptes = ListeDesComptes::orderBy('compte')->get();
 
     return view('Comptabilite.imputation', compact('journaux', 'comptes'));
+}
+
+public function createOperationDiverse()
+{
+    abort_unless(Auth::user()?->hasRole(['Super Admin', 'Admin', 'Comptable']), 403);
+
+    $journaux = JournalType::where('est_tresorerie', false)->orderBy('code')->get();
+    $comptes = ListeDesComptes::orderBy('compte')->get();
+
+    return view('Comptabilite.ecritures.operation-diverse-create', compact('journaux', 'comptes'));
+}
+
+public function ancienFormulaireOperationDiverse()
+{
+    abort_unless(Auth::user()?->hasRole(['Super Admin', 'Admin', 'Comptable']), 403);
+
+    return redirect()->route('comptabilite.imputation-compte.create')
+        ->with('warning', 'Le formulaire précédent a été remplacé. Veuillez saisir l’opération dans ce formulaire dédié, sans mouvement de caisse.');
+}
+
+public function ancienneSoumissionOperationDiverse()
+{
+    abort_unless(Auth::user()?->hasRole(['Super Admin', 'Admin', 'Comptable']), 403);
+
+    return redirect()->route('comptabilite.imputation-compte.create')
+        ->with('warning', 'Aucune écriture n’a été enregistrée. Le formulaire précédent a été remplacé ; veuillez ressaisir l’opération ici.');
+}
+
+public function storeOperationDiverse(Request $request)
+{
+    abort_unless(Auth::user()?->hasRole(['Super Admin', 'Admin', 'Comptable']), 403);
+
+    $data = $request->validate([
+        'date' => ['required', 'date'],
+        'journal_type_id' => ['required', 'integer', 'exists:journal_types,id'],
+        'description' => ['required', 'string', 'max:255'],
+        'lignes' => ['required', 'array', 'min:2'],
+        'lignes.*.compte_id' => ['required', 'integer', 'exists:liste_des_comptes,id'],
+        'lignes.*.sens' => ['required', 'in:debit,credit'],
+        'lignes.*.montant' => ['required', 'numeric', 'gt:0'],
+        'lignes.*.libelle' => ['required', 'string', 'max:255'],
+    ]);
+
+    $journalType = JournalType::whereKey($data['journal_type_id'])
+        ->where('est_tresorerie', false)
+        ->firstOrFail();
+    $totalDebit = round(collect($data['lignes'])->where('sens', 'debit')->sum(fn ($ligne) => (float) $ligne['montant']), 2);
+    $totalCredit = round(collect($data['lignes'])->where('sens', 'credit')->sum(fn ($ligne) => (float) $ligne['montant']), 2);
+    if ($totalDebit <= 0 || abs($totalDebit - $totalCredit) > 0.009) {
+        throw ValidationException::withMessages(['lignes' => 'Les totaux débit et crédit doivent être égaux et supérieurs à zéro.']);
+    }
+
+    $journal = DB::transaction(function () use ($data, $journalType, $totalDebit) {
+        $journal = Journaux::create([
+            'user_id' => Auth::id(),
+            'journal_type_id' => $journalType->id,
+            'liste_des_comptes_id' => null,
+            'reference' => 'OD-'.str_replace('-', '', $data['date']).'-TEMP',
+            'date' => $data['date'],
+            'description' => $data['description'],
+            'type' => 'od',
+            'monnaie' => 'CDF',
+            'montant_ht' => $totalDebit,
+            'montant_ttc' => $totalDebit,
+            'entrees_cdf' => 0,
+            'sorties_cdf' => 0,
+            'entrees_usd' => 0,
+            'sorties_usd' => 0,
+            'statut' => 'Validé',
+            'date_validation' => now(),
+            'valide_par' => Auth::id(),
+        ]);
+        $journal->update(['reference' => 'OD-'.str_replace('-', '', $data['date']).'-'.str_pad((string) $journal->id, 6, '0', STR_PAD_LEFT)]);
+
+        foreach ($data['lignes'] as $ligne) {
+            EcritureComptable::create([
+                'user_id' => Auth::id(),
+                'journal_id' => $journal->id,
+                'liste_des_comptes_id' => $ligne['compte_id'],
+                'date' => $data['date'],
+                'piece' => $journal->reference,
+                'libelle' => $ligne['libelle'],
+                'debit_cdf' => $ligne['sens'] === 'debit' ? $ligne['montant'] : 0,
+                'credit_cdf' => $ligne['sens'] === 'credit' ? $ligne['montant'] : 0,
+                'statut' => 'Validé',
+                'date_validation' => now(),
+                'valide_par' => Auth::id(),
+            ]);
+        }
+
+        return $journal;
+    });
+
+    return redirect()->route('comptabilite.imputation-compte', [
+        'journal_id' => $journal->id,
+        'date_debut' => $journal->date->toDateString(),
+        'date_fin' => $journal->date->toDateString(),
+    ])
+        ->with('success', 'Opération diverse créée sans mouvement de caisse.');
 }
 
 public function traiterJournal(Request $request, Journaux $journal, WorkflowComptableService $workflow)

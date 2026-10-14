@@ -2,8 +2,9 @@
 @section('title', 'Journal des opérations diverses')
 @section('content')
 <div class="container-fluid py-3">
-    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-2 mb-3"><div><h4 class="mb-0"><i class="bi bi-table me-2"></i>Journal des opérations diverses</h4><small class="text-muted">Écritures issues uniquement des BRC validés</small></div>@include('partials.period-export-buttons', ['rapport' => 'operations-diverses', 'exportParams' => ['date_debut' => request('date_debut', today()->toDateString()), 'date_fin' => request('date_fin', today()->toDateString()), 'reference' => request('reference')]])</div>
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-2 mb-3"><div><h4 class="mb-0"><i class="bi bi-table me-2"></i>Journal des opérations diverses</h4><small class="text-muted">Écritures issues des BRC et opérations diverses saisies</small></div><div class="d-flex flex-wrap gap-2">@if(auth()->user()?->hasRole(['Super Admin', 'Admin', 'Comptable']))<a href="{{ route('comptabilite.imputation-compte.create') }}" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Nouveau</a>@endif @include('partials.period-export-buttons', ['rapport' => 'operations-diverses', 'exportParams' => ['date_debut' => request('date_debut', today()->toDateString()), 'date_fin' => request('date_fin', today()->toDateString()), 'reference' => request('reference')]])</div></div>
     @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
+    @if(session('warning'))<div class="alert alert-warning">{{ session('warning') }}</div>@endif
     @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
 
     <div class="card shadow-sm border-0 mb-3">

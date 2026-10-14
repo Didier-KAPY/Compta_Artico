@@ -460,6 +460,15 @@ Route::middleware(['auth', 'force.password.change', 'accounting.open'])->group(f
         Route::get('/tresorerie', [JournalController::class, 'tresorerie'])
             ->middleware('can:viewTreasurySituation')
             ->name('tresorerie');
+        Route::get('/transferts-internes', [JournalController::class, 'transfertsInternes'])
+            ->middleware('role:Super Admin,Admin,Directeur Général,DAF,Comptable,Caissier,Caissière,Trésorier,Trésorière')
+            ->name('transferts-internes');
+        Route::post('/transferts-internes', [JournalController::class, 'enregistrerTransfertInterne'])
+            ->middleware('role:Super Admin,Admin,DAF,Comptable,Caissier,Caissière,Trésorier,Trésorière')
+            ->name('transferts-internes.store');
+        Route::get('/transferts-internes/{reference}/bon', [JournalController::class, 'bonTransfertInterne'])
+            ->middleware('role:Super Admin,Admin,Directeur Général,DAF,Comptable,Caissier,Caissière,Trésorier,Trésorière')
+            ->name('transferts-internes.bon');
         Route::get('/releve', [JournalController::class, 'releve'])
             ->middleware('role:Super Admin,Admin,Directeur Général,DAF,Comptable,Caissier,Caissière,Trésorier,Trésorière')
             ->name('releve');
@@ -582,6 +591,16 @@ Route::middleware(['auth', 'force.password.change', 'accounting.open'])->group(f
     Route::post('/journaux/journal-des-opérations-diverses/{journal}/traiter', [EcritureComptableController::class, 'traiterJournal'])
         ->middleware(['feature:accounting', 'role:Super Admin,Comptable'])
         ->name('comptabilite.imputation-compte.traiter');
+    Route::get('/journaux/journal-des-opérations-diverses/create', [EcritureComptableController::class, 'createOperationDiverse'])
+        ->middleware(['feature:accounting', 'role:Super Admin,Admin,Comptable'])
+        ->name('comptabilite.imputation-compte.create');
+    Route::post('/journaux/journal-des-opérations-diverses', [EcritureComptableController::class, 'storeOperationDiverse'])
+        ->middleware(['feature:accounting', 'role:Super Admin,Admin,Comptable'])
+        ->name('comptabilite.imputation-compte.store');
+    Route::get('/ecritures/create', [EcritureComptableController::class, 'ancienFormulaireOperationDiverse'])
+        ->middleware(['feature:accounting', 'role:Super Admin,Admin,Comptable']);
+    Route::post('/ecritures', [EcritureComptableController::class, 'ancienneSoumissionOperationDiverse'])
+        ->middleware(['feature:accounting', 'role:Super Admin,Admin,Comptable']);
     Route::get('/ecritures', [EcritureComptableController::class, 'liste'])
         ->middleware(['feature:accounting', 'role:Super Admin,Admin,Directeur Général,DAF,Comptable'])
         ->name('ecritures.liste');
