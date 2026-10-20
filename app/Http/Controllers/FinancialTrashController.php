@@ -7,6 +7,7 @@ use App\Http\Requests\EmptyFinancialTrashRequest;
 use App\Http\Requests\RestoreFinancialDocumentRequest;
 use App\Models\AuditLog;
 use App\Models\BRC;
+use App\Models\ConstatationComptable;
 use App\Models\EcritureComptable;
 use App\Models\EntreeCaisse;
 use App\Models\EtatBesoin;
@@ -24,6 +25,7 @@ class FinancialTrashController extends Controller
         'bons-entree' => EntreeCaisse::class,
         'journaux' => Journaux::class,
         'ecritures' => EcritureComptable::class,
+        'constatations' => ConstatationComptable::class,
         'brc' => BRC::class,
     ];
 
@@ -131,6 +133,7 @@ class FinancialTrashController extends Controller
             $document instanceof EntreeCaisse => "Bon d'entrée",
             $document instanceof Journaux => 'Journal',
             $document instanceof EcritureComptable => 'Écriture comptable',
+            $document instanceof ConstatationComptable => 'Constatation comptable',
             $document instanceof BRC => 'BRC',
         };
     }

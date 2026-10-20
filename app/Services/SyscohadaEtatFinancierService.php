@@ -15,27 +15,28 @@ class SyscohadaEtatFinancierService
     {
         $debutPrecedente = $debut->subYear();
         $finPrecedente = $fin->subYear();
-        $actuel = $this->mouvements($debut, $fin);
-        $precedent = $this->mouvements($debutPrecedente, $finPrecedente);
-        $resultat = $this->compteResultat($actuel, $precedent);
-        // Un bilan est une situation à la date de clôture : les comptes de bilan
-        // doivent inclure leur solde d'ouverture et tous les mouvements antérieurs.
-        $soldesBilanActuel = $this->mouvements(null, $fin);
-        $soldesBilanPrecedent = $this->mouvements(null, $finPrecedente);
-        $bilan = $this->bilan($soldesBilanActuel, $soldesBilanPrecedent, $resultat);
+        // Le bilan est une situation à la date de clôture : il reprend tout
+        // l'historique validé. Le compte de résultat est cumulatif depuis le
+        // début de l'exercice (année civile) jusqu'à la même date.
+        $bilanActuel = $this->mouvements(null, $fin);
+        $bilanPrecedent = $this->mouvements(null, $finPrecedente);
+        $resultatActuel = $this->mouvements($debut->startOfYear(), $fin);
+        $resultatPrecedent = $this->mouvements($debutPrecedente->startOfYear(), $finPrecedente);
+        $resultat = $this->compteResultat($resultatActuel, $resultatPrecedent);
+        $bilan = $this->bilan($bilanActuel, $bilanPrecedent, $resultat);
 
         return [
             'date_debut' => $debut->toDateString(), 'date_fin' => $fin->toDateString(),
             'date_debut_precedente' => $debutPrecedente->toDateString(), 'date_fin_precedente' => $finPrecedente->toDateString(),
             'monnaie' => 'CDF', 'bilan' => $bilan, 'compte_resultat' => $resultat,
             'controles' => [
-                'total_debit' => $actuel->sum('debit'), 'total_credit' => $actuel->sum('credit'),
-                'ecart_debit_credit' => $actuel->sum('debit') - $actuel->sum('credit'),
+                'total_debit' => $resultatActuel->sum('debit'), 'total_credit' => $resultatActuel->sum('credit'),
+                'ecart_debit_credit' => $resultatActuel->sum('debit') - $resultatActuel->sum('credit'),
                 'total_actif' => $bilan['total_actif'], 'total_passif' => $bilan['total_passif'],
                 'ecart_actif_passif' => $bilan['ecart'], 'resultat_net' => $resultat['resultat_net']['actuel'],
             ],
-            'non_classes' => $this->nonClasses($actuel),
-            'anomalies' => $this->anomalies($actuel),
+            'non_classes' => $this->nonClasses($bilanActuel),
+            'anomalies' => $this->anomalies($bilanActuel),
         ];
     }
 

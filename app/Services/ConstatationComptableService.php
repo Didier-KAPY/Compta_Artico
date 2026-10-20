@@ -105,6 +105,8 @@ class ConstatationComptableService
             }
             if ($debit <= 0 || $debit !== $credit) $this->fail('L’écriture n’est pas équilibrée. Veuillez vérifier les montants avant de continuer.');
             $paid = max($this->cents($source->debit_cdf), $this->cents($source->credit_cdf));
+            $contrepartieTotal = collect($data['contreparties'])->sum(fn ($line) => $this->cents($line['montant_cdf']));
+            if ($contrepartieTotal !== $paid) $this->fail('Le total des lignes de contrepartie doit correspondre exactement au montant de l’écriture principale.');
             if ($linkNet !== $paid) $this->fail('La dette ou créance nette doit correspondre exactement au montant du règlement.');
             if ($data['type_operation'] === 'salaire' && ($gross <= 0 || $gross-$withholdings !== $paid)) $this->fail('Le salaire brut moins les retenues doit être égal au montant payé.');
             $snapshot = $this->snapshot($source);
@@ -122,14 +124,20 @@ class ConstatationComptableService
                 EcritureComptable::create($common + [
                     'journal_id'=>null, 'piece'=>$record->numero, 'date'=>$data['date'], 'role_constatation'=>'constatation',
                     'nature_constatation'=>$line['nature'], 'liste_des_comptes_id'=>$line['liste_des_comptes_id'],
-                    'libelle'=>$line['libelle'], 'debit_cdf'=>$this->cents($line['debit_cdf'])/100, 'credit_cdf'=>$this->cents($line['credit_cdf'])/100,
+                    // Les lignes de constatation gardent toujours le libellé saisi.
+                    'libelle'=>$line['libelle'],
+                    'debit_cdf'=>$this->cents($line['debit_cdf'])/100, 'credit_cdf'=>$this->cents($line['credit_cdf'])/100,
                 ]);
             }
-            EcritureComptable::create($common + [
-                'journal_id'=>$source->journal_id, 'piece'=>$source->piece, 'date'=>$source->date,
-                'role_constatation'=>'reglement', 'liste_des_comptes_id'=>$link,
-                'libelle'=>'Règlement — '.$source->libelle, 'debit_cdf'=>$outgoing ? $paid/100 : 0, 'credit_cdf'=>$outgoing ? 0 : $paid/100,
-            ]);
+            foreach ($data['contreparties'] as $contrepartie) {
+                $amount = $this->cents($contrepartie['montant_cdf']);
+                EcritureComptable::create($common + [
+                    'journal_id'=>$source->journal_id, 'piece'=>$source->piece, 'date'=>$source->date,
+                    'role_constatation'=>'reglement', 'liste_des_comptes_id'=>$link,
+                    'libelle'=>$source->libelle ?: 'Règlement',
+                    'debit_cdf'=>$outgoing ? $amount/100 : 0, 'credit_cdf'=>$outgoing ? 0 : $amount/100,
+                ]);
+            }
             $source->update(['entreprise_id'=>$company, 'constatation_id'=>$record->id, 'role_constatation'=>'reglement',
                 'statut'=>'Validé', 'valide_par'=>$request->user()->id, 'date_validation'=>now()]);
             $balance = $record->reglement()->selectRaw('SUM(debit_cdf) debit, SUM(credit_cdf) credit')->first();

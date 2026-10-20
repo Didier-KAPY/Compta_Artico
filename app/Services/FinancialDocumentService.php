@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\BRC;
+use App\Models\ConstatationComptable;
 use App\Models\EcritureComptable;
 use App\Models\EntreeCaisse;
 use App\Models\EtatBesoin;
@@ -26,6 +27,10 @@ class FinancialDocumentService
     {
         DB::transaction(function () use ($document, $motif, $strategie, $request) {
             $document = $document->newQuery()->lockForUpdate()->findOrFail($document->getKey());
+            // A constatation and all its entries form one indivisible accounting group.
+            if ($document instanceof EcritureComptable && $document->constatation_id) {
+                $strategie = 'cascade';
+            }
             $dependances = $this->dependencies($document);
 
             if ($strategie === 'individuelle' && $dependances !== []) {
@@ -49,6 +54,10 @@ class FinancialDocumentService
     {
         DB::transaction(function () use ($document, $cascade, $request) {
             $document = $document->newQuery()->onlyTrashed()->lockForUpdate()->findOrFail($document->getKey());
+            // Restoring any member of a constatation restores the full group.
+            if ($document instanceof ConstatationComptable || ($document instanceof EcritureComptable && $document->constatation_id)) {
+                $cascade = true;
+            }
             if (! $cascade) {
                 $this->assertParentsActive($document);
             }
@@ -97,7 +106,26 @@ class FinancialDocumentService
         return DB::transaction(function () use ($modelClasses, $motif, $request) {
             $documents = collect($modelClasses)
                 ->flatMap(fn (string $class) => $class::onlyTrashed()->lockForUpdate()->get())
-                ->sortBy(fn (Model $document) => $this->deletionOrder($document));
+                ->values();
+
+            $constatations = $documents->filter(fn (Model $document) => $document instanceof ConstatationComptable);
+            if ($constatations->isNotEmpty()) {
+                $constatationIds = $constatations->modelKeys();
+                if (EcritureComptable::whereIn('constatation_id', $constatationIds)->exists()) {
+                    throw ValidationException::withMessages([
+                        'dependances' => 'La corbeille contient une constatation avec des écritures encore actives. Supprimez-les d’abord.',
+                    ]);
+                }
+
+                // Break the bidirectional source/group references only during an
+                // explicitly confirmed empty-trash operation, before hard deletion.
+                EcritureComptable::withTrashed()->whereIn('constatation_id', $constatationIds)->update(['constatation_id' => null]);
+            }
+
+            $documents = $documents->sortBy(fn (Model $document) => match (true) {
+                $document instanceof ConstatationComptable => 0,
+                default => $this->deletionOrder($document),
+            })->values();
 
             foreach ($documents as $document) {
                 $this->forceDeleteOne($document, $motif, $request, 'vidage de la corbeille');
@@ -140,6 +168,18 @@ class FinancialDocumentService
         } elseif ($document instanceof Journaux) {
             $items->push(...$scope($document->ecritures())->get());
             $items->push(...$scope($document->brcs())->get());
+        } elseif ($document instanceof ConstatationComptable) {
+            $items->push(...$scope($document->ecritures())->get());
+        } elseif ($document instanceof EcritureComptable && $document->constatation_id) {
+            $constatationQuery = ConstatationComptable::query();
+            if ($withTrashed) $constatationQuery->withTrashed();
+            $constatation = $constatationQuery->find($document->constatation_id);
+            if ($constatation) {
+                $items->push($constatation);
+                $siblings = EcritureComptable::query()->where('constatation_id', $constatation->getKey());
+                if ($withTrashed) $siblings->withTrashed();
+                $items->push(...$siblings->whereKeyNot($document->getKey())->get());
+            }
         }
 
         return $items->filter()->unique(fn (Model $item) => $item::class.'#'.$item->getKey())
@@ -162,9 +202,9 @@ class FinancialDocumentService
         }
 
         return $documents
-            ->sortBy(fn (Model $item) => $this->deletionOrder($item))
             ->push($document)
             ->unique(fn (Model $item) => $item::class.'#'.$item->getKey())
+            ->sortBy(fn (Model $item) => $this->deletionOrder($item))
             ->values();
     }
 
@@ -184,6 +224,10 @@ class FinancialDocumentService
     {
         $parents = collect();
         if ($document instanceof EcritureComptable) {
+            if ($document->constatation_id) {
+                $constatation = ConstatationComptable::withTrashed()->find($document->constatation_id);
+                if ($constatation) $parents->push($constatation);
+            }
             $journal = Journaux::withTrashed()->find($document->journal_id);
             if ($journal) {
                 $parents->push(...$this->parents($journal));
@@ -220,7 +264,9 @@ class FinancialDocumentService
     {
         if ($document->trashed()) return;
         $before = $document->attributesToArray();
-        $dependances = $this->dependencies($document);
+        $dependances = $document instanceof ConstatationComptable
+            ? $this->dependencies($document, true)
+            : $this->dependencies($document);
         $document->forceFill([
             'motif_suppression' => $motif,
             'supprime_par' => $request->user()->id,
@@ -238,9 +284,10 @@ class FinancialDocumentService
     private function forceDeleteOne(Model $document, string $motif, Request $request, string $strategie): void
     {
         $before = $document->attributesToArray();
+        $dependances = $document instanceof ConstatationComptable ? $this->dependencies($document, true) : [];
         $rattachementsCloture = $this->closureAttachments($document);
         $rattachementsBudget = $this->budgetAttachments($document);
-        $this->audit->record('suppression_definitive', $document, $this->reference($document), $motif, $before, null, array_merge($rattachementsCloture, $rattachementsBudget), $request, $strategie);
+        $this->audit->record('suppression_definitive', $document, $this->reference($document), $motif, $before, null, array_merge($dependances, $rattachementsCloture, $rattachementsBudget), $request, $strategie);
 
         if ($rattachementsCloture !== []) {
             $this->closureAttachmentQuery($document)->delete();
@@ -349,6 +396,7 @@ class FinancialDocumentService
             $document instanceof EntreeCaisse => "Bon d'entrée",
             $document instanceof Journaux => 'Journal',
             $document instanceof EcritureComptable => 'Écriture comptable',
+            $document instanceof ConstatationComptable => 'Constatation comptable',
             $document instanceof BRC => 'BRC',
             default => class_basename($document),
         };
@@ -358,6 +406,7 @@ class FinancialDocumentService
     {
         return match (true) {
             $document instanceof EcritureComptable => 1,
+            $document instanceof ConstatationComptable => 2,
             $document instanceof BRC => 2,
             $document instanceof Journaux => 3,
             $document instanceof SortieCaisse, $document instanceof EntreeCaisse => 4,

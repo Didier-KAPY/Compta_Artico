@@ -17,9 +17,10 @@ class ConstatationComptableController extends Controller
         $comptes = ListeDesComptes::orderBy('compte')->get()->filter(fn($a)=>$service->companyId($a) === $company);
         $snapshot = $constatation?->instantane_source ?? $service->snapshot($source);
         $entrepriseActive = app(CurrentEntreprise::class)->for($request->user());
-        $lignesExistantes = $source->journal->ecritures()->with('compte')
-            ->orderByRaw('CASE WHEN debit_cdf > 0 THEN 0 ELSE 1 END')->orderBy('id')->get();
-        return view('Comptabilite.ecritures.constatation', compact('source', 'constatation', 'comptes', 'snapshot', 'entrepriseActive', 'lignesExistantes'));
+        $contrepartieOrigine = $constatation
+            ? $constatation->reglement->where('id', '!=', $constatation->source_ecriture_id)->values()
+            : collect();
+        return view('Comptabilite.ecritures.constatation', compact('source', 'constatation', 'comptes', 'snapshot', 'entrepriseActive', 'contrepartieOrigine'));
     }
 
     public function store(Request $request, int $id, ConstatationComptableService $service)
@@ -27,6 +28,7 @@ class ConstatationComptableController extends Controller
         $data = $request->validate([
             'date'=>'required|date', 'type_operation'=>'required|in:salaire,generique,charge,produit',
             'compte_liaison_id'=>'required|integer|exists:liste_des_comptes,id',
+            'contreparties'=>'required|array|min:1', 'contreparties.*.montant_cdf'=>'required|numeric|gt:0|max:9999999999999|decimal:0,2',
             'lignes'=>'required|array|min:2', 'lignes.*.liste_des_comptes_id'=>'required|integer|exists:liste_des_comptes,id',
             'lignes.*.nature'=>'required|in:charge,retenue,dette,autre', 'lignes.*.libelle'=>'required|string|max:255',
             'lignes.*.debit_cdf'=>'required|numeric|min:0|max:9999999999999|decimal:0,2',
