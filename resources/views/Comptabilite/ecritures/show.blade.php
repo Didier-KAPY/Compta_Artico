@@ -138,7 +138,7 @@
     'documentReference' => $ecriture->piece ?: 'Écriture #'.$ecriture->id,
     'documentStatus' => $ecriture->statut,
     'suppressionDependencies' => $suppressionDependencies,
-    'cascadeByDefault' => (bool) ($ecriture->constatation_id || $ecriture->journal?->sortieCaisse?->etat_besoin_id),
+    'cascadeByDefault' => (bool) ($ecriture->constatation_id || $ecriture->journal_id),
     'deleteRoute' => route('ecritures.destroy', $ecriture),
 ])
 @endsection
