@@ -3,9 +3,6 @@
 <tr><td>{{ $ligne->libelle }}</td><td class="amount">{{ number_format($ligne->montant,2,',',' ') }}</td><td></td></tr>
 @endforeach
 @elseif((float)$paie->primes > 0)<tr><td>Primes et indemnités</td><td class="amount">{{ number_format($paie->primes,2,',',' ') }}</td><td></td></tr>@endif
-@foreach(['transport'=>'Transport','logement'=>'Logement','autres_avantages'=>'Autres avantages','telecommunication'=>'Télécommunication','montant_heures_supplementaires'=>'Heures supplémentaires'] as $champ=>$libelle)
-<tr><td>{{ $libelle }}</td><td class="amount">{{ (float)$paie->$champ ? number_format($paie->$champ,2,',',' ') : '—' }}</td><td></td></tr>
-@endforeach
 @foreach($paie->lignes->where('type','!=','Gain') as $ligne)
 <tr><td>{{ $ligne->libelle }}</td><td></td><td class="amount">{{ $paie->appliquer_retenues ? number_format($ligne->montant,2,',',' ') : '—' }}</td></tr>
 @endforeach
