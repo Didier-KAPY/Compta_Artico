@@ -28,7 +28,7 @@ class FinancialDocumentService
         DB::transaction(function () use ($document, $motif, $strategie, $request) {
             $document = $document->newQuery()->lockForUpdate()->findOrFail($document->getKey());
             // A constatation and all its entries form one indivisible accounting group.
-            if ($document instanceof EcritureComptable && $document->constatation_id) {
+            if ($document instanceof EcritureComptable && ($document->constatation_id || $this->hasEtatBesoinParent($document))) {
                 $strategie = 'cascade';
             }
             $dependances = $this->dependencies($document);
@@ -55,7 +55,7 @@ class FinancialDocumentService
         DB::transaction(function () use ($document, $cascade, $request) {
             $document = $document->newQuery()->onlyTrashed()->lockForUpdate()->findOrFail($document->getKey());
             // Restoring any member of a constatation restores the full group.
-            if ($document instanceof ConstatationComptable || ($document instanceof EcritureComptable && $document->constatation_id)) {
+            if ($document instanceof ConstatationComptable || ($document instanceof EcritureComptable && ($document->constatation_id || $this->hasEtatBesoinParent($document)))) {
                 $cascade = true;
             }
             if (! $cascade) {
@@ -170,15 +170,34 @@ class FinancialDocumentService
             $items->push(...$scope($document->brcs())->get());
         } elseif ($document instanceof ConstatationComptable) {
             $items->push(...$scope($document->ecritures())->get());
-        } elseif ($document instanceof EcritureComptable && $document->constatation_id) {
-            $constatationQuery = ConstatationComptable::query();
-            if ($withTrashed) $constatationQuery->withTrashed();
-            $constatation = $constatationQuery->find($document->constatation_id);
-            if ($constatation) {
-                $items->push($constatation);
-                $siblings = EcritureComptable::query()->where('constatation_id', $constatation->getKey());
-                if ($withTrashed) $siblings->withTrashed();
-                $items->push(...$siblings->whereKeyNot($document->getKey())->get());
+        } elseif ($document instanceof EcritureComptable) {
+            if ($document->constatation_id) {
+                $constatationQuery = ConstatationComptable::query();
+                if ($withTrashed) $constatationQuery->withTrashed();
+                $constatation = $constatationQuery->find($document->constatation_id);
+                if ($constatation) {
+                    $items->push($constatation);
+                    $siblings = EcritureComptable::query()->where('constatation_id', $constatation->getKey());
+                    if ($withTrashed) $siblings->withTrashed();
+                    $items->push(...$siblings->whereKeyNot($document->getKey())->get());
+                }
+            }
+
+            // A payment entry linked to a state of need is the root of one
+            // reversible document chain: entry, journal, cash voucher and need.
+            // Include dependent documents on each ancestor so the whole chain
+            // is visible in the confirmation dialog and moved together.
+            if ($this->hasEtatBesoinParent($document)) {
+                foreach ($this->parents($document) as $parent) {
+                    $items->push($parent);
+                    foreach ($this->dependencies($parent, $withTrashed) as $dependency) {
+                        $model = new $dependency['model'];
+                        $query = $model->newQuery();
+                        if ($withTrashed && method_exists($model, 'trashed')) $query->withTrashed();
+                        $related = $query->find($dependency['id']);
+                        if ($related) $items->push($related);
+                    }
+                }
             }
         }
 
@@ -248,6 +267,11 @@ class FinancialDocumentService
             if ($etat) $parents->push($etat);
         }
         return $parents->filter()->unique(fn (Model $item) => $item::class.'#'.$item->getKey());
+    }
+
+    private function hasEtatBesoinParent(EcritureComptable $document): bool
+    {
+        return $this->parents($document)->contains(fn (Model $parent) => $parent instanceof EtatBesoin);
     }
 
     private function assertParentsActive(Model $document): void
