@@ -7,6 +7,7 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use App\Models\Entreprise;
 use Illuminate\Pagination\Paginator;
 use App\Models\Journaux;
@@ -81,6 +82,11 @@ class AppServiceProvider extends ServiceProvider
             $role = mb_strtolower(trim((string) $user->role?->designation));
 
             return in_array($role, ['gérant', 'gerant'], true);
+        });
+        Gate::define('deleteAccountingAttachment', function (User $user): bool {
+            $role = Str::lower(Str::ascii(trim((string) $user->role?->designation)));
+
+            return $user->isSuperAdmin() || $role === 'gerant';
         });
         Gate::define('deleteFinancialDocument', fn (User $user): bool => $user->isSuperAdmin() || $user->isManagement());
         Gate::define('restoreFinancialDocument', fn (User $user): bool => $user->isSuperAdmin());

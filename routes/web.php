@@ -622,6 +622,9 @@ Route::middleware(['auth', 'force.password.change', 'accounting.open'])->group(f
     Route::post('/ecritures/{id}/piece-justificative', [EcritureComptableController::class, 'ajouterPieceJustificative'])
         ->middleware(['feature:accounting', 'role:Super Admin,Comptable,Chargé des finances,Chargé de finance,Charger de finance'])
         ->name('ecritures.piece.store');
+    Route::delete('/ecritures/{id}/piece-justificative', [EcritureComptableController::class, 'supprimerPieceJustificative'])
+        ->middleware(['feature:accounting', 'can:deleteAccountingAttachment'])
+        ->name('ecritures.piece.destroy');
     Route::patch('/ecritures/{id}/reouvrir', [EcritureComptableController::class, 'reouvrir'])
         ->middleware(['feature:accounting', 'role:Super Admin'])
         ->name('ecritures.reouvrir');

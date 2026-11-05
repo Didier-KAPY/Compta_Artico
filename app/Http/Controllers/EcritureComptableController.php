@@ -494,6 +494,35 @@ public function valider(Request $request, $id)
         $ecriture = EcritureComptable::findOrFail($id);
         return app(\App\Services\PiecesJustificativesService::class)->consulter($request, $ecriture);
     }
+    public function supprimerPieceJustificative(
+        Request $request,
+        $id,
+        \App\Services\PiecesJustificativesService $pieces,
+        \App\Services\AuditLogService $audit,
+    ) {
+        Gate::authorize('deleteAccountingAttachment');
+        $ecriture = EcritureComptable::findOrFail($id);
+        $identifiant = (string) $request->query('piece');
+        abort_if($identifiant === '', 404);
+
+        $ancienneValeur = $ecriture->only(['piece_justificative', 'pieces_justificatives']);
+        $pieceSupprimee = $pieces->supprimer($ecriture, $identifiant);
+        $ecriture->refresh();
+
+        $audit->record(
+            'suppression_piece_justificative_ecriture',
+            $ecriture,
+            $ecriture->piece ?: (string) $ecriture->id,
+            'Suppression de la piece justificative '.$pieceSupprimee['nom'],
+            $ancienneValeur,
+            $ecriture->only(['piece_justificative', 'pieces_justificatives']),
+            ['piece_supprimee' => $pieceSupprimee],
+            $request,
+        );
+
+        return back()->with('success', 'Piece justificative supprimee avec succes.');
+    }
+
     public function reouvrir($id, WorkflowComptableService $workflow)
     {
         $ecriture = EcritureComptable::findOrFail($id);

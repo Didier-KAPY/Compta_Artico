@@ -75,7 +75,12 @@
     <div class="card border-0 shadow-sm mb-4">
         <div class="card-header bg-light"><strong><i class="bi bi-paperclip me-2"></i>Pièces justificatives liées</strong></div>
         <div class="card-body">
-            @include('partials.pieces-justificatives', ['document' => $ecriture, 'pieceRoute' => 'ecritures.piece'])
+            @include('partials.pieces-justificatives', [
+                'document' => $ecriture,
+                'pieceRoute' => 'ecritures.piece',
+                'pieceDeleteRoute' => 'ecritures.piece.destroy',
+                'canDeletePiece' => auth()->user()->can('deleteAccountingAttachment'),
+            ])
             @if($peutAjouterPiece)
                 <form method="POST" action="{{ route('ecritures.piece.store', $ecriture) }}" enctype="multipart/form-data" class="mt-3">
                     @csrf
