@@ -556,7 +556,7 @@ public function valider(Request $request, $id)
         $ecriture = EcritureComptable::findOrFail($id);
         $documents->delete($ecriture, $request->validated('motif'), 'individuelle', $request);
 
-        return back()->with(
+        return redirect()->route('ecritures.liste')->with(
             'success',
             'Écriture comptable placée dans la corbeille.'
         );

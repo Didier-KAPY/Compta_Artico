@@ -46,6 +46,11 @@
 
 
         <div class="d-flex align-items-center gap-2">
+            @if(auth()->user()->isSuperAdmin() && $etat->statut === 'Validé')
+                <a href="{{ route('etat-besoins.edit', $etat->id) }}" class="btn btn-warning btn-sm">
+                    <i class="bi bi-pencil-square me-1"></i>Modifier
+                </a>
+            @endif
             @can('deleteFinancialDocument')
             @if($etat->statut === 'En attente' || $estGestionnaire)
                 <button type="button"
@@ -421,7 +426,7 @@
 
 
             @can('manageEtatBesoin')
-            @if($etat->statut == 'En attente')
+            @if($etat->statut == 'En attente' || (auth()->user()->isSuperAdmin() && $etat->statut === 'Validé'))
                 <a href="{{ route('etat-besoins.edit',$etat->id) }}"
                    class="btn btn-warning">
 
@@ -615,6 +620,20 @@
 
     <div class="card-body text-center">
 
+
+        @if(auth()->user()->isSuperAdmin() && $etat->statut !== 'Validé' && ! $bonSortieValide)
+            <form action="{{ route('etat-besoins.reouvrir', $etat->id) }}"
+                  method="POST"
+                  class="mb-3"
+                  data-confirm="Remettre cet état de besoin en attente pour modifier son statut ?">
+                @csrf
+                @method('PATCH')
+                <button type="submit" class="btn btn-warning">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>
+                    Modifier le statut
+                </button>
+            </form>
+        @endif
 
         @if($etat->statut == 'Validé')
 

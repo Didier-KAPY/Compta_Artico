@@ -17,12 +17,13 @@ class DashboardController extends Controller
 
         if ($user->isTechnicalOfficer()) {
             $query = \App\Models\EtatBesoin::query()->perimetreTechnique()->whereBetween('date', [$month->toDateString(), $month->endOfMonth()->endOfDay()->toDateTimeString()]);
+            $sansPieceQuery = \App\Models\EtatBesoin::query()->perimetreTechnique()->sansPieceJustificative();
 
             return view('dashboard-technique', $period + [
                 'total' => (clone $query)->count(),
                 'statuts' => (clone $query)->select('statut')->selectRaw('COUNT(*) AS total')->groupBy('statut')->pluck('total', 'statut'),
-                'sansPiece' => (clone $query)->sansPieceJustificative()->count(),
-                'derniersSansPiece' => (clone $query)->sansPieceJustificative()->with('departement')->latest('date')->latest('id')->limit(10)->get(),
+                'sansPiece' => (clone $sansPieceQuery)->count(),
+                'derniersSansPiece' => (clone $sansPieceQuery)->with('departement')->latest('date')->latest('id')->limit(10)->get(),
             ]);
         }
 

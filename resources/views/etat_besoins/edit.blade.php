@@ -12,6 +12,10 @@
         @csrf
         @method('PUT')
 
+        @if($etat->statut === 'Validé' && auth()->user()->isSuperAdmin())
+            <div class="alert alert-info">État validé : la direction, le demandeur et le motif peuvent être modifiés. Le montant, la monnaie et les lignes restent inchangés.</div>
+        @endif
+
         <div class="mb-3">
             <label>Direction</label>
             <select name="departement_id" class="form-select" required>
@@ -26,6 +30,14 @@
             <input type="text" name="demandeur" class="form-control" value="{{ old('demandeur', $etat->demandeur) }}" required>
         </div>
 
+        @if($etat->statut === 'Validé' && auth()->user()->isSuperAdmin())
+            <div class="mb-3">
+                <label for="motif" class="form-label">Motif</label>
+                <textarea id="motif" name="motif" class="form-control" rows="3" required>{{ old('motif', $etat->motif) }}</textarea>
+            </div>
+        @endif
+
+        @if($etat->statut !== 'Validé')
         <div class="mb-3">
             <label class="form-label">Monnaie</label>
             <select name="monnaie" id="monnaie" class="form-select" required>
@@ -71,6 +83,7 @@
             </tbody>
         </table></div>
         <div class="text-end mb-3"><strong>Total estimé : <span id="total-general">0.00</span> <span class="currency-label">{{ old('monnaie', $etat->monnaie) }}</span></strong></div>
+        @endif
 
         <button class="btn btn-primary">Modifier</button>
 
@@ -81,6 +94,7 @@
 @endsection
 
 @section('scripts')
+@if($etat->statut !== 'Validé')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const tbody = document.querySelector('#table-lignes tbody');
@@ -124,4 +138,5 @@ document.addEventListener('DOMContentLoaded', function () {
     actualiserMonnaie();
 });
 </script>
+@endif
 @endsection

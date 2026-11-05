@@ -315,8 +315,11 @@ class EtatBesoinController extends Controller
     public function edit(string $id)
     {
         $etat = $this->etatAccessible($id, ['lignes', 'departement']);
-        abort_if($etat->statut !== 'En attente', 403, 'Cet état de besoin est verrouillé après validation. Seule la pièce justificative peut encore être ajoutée.');
-        $this->verifierBonSortieNonValide($etat);
+        $editionInfosValide = auth()->user()->isSuperAdmin() && $etat->statut === 'Validé';
+        abort_if($etat->statut !== 'En attente' && ! $editionInfosValide, 403, 'Cet état de besoin est verrouillé après validation.');
+        if (! $editionInfosValide) {
+            $this->verifierBonSortieNonValide($etat);
+        }
 
         $departements = Departement::orderBy('designation')->get();
         $lignesBudgetaires = LigneBudgetaire::with(['budget', 'compte', 'rubriqueBudgetaire'])
@@ -338,7 +341,31 @@ class EtatBesoinController extends Controller
 
     public function update(Request $request, string $id)
     {
-        $etat = $this->etatAccessible($id);
+        $etat = $this->etatAccessible($id, ['sortieCaisses']);
+        if ($request->user()->isSuperAdmin() && $etat->statut === 'Validé') {
+            $validated = $request->validate([
+                'departement_id' => 'required|exists:departements,id',
+                'demandeur' => 'required|string|max:255',
+                'motif' => 'required|string',
+            ]);
+            $departement = Departement::findOrFail($validated['departement_id']);
+            DB::transaction(function () use ($etat, $departement, $validated) {
+                $etat->update([
+                    'departement_id' => $departement->id,
+                    'service' => $departement->designation,
+                    'demandeur' => $validated['demandeur'],
+                    'motif' => $validated['motif'],
+                ]);
+                $etat->sortieCaisses()->withTrashed()->update([
+                    'beneficiaire' => $validated['demandeur'],
+                    'motif' => $validated['motif'],
+                ]);
+            });
+
+            return redirect()->route('etat-besoins.show', $etat->id)
+                ->with('success', 'Informations et motif modifiés sur l’état de besoin et tous ses bons de sortie liés. Le montant reste inchangé.');
+        }
+
         abort_if($etat->statut !== 'En attente', 403, 'Cet état de besoin est verrouillé après validation. Seule la pièce justificative peut encore être ajoutée.');
 
         $request->validate([
