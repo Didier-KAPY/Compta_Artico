@@ -469,6 +469,9 @@ Route::middleware(['auth', 'force.password.change', 'accounting.open'])->group(f
         Route::get('/transferts-internes/{reference}/bon', [JournalController::class, 'bonTransfertInterne'])
             ->middleware('role:Super Admin,Admin,Directeur Général,DAF,Comptable,Caissier,Caissière,Trésorier,Trésorière')
             ->name('transferts-internes.bon');
+        Route::delete('/transferts-internes/{reference}', [JournalController::class, 'supprimerTransfertInterne'])
+            ->middleware('role:Super Admin,Gérant,Gerant')
+            ->name('transferts-internes.destroy');
         Route::get('/releve', [JournalController::class, 'releve'])
             ->middleware('role:Super Admin,Admin,Directeur Général,DAF,Comptable,Caissier,Caissière,Trésorier,Trésorière')
             ->name('releve');

@@ -79,6 +79,25 @@ public function bonTransfertInterne(string $reference)
     return view('journaux.bon-transfert-interne', compact('sortie', 'entree'));
 }
 
+public function supprimerTransfertInterne(DeleteFinancialDocumentRequest $request, string $reference, FinancialDocumentService $documents)
+{
+    abort_unless(Auth::user()?->isSuperAdmin() || Auth::user()?->hasRole(['Gérant', 'Gerant']), 403);
+    abort_unless(preg_match('/^TRI-\\d{8}-\\d+$/', $reference) === 1, 404);
+
+    $journaux = Journaux::where('reference', $reference)->get();
+    abort_unless($journaux->count() === 2
+        && $journaux->contains(fn ($journal) => (float) $journal->sorties_cdf > 0 || (float) $journal->sorties_usd > 0)
+        && $journaux->contains(fn ($journal) => (float) $journal->entrees_cdf > 0 || (float) $journal->entrees_usd > 0), 404);
+
+    DB::transaction(function () use ($journaux, $request, $documents) {
+        foreach ($journaux as $journal) {
+            $documents->delete($journal, $request->validated('motif'), 'cascade', $request);
+        }
+    });
+
+    return redirect()->route('journaux.transferts-internes')->with('success', 'Le transfert '.$reference.' et ses deux écritures ont été supprimés.');
+}
+
 public function enregistrerTransfertInterne(Request $request)
 {
     abort_unless(Auth::user()?->hasRole(['Super Admin', 'Admin', 'DAF', 'Comptable', 'Caissier', 'Caissière', 'Trésorier', 'Trésorière']), 403);
@@ -87,7 +106,7 @@ public function enregistrerTransfertInterne(Request $request)
         'monnaie' => ['required', 'in:CDF,USD'],
         'source_id' => ['required', 'integer', 'different:destination_id', 'exists:journal_types,id'],
         'destination_id' => ['required', 'integer', 'exists:journal_types,id'],
-        'montant' => ['required', 'numeric', 'gt:0'],
+        'montant' => ['required', 'numeric', 'gt:0', 'decimal:0,18'],
         'description' => ['nullable', 'string', 'max:255'],
     ]);
     $source = JournalType::whereKey($data['source_id'])->where('est_tresorerie', true)->where('monnaie', $data['monnaie'])->whereNotNull('liste_des_comptes_id')->firstOrFail();
@@ -102,7 +121,43 @@ public function enregistrerTransfertInterne(Request $request)
     $journal = DB::transaction(function () use ($data, $source, $destination) {
         $date = Carbon::parse($data['date']);
         $monnaie = $source->monnaie;
-        $montant = round((float) $data['montant'], 2);
+        $montantDecimal = \Brick\Math\BigDecimal::of((string) $data['montant']);
+        $montantDecimal = $monnaie === 'USD'
+            ? $montantDecimal->toScale(18, \Brick\Math\RoundingMode::DOWN)
+            : $montantDecimal->toScale(2, \Brick\Math\RoundingMode::HALF_UP);
+        $montant = (string) $montantDecimal;
+        $compteSource = ListeDesComptes::query()
+            ->whereKey($source->liste_des_comptes_id)
+            ->lockForUpdate()
+            ->firstOrFail();
+        $montantCdfDecimal = $montantDecimal;
+        if ($monnaie === 'USD') {
+            $taux = (string) (TauxDeChange::latest()->value('taux_de_change') ?? 0);
+            if ((float) $taux <= 0) {
+                throw ValidationException::withMessages(['montant' => 'Aucun taux de change valide n’est configuré pour comptabiliser ce transfert en USD.']);
+            }
+            $montantCdfDecimal = $montantDecimal
+                ->multipliedBy(\Brick\Math\BigDecimal::of($taux))
+                ->toScale(2, \Brick\Math\RoundingMode::HALF_UP);
+        }
+        $montantCdf = (float) (string) $montantCdfDecimal;
+
+        $soldeDisponible = (float) EcritureComptable::query()
+            ->where('liste_des_comptes_id', $compteSource->id)
+            ->where('statut', 'Validé')
+            ->selectRaw('COALESCE(SUM(debit_cdf - credit_cdf), 0) AS solde')
+            ->value('solde');
+
+        if ($montantCdf > round($soldeDisponible, 2)) {
+            throw ValidationException::withMessages([
+                'montant' => 'Solde insuffisant sur le compte source : '
+                    .number_format(max(0, $soldeDisponible), 2, ',', ' ')
+                    .' FC disponibles pour un transfert de '
+                    .number_format($montantCdf, 2, ',', ' ')
+                    .' FC.',
+            ]);
+        }
+
         $description = trim((string) ($data['description'] ?? '')) ?: 'Transfert interne de trésorerie';
         $referenceTemporaire = 'TRI-TEMP-'.uniqid();
         $commun = [
@@ -128,14 +183,6 @@ public function enregistrerTransfertInterne(Request $request)
         $sortie->update(['reference' => $reference]);
         $entree->update(['reference' => $reference]);
 
-        $montantCdf = $montant;
-        if ($monnaie === 'USD') {
-            $taux = (float) (TauxDeChange::latest()->value('taux_de_change') ?? 0);
-            if ($taux <= 0) {
-                throw ValidationException::withMessages(['montant' => 'Aucun taux de change valide n’est configuré pour comptabiliser ce transfert en USD.']);
-            }
-            $montantCdf = round($montant * $taux, 2);
-        }
         $libelle = $description.' — '.$source->code.' vers '.$destination->code;
         EcritureComptable::create([
             'user_id' => Auth::id(), 'journal_id' => $sortie->id,
