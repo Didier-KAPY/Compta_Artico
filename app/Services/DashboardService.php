@@ -50,17 +50,20 @@ class DashboardService
             $setting = ParametrageComptable::with('compte')->where('code', 'DASHBOARD_GERANT_TVA_DUE')->first();
             if ($setting?->compte) {
                 $accountMonth = ($month ?? \Carbon\CarbonImmutable::now())->startOfMonth();
-                $balance = EcritureComptable::query()
+                $entry = EcritureComptable::query()
                     ->where('liste_des_comptes_id', $setting->liste_des_comptes_id)
                     ->where('statut', "Valid\u{00C3}\u{00A9}")
                     ->whereBetween('date', [$accountMonth->toDateString(), $accountMonth->endOfMonth()->endOfDay()->toDateTimeString()])
-                    ->selectRaw('COALESCE(SUM(debit_cdf), 0) AS debit, COALESCE(SUM(credit_cdf), 0) AS credit')
-                    ->first();
+                    ->latest('date')->latest('id')
+                    ->first(['debit_cdf', 'credit_cdf']);
+                $debit = (float) ($entry?->debit_cdf ?? 0);
+                $credit = (float) ($entry?->credit_cdf ?? 0);
+                $amountSide = $entry ? (abs($debit) > 0 ? 'Débit enregistré' : 'Crédit enregistré') : null;
+                $recordedAmount = $entry ? (abs($debit) > 0 ? $debit : $credit) : null;
                 $data['management_account'] = [
                     'account' => $setting->compte,
-                    'debit' => (float) $balance->debit,
-                    'credit' => (float) $balance->credit,
-                    'balance' => (float) $balance->credit - (float) $balance->debit,
+                    'amount' => $recordedAmount,
+                    'amount_side' => $amountSide,
                 ];
             }
         }
@@ -107,40 +110,7 @@ class DashboardService
         }
 
         if ($sections['treasury_situation']) {
-            $positions = app(\App\Services\TreasuryMovementService::class)->query()
-                ->select('journal_type_id')
-                ->selectRaw('COALESCE(SUM(entrees_cdf), 0) AS entree_cdf')
-                ->selectRaw('COALESCE(SUM(sorties_cdf), 0) AS sortie_cdf')
-                ->selectRaw('COALESCE(SUM(entrees_usd), 0) AS entree_usd')
-                ->selectRaw('COALESCE(SUM(sorties_usd), 0) AS sortie_usd')
-                ->with('journalType.compte')
-                ->where('statut', 'Validé')
-                ->whereHas('journalType', fn ($query) => $query->where('est_tresorerie', true))
-                ->whereDate('date', '<=', now()->toDateString())
-                ->groupBy('journal_type_id')
-                ->get();
-
-            $accounts = $positions->map(fn ($position): array => [
-                'code' => $position->journalType?->code ?? '—',
-                'account' => $position->journalType?->compte?->compte ?? '—',
-                'designation' => $position->journalType?->compte?->designation
-                    ?? $position->journalType?->libelle
-                    ?? 'Compte de trésorerie',
-                'nature' => $position->journalType?->nature ?? 'autre',
-                'balance_cdf' => (float) $position->entree_cdf - (float) $position->sortie_cdf,
-                'balance_usd' => (float) $position->entree_usd - (float) $position->sortie_usd,
-            ])->sortBy('code')->values();
-
-            $totals = [];
-            foreach (['caisse' => 'caisse', 'banque' => 'banque', 'mobile' => 'mobile_money'] as $key => $nature) {
-                $lines = $accounts->where('nature', $nature);
-                $totals[$key.'_cdf'] = (float) $lines->sum('balance_cdf');
-                $totals[$key.'_usd'] = (float) $lines->sum('balance_usd');
-            }
-            $totals['total_cdf'] = (float) $accounts->sum('balance_cdf');
-            $totals['total_usd'] = (float) $accounts->sum('balance_usd');
-
-            $data['treasury_situation'] = compact('accounts', 'totals');
+            $data['treasury_situation'] = $this->getTreasurySituation();
         }
 
         if ($sections['charts']) {
