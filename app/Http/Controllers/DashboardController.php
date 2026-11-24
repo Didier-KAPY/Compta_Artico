@@ -31,6 +31,13 @@ class DashboardController extends Controller
             return redirect()->route('etat-besoins.index');
         }
 
+        if ($user->hasRole(['Caissier', 'Caissière'])) {
+            return view('dashboard-caisse', $period + [
+                'user' => $user,
+                'cashier' => $dashboard->getCashierData($month),
+            ]);
+        }
+
         return view('dashboard', $period + $dashboard->getData($user, $month));
     }
 }

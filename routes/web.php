@@ -280,6 +280,9 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::post('/parametres/comptables', [ParametreController::class, 'store'])
         ->middleware('role:Super Admin,DAF')
         ->name('parametres.comptables.store');
+    Route::put('/parametres/comptables/compte-tableau-gerant', [ParametreController::class, 'updateDashboardGerantAccount'])
+        ->middleware('role:Super Admin,DAF')
+        ->name('parametres.comptables.dashboard-gerant');
     Route::put('/parametres/comptables/{id}', [ParametreController::class, 'updateParametrageComptable'])
         ->middleware('role:Super Admin,DAF')
         ->name('parametres.comptables.update');

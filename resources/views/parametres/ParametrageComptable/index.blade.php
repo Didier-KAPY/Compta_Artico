@@ -53,6 +53,28 @@ Configuration des comptes automatiques
 
 @endif
 
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-light fw-semibold">Compte affiché au tableau de bord du gérant</div>
+    <div class="card-body">
+        <p class="text-muted">Choisissez le compte à présenter aux rôles Gérant, Gerant et Directeur Général. Le compte 44411 « État, TVA due » peut être sélectionné ici.</p>
+        <form method="POST" action="{{ route('parametres.comptables.dashboard-gerant') }}" class="row g-3 align-items-end">
+            @csrf
+            @method('PUT')
+            <div class="col-md-8">
+                <label class="form-label" for="dashboardGerantAccount">Compte comptable</label>
+                <select class="form-select" id="dashboardGerantAccount" name="liste_des_comptes_id">
+                    <option value="">Aucun compte sélectionné</option>
+                    @foreach($comptes as $compte)
+                        <option value="{{ $compte->id }}" @selected($dashboardGerantAccount?->liste_des_comptes_id == $compte->id)>{{ $compte->compte }} — {{ $compte->designation }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="col-md-4"><button class="btn btn-primary"><i class="bi bi-save me-1"></i>Enregistrer</button></div>
+        </form>
+        @error('liste_des_comptes_id')<div class="text-danger small mt-2">{{ $message }}</div>@enderror
+    </div>
+</div>
+
 
 
 

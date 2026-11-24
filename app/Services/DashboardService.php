@@ -9,6 +9,7 @@ use App\Models\EtatBesoin;
 use App\Models\Journaux;
 use App\Models\JournalType;
 use App\Models\ListeDesComptes;
+use App\Models\ParametrageComptable;
 use App\Models\SortieCaisse;
 use App\Models\TauxDeChange;
 use App\Models\User;
@@ -16,12 +17,63 @@ use Illuminate\Support\Facades\DB;
 
 class DashboardService
 {
+    public function getCashierData(?\Carbon\CarbonImmutable $month = null): array
+    {
+        $month = ($month ?? \Carbon\CarbonImmutable::now())->startOfMonth();
+        $start = $month->toDateString();
+        $end = $month->endOfMonth()->toDateString();
+
+        $entries = EntreeCaisse::query()->whereBetween('date', [$start, $end]);
+        $outputs = SortieCaisse::query()->whereBetween('date', [$start, $end]);
+        $pendingEntries = EntreeCaisse::query()->where('statut', 'En attente');
+        $pendingOutputs = SortieCaisse::query()->where('statut', 'En attente');
+
+        $recentEntries = EntreeCaisse::query()->latest('date')->latest('id')->limit(8)->get()
+            ->map(fn (EntreeCaisse $item) => ['kind' => 'Entrée', 'date' => $item->date, 'numero' => $item->numero,
+                'description' => $item->motif ?: ($item->nom_partenaire ?: 'Entrée de caisse'), 'amount' => (float) $item->montant,
+                'currency' => $item->monnaie, 'status' => $item->statut, 'url' => route('entree-caisses.show', $item)]);
+        $recentOutputs = SortieCaisse::query()->latest('date')->latest('id')->limit(8)->get()
+            ->map(fn (SortieCaisse $item) => ['kind' => 'Sortie', 'date' => $item->date, 'numero' => $item->numero,
+                'description' => $item->motif ?: ($item->beneficiaire ?: 'Sortie de caisse'), 'amount' => (float) $item->montant,
+                'currency' => $item->monnaie, 'status' => $item->statut, 'url' => route('sortie-caisses.show', $item)]);
+
+        return [
+            'entry_count' => (clone $entries)->count(),
+            'entry_totals' => (clone $entries)->select('monnaie')->selectRaw('COALESCE(SUM(montant), 0) AS total')->groupBy('monnaie')->pluck('total', 'monnaie'),
+            'output_count' => (clone $outputs)->count(),
+            'output_totals' => (clone $outputs)->select('monnaie')->selectRaw('COALESCE(SUM(montant), 0) AS total')->groupBy('monnaie')->pluck('total', 'monnaie'),
+            'pending_entries' => $pendingEntries->count(),
+            'pending_outputs' => $pendingOutputs->count(),
+            'recent' => $recentEntries->concat($recentOutputs)->sortByDesc(fn ($item) => $item['date']?->timestamp ?? 0)->take(10)->values(),
+        ];
+    }
+
     public function getData(User $user, ?\Carbon\CarbonImmutable $month = null): array
     {
         $role = mb_strtolower(trim((string) $user->role?->designation));
         $sections = $this->sectionsFor($role);
+        $data = $this->buildData($sections, ($month ?? \Carbon\CarbonImmutable::now())->startOfMonth());
 
-        return $this->buildData($sections, ($month ?? \Carbon\CarbonImmutable::now())->startOfMonth()) + ['sections' => $sections];
+        if (in_array($role, ['gérant', 'gerant', 'gÃ©rant', 'directeur général', 'directeur gÃ©nÃ©ral'], true)) {
+            $setting = ParametrageComptable::with('compte')->where('code', 'DASHBOARD_GERANT_TVA_DUE')->first();
+            if ($setting?->compte) {
+                $accountMonth = ($month ?? \Carbon\CarbonImmutable::now())->startOfMonth();
+                $balance = EcritureComptable::query()
+                    ->where('liste_des_comptes_id', $setting->liste_des_comptes_id)
+                    ->where('statut', 'ValidÃ©')
+                    ->whereBetween('date', [$accountMonth->toDateString(), $accountMonth->endOfMonth()->endOfDay()->toDateTimeString()])
+                    ->selectRaw('COALESCE(SUM(debit_cdf), 0) AS debit, COALESCE(SUM(credit_cdf), 0) AS credit')
+                    ->first();
+                $data['management_account'] = [
+                    'account' => $setting->compte,
+                    'debit' => (float) $balance->debit,
+                    'credit' => (float) $balance->credit,
+                    'balance' => (float) $balance->credit - (float) $balance->debit,
+                ];
+            }
+        }
+
+        return $data + ['sections' => $sections];
     }
 
     private function buildData(array $sections, \Carbon\CarbonImmutable $month): array

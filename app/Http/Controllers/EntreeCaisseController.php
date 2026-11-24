@@ -27,11 +27,12 @@ class EntreeCaisseController extends Controller
     {
         $query = EntreeCaisse::with(['user', 'validateur', 'journaux'])
             ->when($request->filled('numero'), fn ($query) => $query->where('numero', 'like', '%'.$request->numero.'%'))
+            ->when($request->filled('statut'), fn ($query) => $query->where('statut', $request->statut))
             ->when($request->filled('date_debut'), fn ($query) => $query->whereDate('date', '>=', $request->date_debut))
             ->when($request->filled('date_fin'), fn ($query) => $query->whereDate('date', '<=', $request->date_fin))
             ->latest();
 
-        $entrees = $request->hasAny(['numero', 'date_debut', 'date_fin'])
+        $entrees = $request->hasAny(['numero', 'statut', 'date_debut', 'date_fin'])
             ? $query->get()
             : $query->paginate(10)->withQueryString();
 

@@ -614,6 +614,7 @@ public function index()
     $comptes = ListeDesComptes::orderBy('compte')->get();
 
     $parametrages = ParametrageComptable::with(['compte', 'user'])
+        ->where('code', '<>', 'DASHBOARD_GERANT_TVA_DUE')
         ->paginate(15);
 
 
@@ -621,15 +622,40 @@ public function index()
         ->orderBy('id')
         ->get();
 
+    $dashboardGerantAccount = ParametrageComptable::with('compte')
+        ->where('code', 'DASHBOARD_GERANT_TVA_DUE')
+        ->first();
+
 
     return view(
         'parametres.ParametrageComptable.index',
         compact(
             'comptes',
             'parametrages',
-            'journaux'
+            'journaux',
+            'dashboardGerantAccount'
         )
     );
+}
+
+public function updateDashboardGerantAccount(Request $request)
+{
+    $data = $request->validate([
+        'liste_des_comptes_id' => ['nullable', 'exists:liste_des_comptes,id'],
+    ]);
+
+    $setting = ParametrageComptable::firstOrNew(['code' => 'DASHBOARD_GERANT_TVA_DUE']);
+    if (empty($data['liste_des_comptes_id'])) {
+        if ($setting->exists) $setting->delete();
+    } else {
+        $setting->fill([
+            'user_id' => Auth::id(),
+            'designation' => 'Compte affiché au tableau de bord du gérant',
+            'liste_des_comptes_id' => $data['liste_des_comptes_id'],
+        ])->save();
+    }
+
+    return back()->with('success', 'Compte du tableau de bord du gérant mis à jour.');
 }
 
 

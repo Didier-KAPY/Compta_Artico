@@ -69,6 +69,10 @@
 
 ]))
 
+    @if($user->hasRole(['Caissier', 'Caissière']))
+        <li><a href="{{ route('dashboard') }}" class="nav-link {{ request()->routeIs('dashboard') ? 'active-menu' : '' }}"><i class="bi bi-speedometer2 me-2"></i>Tableau de bord caisse</a></li>
+    @endif
+
     @include('layouts.partials.etat-besoins')
     @include('layouts.partials.sortie-caisses')
     @include('layouts.partials.entree-caisses')

@@ -34,8 +34,24 @@
         </div>
     @endif
 
+    @if(isset($management_account))
+        @include('partials.dashboard-month', ['periodDescription' => 'Période du compte configuré'])
+        <section class="panel-card mb-4 border-start border-4 border-info">
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                <div><span class="eyebrow">Compte configuré · {{ $monthLabel }}</span><h5 class="mb-1">{{ $management_account['account']->compte }} — {{ $management_account['account']->designation }}</h5><small class="text-muted">Écritures validées du mois sélectionné. Solde = crédit − débit.</small></div>
+                <div class="text-end"><span class="d-block text-muted small">Solde</span><strong class="fs-4 {{ $management_account['balance'] < 0 ? 'text-danger' : 'text-success' }}">{{ number_format($management_account['balance'], 2, ',', ' ') }} CDF</strong></div>
+            </div>
+            <div class="row g-3 mt-2">
+                <div class="col-sm-6"><div class="p-3 rounded bg-light"><small class="text-muted">Débit cumulé</small><strong class="d-block">{{ number_format($management_account['debit'], 2, ',', ' ') }} CDF</strong></div></div>
+                <div class="col-sm-6"><div class="p-3 rounded bg-light"><small class="text-muted">Crédit cumulé</small><strong class="d-block">{{ number_format($management_account['credit'], 2, ',', ' ') }} CDF</strong></div></div>
+            </div>
+        </section>
+    @endif
+
     @if($sections['statistics'])
-        @include('partials.dashboard-month', ['periodDescription' => 'Période des statistiques'])
+        @unless(isset($management_account))
+            @include('partials.dashboard-month', ['periodDescription' => 'Période des statistiques'])
+        @endunless
         @php
             $operationalCards = [
                 ['brc', 'BRC', 'file-earmark-text', 'info'], ['cash_in', "Bons d'entrée", 'box-arrow-in-down', 'emerald'],
