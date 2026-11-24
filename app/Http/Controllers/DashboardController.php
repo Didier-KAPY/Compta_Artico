@@ -32,9 +32,12 @@ class DashboardController extends Controller
         }
 
         if ($user->hasRole(['Caissier', 'Caissière'])) {
+            $cashierData = $dashboard->getCashierData($month);
+
             return view('dashboard-caisse', $period + [
                 'user' => $user,
-                'cashier' => $dashboard->getCashierData($month),
+                'cashier' => $cashierData,
+                'treasury_situation' => $cashierData['treasury_situation'],
             ]);
         }
 
