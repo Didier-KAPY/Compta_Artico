@@ -614,7 +614,7 @@ public function index()
     $comptes = ListeDesComptes::orderBy('compte')->get();
 
     $parametrages = ParametrageComptable::with(['compte', 'user'])
-        ->where('code', '<>', 'DASHBOARD_GERANT_TVA_DUE')
+        ->whereNotIn('code', ['DASHBOARD_GERANT_TVA_DUE', 'TVA_FACTUREE', 'TVA_RECUPERABLE'])
         ->paginate(15);
 
 
@@ -625,6 +625,8 @@ public function index()
     $dashboardGerantAccount = ParametrageComptable::with('compte')
         ->where('code', 'DASHBOARD_GERANT_TVA_DUE')
         ->first();
+    $tvaFactureeSetting = ParametrageComptable::with('compte')->where('code', 'TVA_FACTUREE')->first();
+    $tvaRecuperableSetting = ParametrageComptable::with('compte')->where('code', 'TVA_RECUPERABLE')->first();
 
 
     return view(
@@ -633,7 +635,9 @@ public function index()
             'comptes',
             'parametrages',
             'journaux',
-            'dashboardGerantAccount'
+            'dashboardGerantAccount',
+            'tvaFactureeSetting',
+            'tvaRecuperableSetting'
         )
     );
 }
@@ -642,16 +646,25 @@ public function updateDashboardGerantAccount(Request $request)
 {
     $data = $request->validate([
         'liste_des_comptes_id' => ['nullable', 'exists:liste_des_comptes,id'],
+        'tva_facturee_id' => ['nullable', 'exists:liste_des_comptes,id', 'different:tva_recuperable_id'],
+        'tva_recuperable_id' => ['nullable', 'exists:liste_des_comptes,id', 'different:tva_facturee_id'],
     ]);
 
-    $setting = ParametrageComptable::firstOrNew(['code' => 'DASHBOARD_GERANT_TVA_DUE']);
-    if (empty($data['liste_des_comptes_id'])) {
-        if ($setting->exists) $setting->delete();
-    } else {
+    foreach ([
+        'DASHBOARD_GERANT_TVA_DUE' => [$data['liste_des_comptes_id'] ?? null, 'Compte affiché au tableau de bord du gérant'],
+        'TVA_FACTUREE' => [$data['tva_facturee_id'] ?? null, 'Compte de TVA facturée'],
+        'TVA_RECUPERABLE' => [$data['tva_recuperable_id'] ?? null, 'Compte de TVA récupérable'],
+    ] as $code => [$accountId, $designation]) {
+        $setting = ParametrageComptable::firstOrNew(['code' => $code]);
+        if (!$accountId) {
+            if ($setting->exists) $setting->delete();
+            continue;
+        }
+
         $setting->fill([
             'user_id' => Auth::id(),
-            'designation' => 'Compte affiché au tableau de bord du gérant',
-            'liste_des_comptes_id' => $data['liste_des_comptes_id'],
+            'designation' => $designation,
+            'liste_des_comptes_id' => $accountId,
         ])->save();
     }
 

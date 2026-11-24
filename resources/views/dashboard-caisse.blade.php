@@ -40,6 +40,8 @@
         <div class="col-md-6"><a href="{{ route('sortie-caisses.index', ['statut' => 'En attente']) }}" class="card border-0 shadow-sm h-100 text-decoration-none text-dark"><div class="card-body d-flex align-items-center gap-3"><span class="rounded-3 bg-warning-subtle text-warning p-3"><i class="bi bi-hourglass-split fs-4"></i></span><div><span class="text-muted">Sorties en attente</span><div class="fs-3 fw-bold">{{ number_format($cashier['pending_outputs'], 0, ',', ' ') }}</div></div></div></a></div>
     </div>
 
+    @include('partials.dashboard-treasury-situation')
+
     <section class="card border-0 shadow-sm">
         <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center"><h5 class="mb-0">Dernières opérations de caisse</h5><span class="text-muted small">10 opérations récentes</span></div>
         <div class="table-responsive"><table class="table table-hover align-middle mb-0">

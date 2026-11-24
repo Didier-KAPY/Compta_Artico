@@ -44,6 +44,7 @@ class DashboardService
             'pending_entries' => $pendingEntries->count(),
             'pending_outputs' => $pendingOutputs->count(),
             'recent' => $recentEntries->concat($recentOutputs)->sortByDesc(fn ($item) => $item['date']?->timestamp ?? 0)->take(10)->values(),
+            'treasury_situation' => $this->getTreasurySituation(),
         ];
     }
 
@@ -54,28 +55,47 @@ class DashboardService
         $data = $this->buildData($sections, ($month ?? \Carbon\CarbonImmutable::now())->startOfMonth());
 
         $asciiRole = \Illuminate\Support\Str::ascii($role);
-        if (in_array($asciiRole, ['super admin', 'gerant', 'directeur general'], true) || in_array($role, ['super admin', 'gérant', 'gerant', 'gÃ©rant', 'directeur général', 'directeur gÃ©nÃ©ral'], true)) {
-            $setting = ParametrageComptable::with('compte')->where('code', 'DASHBOARD_GERANT_TVA_DUE')->first();
-            if ($setting?->compte) {
+        if (in_array($asciiRole, ['super admin', 'gerant', 'directeur general'], true)) {
+            $settings = ParametrageComptable::with('compte')->whereIn('code', [
+                'DASHBOARD_GERANT_TVA_DUE', 'TVA_FACTUREE', 'TVA_RECUPERABLE',
+            ])->get()->keyBy('code');
+            $dueAccount = $settings->get('DASHBOARD_GERANT_TVA_DUE');
+            $factureeAccount = $settings->get('TVA_FACTUREE');
+            $recuperableAccount = $settings->get('TVA_RECUPERABLE');
+
+            if ($dueAccount?->compte && $factureeAccount?->compte && $recuperableAccount?->compte) {
                 $accountMonth = ($month ?? \Carbon\CarbonImmutable::now())->startOfMonth();
-                $entry = EcritureComptable::query()
-                    ->where('liste_des_comptes_id', $setting->liste_des_comptes_id)
-                    ->where('statut', "Valid\u{00E9}")
+                $validStatuses = ["Valid\u{00E9}", "Valid\u{00C3}\u{00A9}"];
+                $taxAmounts = Journaux::query()
+                    ->whereIn('liste_des_comptes_id', [$factureeAccount->liste_des_comptes_id, $recuperableAccount->liste_des_comptes_id])
+                    ->whereIn('statut', $validStatuses)
+                    ->where('montant_tva', '>', 0)
                     ->whereBetween('date', [$accountMonth->toDateString(), $accountMonth->endOfMonth()->endOfDay()->toDateTimeString()])
-                    ->latest('date')->latest('id')
-                    ->first(['debit_cdf', 'credit_cdf']);
-                $debit = (float) ($entry?->debit_cdf ?? 0);
-                $credit = (float) ($entry?->credit_cdf ?? 0);
-                $amountSide = $entry ? (abs($debit) > 0 ? 'Débit enregistré' : 'Crédit enregistré') : null;
-                $recordedAmount = $entry ? (abs($debit) > 0 ? $debit : $credit) : null;
+                    ->select('liste_des_comptes_id', 'monnaie')
+                    ->selectRaw('COALESCE(SUM(montant_tva), 0) AS total')
+                    ->groupBy('liste_des_comptes_id', 'monnaie')
+                    ->get()
+                    ->keyBy(fn ($row) => $row->liste_des_comptes_id.'|'.$row->monnaie);
+
+                $byCurrency = [];
+                foreach (['CDF', 'USD'] as $currency) {
+                    $facturee = (float) ($taxAmounts->get($factureeAccount->liste_des_comptes_id.'|'.$currency)?->total ?? 0);
+                    $recuperable = (float) ($taxAmounts->get($recuperableAccount->liste_des_comptes_id.'|'.$currency)?->total ?? 0);
+                    $byCurrency[$currency] = [
+                        'facturee' => $facturee,
+                        'recuperable' => $recuperable,
+                        'due' => $recuperable - $facturee,
+                    ];
+                }
+
                 $data['management_account'] = [
-                    'account' => $setting->compte,
-                    'amount' => $recordedAmount,
-                    'amount_side' => $amountSide,
+                    'account' => $dueAccount->compte,
+                    'facturee_account' => $factureeAccount->compte,
+                    'recuperable_account' => $recuperableAccount->compte,
+                    'amounts' => $byCurrency,
                 ];
             }
         }
-
         return $data + ['sections' => $sections];
     }
 

@@ -37,10 +37,17 @@
     @if(isset($management_account))
         @include('partials.dashboard-month', ['periodDescription' => 'Période du compte configuré'])
         <section class="panel-card mb-4 border-start border-4 border-info">
-            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
-                <div><span class="eyebrow">Compte configuré · {{ $monthLabel }}</span><h5 class="mb-1">{{ $management_account['account']->compte }} — {{ $management_account['account']->designation }}</h5><small class="text-muted">Montant de la dernière écriture validée du mois sélectionné.</small></div>
-                <div class="text-end"><span class="d-block text-muted small">{{ $management_account['amount_side'] ?? 'Montant enregistré' }}</span>@if($management_account['amount'] === null)<strong>Aucun montant enregistré</strong>@else<strong class="fs-4">{{ number_format($management_account['amount'], 2, ',', ' ') }} CDF</strong>@endif</div>
+            <div class="panel-title">
+                <div><span class="eyebrow">TVA due · {{ $monthLabel }}</span><h5>{{ $management_account['account']->compte }} — {{ $management_account['account']->designation }}</h5><small class="text-muted">TVA récupérable − TVA facturée</small></div>
             </div>
+            <div class="table-responsive"><table class="table dashboard-table align-middle mb-0">
+                <thead><tr><th>Calcul</th><th class="text-end">CDF</th><th class="text-end">USD</th></tr></thead>
+                <tbody>
+                    <tr><td>TVA récupérable · {{ $management_account['recuperable_account']->compte }}</td><td class="text-end">{{ number_format($management_account['amounts']['CDF']['recuperable'], 2, ',', ' ') }}</td><td class="text-end">{{ number_format($management_account['amounts']['USD']['recuperable'], 2, ',', ' ') }}</td></tr>
+                    <tr><td>TVA facturée · {{ $management_account['facturee_account']->compte }}</td><td class="text-end">− {{ number_format($management_account['amounts']['CDF']['facturee'], 2, ',', ' ') }}</td><td class="text-end">− {{ number_format($management_account['amounts']['USD']['facturee'], 2, ',', ' ') }}</td></tr>
+                    <tr class="fw-bold"><td>TVA due</td><td class="text-end">{{ number_format($management_account['amounts']['CDF']['due'], 2, ',', ' ') }} CDF</td><td class="text-end">{{ number_format($management_account['amounts']['USD']['due'], 2, ',', ' ') }} USD</td></tr>
+                </tbody>
+            </table></div>
         </section>
     @endif
 

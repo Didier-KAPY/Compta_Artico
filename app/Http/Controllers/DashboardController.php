@@ -37,6 +37,7 @@ class DashboardController extends Controller
             return view('dashboard-caisse', $period + [
                 'user' => $user,
                 'cashier' => $cashierData,
+                'treasury_situation' => $cashierData['treasury_situation'],
             ]);
         }
 
