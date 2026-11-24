@@ -110,7 +110,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('reopenBudget', fn (User $user): bool => $user->isSuperAdmin());
 
         Gate::define('viewEtatBesoinDetail', fn (User $user): bool => ! $user->hasRole([
-            'Chef de Service', 'Chef de Département', 'Directeur Technique',
+            'Chef de Service', 'Chef de Département', 'Directeur Technique', 'Caissier', 'Caissière',
         ]));
         Gate::define('consultEtatBesoin', fn (User $user): bool =>
             $user->can('viewEtatBesoinDetail') || $user->hasRole('Directeur Technique'));
@@ -130,7 +130,7 @@ class AppServiceProvider extends ServiceProvider
 
         Gate::define('viewTreasurySituation', fn (User $user): bool => $user->hasRole([
             'Super Admin', 'Admin', 'Gérant', 'Gerant', 'Directeur Général',
-            'DAF', 'Comptable', 'Trésorier', 'Trésorière',
+            'DAF', 'Comptable', 'Caissier', 'Caissière', 'Trésorier', 'Trésorière',
         ]));
 
         Paginator::useBootstrap();

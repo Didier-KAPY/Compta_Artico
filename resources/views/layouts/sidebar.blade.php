@@ -69,6 +69,9 @@
 
 ]))
 
+    @include('layouts.partials.etat-besoins')
+    @include('layouts.partials.sortie-caisses')
+    @include('layouts.partials.entree-caisses')
     @include('layouts.partials.journaux')
 
 @endif
