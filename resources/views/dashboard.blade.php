@@ -35,10 +35,9 @@
     @endif
 
     @if(isset($management_account))
-        @include('partials.dashboard-month', ['periodDescription' => 'Période du compte configuré'])
         <section class="panel-card mb-4 border-start border-4 border-info">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
-                <div><span class="eyebrow">TVA due · {{ $monthLabel }}</span><h5 class="mb-1">{{ $management_account['account']->compte }} — {{ $management_account['account']->designation }}</h5><small class="text-muted">Calculée à partir des écritures comptables validées du mois.</small></div>
+                <div><span class="eyebrow">TVA due · Toutes périodes</span><h5 class="mb-1">{{ $management_account['account']->compte }} — {{ $management_account['account']->designation }}</h5><small class="text-muted">Calculée à partir des écritures comptables validées, toutes périodes.</small></div>
                 <div class="text-end"><span class="d-block text-muted small">TVA facturée − TVA récupérable</span><strong class="fs-3 {{ $management_account['due'] < 0 ? 'text-danger' : 'text-success' }}">{{ number_format($management_account['due'], 2, ',', ' ') }} CDF</strong></div>
             </div>
         </section>

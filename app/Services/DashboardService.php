@@ -64,12 +64,10 @@ class DashboardService
             $recuperableAccount = $settings->get('TVA_RECUPERABLE');
 
             if ($dueAccount?->compte && $factureeAccount?->compte && $recuperableAccount?->compte) {
-                $accountMonth = ($month ?? \Carbon\CarbonImmutable::now())->startOfMonth();
                 $validStatuses = ["Valid\u{00E9}", "Valid\u{00C3}\u{00A9}"];
                 $accountEntries = EcritureComptable::query()
                     ->whereIn('liste_des_comptes_id', [$factureeAccount->liste_des_comptes_id, $recuperableAccount->liste_des_comptes_id])
                     ->whereIn('statut', $validStatuses)
-                    ->whereBetween('date', [$accountMonth->toDateString(), $accountMonth->endOfMonth()->endOfDay()->toDateTimeString()])
                     ->select('liste_des_comptes_id')
                     ->selectRaw('COALESCE(SUM(debit_cdf), 0) AS debit, COALESCE(SUM(credit_cdf), 0) AS credit')
                     ->groupBy('liste_des_comptes_id')
