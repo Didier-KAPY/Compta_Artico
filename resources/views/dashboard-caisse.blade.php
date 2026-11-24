@@ -40,6 +40,18 @@
         <div class="col-md-6"><a href="{{ route('sortie-caisses.index', ['statut' => 'En attente']) }}" class="card border-0 shadow-sm h-100 text-decoration-none text-dark"><div class="card-body d-flex align-items-center gap-3"><span class="rounded-3 bg-warning-subtle text-warning p-3"><i class="bi bi-hourglass-split fs-4"></i></span><div><span class="text-muted">Sorties en attente</span><div class="fs-3 fw-bold">{{ number_format($cashier['pending_outputs'], 0, ',', ' ') }}</div></div></div></a></div>
     </div>
 
-    @include('partials.dashboard-treasury-situation')
+    <section class="card border-0 shadow-sm">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center"><h5 class="mb-0">Dernières opérations de caisse</h5><span class="text-muted small">10 opérations récentes</span></div>
+        <div class="table-responsive"><table class="table table-hover align-middle mb-0">
+            <thead class="table-light"><tr><th>Date</th><th>Type</th><th>Référence</th><th>Motif / bénéficiaire</th><th class="text-end">Montant</th><th>Statut</th><th></th></tr></thead>
+            <tbody>
+                @forelse($cashier['recent'] as $operation)
+                    <tr><td>{{ $operation['date']?->format('d/m/Y') ?? '—' }}</td><td><span class="badge text-bg-{{ $operation['kind'] === 'Entrée' ? 'success' : 'danger' }}">{{ $operation['kind'] }}</span></td><td>{{ $operation['numero'] ?: '—' }}</td><td>{{ $operation['description'] }}</td><td class="text-end fw-semibold">{{ number_format($operation['amount'], 2, ',', ' ') }} {{ $operation['currency'] }}</td><td><span class="badge text-bg-{{ $operation['status'] === "Valid\u{00C3}\u{00A9}" ? 'success' : ($operation['status'] === 'En attente' ? 'warning' : 'secondary') }}">{{ $operation['status'] ?: '—' }}</span></td><td><a class="btn btn-sm btn-outline-primary" href="{{ $operation['url'] }}">Ouvrir</a></td></tr>
+                @empty
+                    <tr><td colspan="7" class="text-center text-muted py-5">Aucune opération de caisse enregistrée.</td></tr>
+                @endforelse
+            </tbody>
+        </table></div>
+    </section>
 </div>
 @endsection

@@ -27,6 +27,14 @@ class DashboardService
         $outputs = SortieCaisse::query()->whereBetween('date', [$start, $end]);
         $pendingEntries = EntreeCaisse::query()->where('statut', 'En attente');
         $pendingOutputs = SortieCaisse::query()->where('statut', 'En attente');
+        $recentEntries = EntreeCaisse::query()->latest('date')->latest('id')->limit(8)->get()
+            ->map(fn (EntreeCaisse $item) => ['kind' => 'Entrée', 'date' => $item->date, 'numero' => $item->numero,
+                'description' => $item->motif ?: ($item->nom_partenaire ?: 'Entrée de caisse'), 'amount' => (float) $item->montant,
+                'currency' => $item->monnaie, 'status' => $item->statut, 'url' => route('entree-caisses.show', $item)]);
+        $recentOutputs = SortieCaisse::query()->latest('date')->latest('id')->limit(8)->get()
+            ->map(fn (SortieCaisse $item) => ['kind' => 'Sortie', 'date' => $item->date, 'numero' => $item->numero,
+                'description' => $item->motif ?: ($item->beneficiaire ?: 'Sortie de caisse'), 'amount' => (float) $item->montant,
+                'currency' => $item->monnaie, 'status' => $item->statut, 'url' => route('sortie-caisses.show', $item)]);
 
         return [
             'entry_count' => (clone $entries)->count(),
@@ -35,7 +43,7 @@ class DashboardService
             'output_totals' => (clone $outputs)->select('monnaie')->selectRaw('COALESCE(SUM(montant), 0) AS total')->groupBy('monnaie')->pluck('total', 'monnaie'),
             'pending_entries' => $pendingEntries->count(),
             'pending_outputs' => $pendingOutputs->count(),
-            'treasury_situation' => $this->getTreasurySituation(),
+            'recent' => $recentEntries->concat($recentOutputs)->sortByDesc(fn ($item) => $item['date']?->timestamp ?? 0)->take(10)->values(),
         ];
     }
 
@@ -52,7 +60,7 @@ class DashboardService
                 $accountMonth = ($month ?? \Carbon\CarbonImmutable::now())->startOfMonth();
                 $entry = EcritureComptable::query()
                     ->where('liste_des_comptes_id', $setting->liste_des_comptes_id)
-                    ->where('statut', "Valid\u{00C3}\u{00A9}")
+                    ->where('statut', "Valid\u{00E9}")
                     ->whereBetween('date', [$accountMonth->toDateString(), $accountMonth->endOfMonth()->endOfDay()->toDateTimeString()])
                     ->latest('date')->latest('id')
                     ->first(['debit_cdf', 'credit_cdf']);
@@ -218,7 +226,6 @@ class DashboardService
             ->selectRaw('COALESCE(SUM(entrees_usd), 0) AS entree_usd')
             ->selectRaw('COALESCE(SUM(sorties_usd), 0) AS sortie_usd')
             ->with('journalType.compte')
-            ->where('statut', 'ValidÃ©')
             ->whereHas('journalType', fn ($query) => $query->where('est_tresorerie', true))
             ->whereDate('date', '<=', now()->toDateString())
             ->groupBy('journal_type_id')
