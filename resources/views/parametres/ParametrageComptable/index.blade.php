@@ -56,7 +56,7 @@ Configuration des comptes automatiques
 <div class="card shadow-sm border-0 mb-4">
     <div class="card-header bg-light fw-semibold">Configuration de la TVA due au tableau de bord</div>
     <div class="card-body">
-        <p class="text-muted">La TVA due affichée au gérant et au Super Admin est calculée ainsi : TVA récupérable − TVA facturée. Choisissez les deux comptes sources et le compte de résultat à afficher, par exemple 44411 — État, TVA due.</p>
+        <p class="text-muted">La TVA due est calculée à partir des écritures comptables validées : TVA facturée − TVA récupérable. Choisissez le compte de TVA due à afficher ainsi que les comptes sources.</p>
         <form method="POST" action="{{ route('parametres.comptables.dashboard-gerant') }}" class="row g-3 align-items-end">
             @csrf
             @method('PUT')

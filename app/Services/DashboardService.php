@@ -66,33 +66,24 @@ class DashboardService
             if ($dueAccount?->compte && $factureeAccount?->compte && $recuperableAccount?->compte) {
                 $accountMonth = ($month ?? \Carbon\CarbonImmutable::now())->startOfMonth();
                 $validStatuses = ["Valid\u{00E9}", "Valid\u{00C3}\u{00A9}"];
-                $taxAmounts = Journaux::query()
+                $accountEntries = EcritureComptable::query()
                     ->whereIn('liste_des_comptes_id', [$factureeAccount->liste_des_comptes_id, $recuperableAccount->liste_des_comptes_id])
                     ->whereIn('statut', $validStatuses)
-                    ->where('montant_tva', '>', 0)
                     ->whereBetween('date', [$accountMonth->toDateString(), $accountMonth->endOfMonth()->endOfDay()->toDateTimeString()])
-                    ->select('liste_des_comptes_id', 'monnaie')
-                    ->selectRaw('COALESCE(SUM(montant_tva), 0) AS total')
-                    ->groupBy('liste_des_comptes_id', 'monnaie')
+                    ->select('liste_des_comptes_id')
+                    ->selectRaw('COALESCE(SUM(debit_cdf), 0) AS debit, COALESCE(SUM(credit_cdf), 0) AS credit')
+                    ->groupBy('liste_des_comptes_id')
                     ->get()
-                    ->keyBy(fn ($row) => $row->liste_des_comptes_id.'|'.$row->monnaie);
+                    ->keyBy('liste_des_comptes_id');
 
-                $byCurrency = [];
-                foreach (['CDF', 'USD'] as $currency) {
-                    $facturee = (float) ($taxAmounts->get($factureeAccount->liste_des_comptes_id.'|'.$currency)?->total ?? 0);
-                    $recuperable = (float) ($taxAmounts->get($recuperableAccount->liste_des_comptes_id.'|'.$currency)?->total ?? 0);
-                    $byCurrency[$currency] = [
-                        'facturee' => $facturee,
-                        'recuperable' => $recuperable,
-                        'due' => $recuperable - $facturee,
-                    ];
-                }
+                $factureeEntry = $accountEntries->get($factureeAccount->liste_des_comptes_id);
+                $recuperableEntry = $accountEntries->get($recuperableAccount->liste_des_comptes_id);
+                $facturee = (float) ($factureeEntry?->credit ?? 0) - (float) ($factureeEntry?->debit ?? 0);
+                $recuperable = (float) ($recuperableEntry?->debit ?? 0) - (float) ($recuperableEntry?->credit ?? 0);
 
                 $data['management_account'] = [
                     'account' => $dueAccount->compte,
-                    'facturee_account' => $factureeAccount->compte,
-                    'recuperable_account' => $recuperableAccount->compte,
-                    'amounts' => $byCurrency,
+                    'due' => $facturee - $recuperable,
                 ];
             }
         }
