@@ -10,7 +10,8 @@
 $role = strtolower(auth()->user()->role?->designation ?? '');
 
 $isSuperAdmin = $role == 'super admin';
-$canValidateSortie = in_array($role, ['chargé des finances', 'chargé de finance', 'charge de finance', 'charger de finance'], true);
+$roleAscii = \Illuminate\Support\Str::ascii($role);
+$canValidateSortie = in_array($roleAscii, ["charge des finances", "charge de finance", "charger de finance", "caissier", "caissiere"], true);
 $showActions = ! auth()->user()->isAccounting() || $canValidateSortie;
 $canCreateSortie = auth()->user()->isSuperAdmin() || auth()->user()->isManagement() || in_array($role, ['chargé des finances', 'chargé de finance', 'charge de finance', 'charger de finance', 'caissier', 'caissière', 'trésorier', 'trésorière'], true);
 $canManageSortie = auth()->user()->isSuperAdmin() || auth()->user()->isManagement();

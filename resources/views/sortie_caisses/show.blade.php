@@ -16,8 +16,9 @@ $role = mb_strtolower(trim(auth()->user()->role->designation ?? ''));
 
 $isGestion = auth()->user()->isSuperAdmin() || auth()->user()->isManagement();
 
-$canValidateSortie = ! in_array($role, ['gérant', 'gerant'], true)
-    && ($isGestion || in_array($role, ['chargé des finances', 'chargé de finance', 'charge de finance', 'charger de finance'], true));
+$roleAscii = \Illuminate\Support\Str::ascii($role);
+$canValidateSortie = $roleAscii !== "gerant"
+    && ($isGestion || in_array($roleAscii, ["charge des finances", "charge de finance", "charger de finance", "caissier", "caissiere"], true));
 
 $isSuperAdmin = $role === 'super admin';
 

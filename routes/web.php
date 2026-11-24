@@ -406,7 +406,7 @@ Route::middleware(['auth', 'force.password.change', 'accounting.open'])->group(f
     Route::delete('/sortie-caisses/{sortie_caiss}', [SortieCaisseController::class, 'destroy'])
         ->middleware('can:deleteFinancialDocument')->name('sortie-caisses.destroy');
     Route::post('/sortie-caisses/{id}/valider', [SortieCaisseController::class, 'valider'])
-        ->middleware('role:Super Admin,Admin,Directeur Général,Chargé des finances')
+        ->middleware('role:Super Admin,Admin,Directeur Général,Chargé des finances,Caissier,Caissière,CaissiÃ¨re')
         ->name('sortie-caisses.valider');
     Route::post('/sortie-caisses/{id}/rejeter', [SortieCaisseController::class, 'rejeter'])
         ->middleware('role:Super Admin,Admin,Directeur Général')
