@@ -14,8 +14,10 @@ use App\Models\Departement;
 use App\Models\Fonction;
 use App\Models\User;
 use App\Models\Role;
+use App\Models\AuditLog;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -98,6 +100,7 @@ class ParametreController extends Controller
 
     public function affecterDepartement(Request $request, User $user)
     {
+        abort_if($user->archive_le, 404);
         $data = $request->validate([
             'departement_id' => 'nullable|exists:departements,id',
             'fonction_id' => 'nullable|exists:fonctions,id',
@@ -108,6 +111,7 @@ class ParametreController extends Controller
 
     public function changerRole(Request $request, User $user)
     {
+        abort_if($user->archive_le, 404);
         $data = $request->validate([
             'role_id' => 'required|exists:roles,id',
         ]);
@@ -125,6 +129,7 @@ class ParametreController extends Controller
 
     public function reinitialiserMotDePasse(Request $request, User $user)
     {
+        abort_if($user->archive_le, 404);
         abort_if($user->isSuperAdmin() && ! $request->user()->isSuperAdmin(), 403,
             'Seul le Super Admin peut réinitialiser le mot de passe d’un Super Admin.');
 
@@ -141,6 +146,109 @@ class ParametreController extends Controller
             'agent_email' => $user->email,
             'password_default' => $password,
         ]);
+    }
+
+    public function supprimerUtilisateur(Request $request, User $user)
+    {
+        abort_unless($request->user()?->isSuperAdmin(), 403);
+        abort_if($user->is($request->user()), 422, 'Vous ne pouvez pas archiver votre propre compte.');
+
+        if ($user->archive_le) {
+            return back()->with('info', 'Ce compte est déjà archivé.');
+        }
+
+        $user->loadMissing('role');
+        if ($user->isSuperAdmin()) {
+            $autreSuperAdminActif = User::query()
+                ->where('statut', 'Actif')
+                ->whereNull('archive_le')
+                ->where('id', '<>', $user->id)
+                ->get()
+                ->contains(fn (User $candidate) => $candidate->isSuperAdmin());
+
+            if (! $autreSuperAdminActif) {
+                return back()->with('error', 'Le dernier compte Super Admin actif ne peut pas être archivé.');
+            }
+        }
+
+        DB::transaction(function () use ($request, $user): void {
+            $user = User::query()->lockForUpdate()->findOrFail($user->id);
+            $archivedAt = now();
+            $oldValues = [
+                'nom' => $user->nom,
+                'prenom' => $user->prenom,
+                'email' => $user->email,
+                'role' => $user->role?->designation,
+                'statut' => $user->statut,
+            ];
+
+            AuditLog::create([
+                'user_id' => $request->user()->id,
+                'module' => 'administration',
+                'action' => 'suppression_utilisateur',
+                'model_type' => User::class,
+                'model_id' => $user->id,
+                'reference_document' => $user->email,
+                'ancien_statut' => $user->statut,
+                'motif' => 'Compte archivé par le Super Admin.',
+                'ancienne_valeur' => $oldValues,
+                'nouvelle_valeur' => ['statut' => 'Inactif', 'archive_le' => $archivedAt->toIso8601String()],
+                'dependances' => [
+                    'bons_entree' => $user->entreesCaisse()->count(),
+                    'bons_sortie' => $user->sortiesCaisse()->count(),
+                    'ecritures' => $user->ecrituresComptables()->count(),
+                    'journaux' => $user->journaux()->count(),
+                ],
+                'type_suppression' => 'archivage',
+                'adresse_ip' => $request->ip(),
+                'user_agent' => mb_substr((string) $request->userAgent(), 0, 2000),
+            ]);
+
+            $user->forceFill(['statut' => 'Inactif', 'archive_le' => $archivedAt])->save();
+
+            if (config('session.driver') === 'database' && Schema::hasTable(config('session.table', 'sessions'))) {
+                DB::table(config('session.table', 'sessions'))->where('user_id', $user->id)->delete();
+            }
+        });
+
+        return back()->with('success', 'Compte archivé. Les opérations et les références historiques sont conservées.');
+    }
+
+    public function restaurerUtilisateur(Request $request, User $user)
+    {
+        abort_unless($request->user()?->isSuperAdmin(), 403);
+        abort_if(! $user->archive_le, 404);
+
+        DB::transaction(function () use ($request, $user): void {
+            $archiveLog = AuditLog::query()
+                ->where('model_type', User::class)
+                ->where('model_id', $user->id)
+                ->where('action', 'suppression_utilisateur')
+                ->latest('id')
+                ->first();
+            $restoreStatus = data_get($archiveLog?->ancienne_valeur, 'statut', 'Actif');
+
+            AuditLog::create([
+                'user_id' => $request->user()->id,
+                'module' => 'administration',
+                'action' => 'restauration_utilisateur',
+                'model_type' => User::class,
+                'model_id' => $user->id,
+                'reference_document' => $user->email,
+                'ancien_statut' => $user->statut,
+                'motif' => 'Compte restauré par le Super Admin.',
+                'ancienne_valeur' => ['statut' => $user->statut, 'archive_le' => $user->archive_le?->toIso8601String()],
+                'nouvelle_valeur' => ['statut' => $restoreStatus, 'archive_le' => null],
+                'dependances' => [],
+                'type_suppression' => null,
+                'adresse_ip' => $request->ip(),
+                'user_agent' => mb_substr((string) $request->userAgent(), 0, 2000),
+            ]);
+
+            $user->forceFill(['statut' => $restoreStatus, 'archive_le' => null])->save();
+        });
+
+        return back()->with('success', 'Compte utilisateur restauré.');
     }
 
     public function parametre()

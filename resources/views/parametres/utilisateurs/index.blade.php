@@ -11,6 +11,8 @@
         <div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>{{ session('success') }}</div>
         @if(session('password_default'))<div class="alert alert-warning"><strong>Identifiants temporaires :</strong> {{ session('agent_email') }} — Mot de passe : <span class="badge bg-dark fs-6">{{ session('password_default') }}</span><div class="small mt-1">À transmettre de façon sécurisée. Le changement sera exigé à la première connexion.</div></div>@endif
     @endif
+    @if(session('error'))<div class="alert alert-danger">{{ session('error') }}</div>@endif
+    @if(session('info'))<div class="alert alert-info">{{ session('info') }}</div>@endif
     @if($errors->any())<div class="alert alert-danger"><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 
     <div class="card border-0 shadow-sm mb-4">
@@ -34,9 +36,28 @@
         </div></div>
     </div>
 
-    <div class="card border-0 shadow-sm"><div class="card-header bg-dark text-white py-3 d-flex justify-content-between"><strong>Liste des utilisateurs</strong><span class="badge bg-light text-dark">{{ $users->total() }} compte(s)</span></div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Utilisateur</th><th>Rôle</th><th>Affectation</th><th>Statut</th><th>Dernière connexion</th><th class="text-end">Actions</th></tr></thead><tbody>
-        @forelse($users as $agent)<tr><td><div class="fw-semibold">{{ $agent->prenom }} {{ $agent->nom }}</div><small class="text-muted">{{ $agent->email }} @if($agent->telephone)· {{ $agent->telephone }}@endif</small></td><td><form action="{{ route('parametres.utilisateurs.role', $agent) }}" method="POST" class="d-flex gap-2">@csrf @method('PATCH')<select name="role_id" class="form-select form-select-sm" aria-label="Rôle de {{ $agent->prenom }} {{ $agent->nom }}" @disabled($agent->isSuperAdmin() && !auth()->user()->isSuperAdmin())>@foreach($roles as $role)@if(auth()->user()->isSuperAdmin() || $role->designation !== 'Super Admin')<option value="{{ $role->id }}" @selected($agent->role_id===$role->id)>{{ $role->designation }}</option>@endif @endforeach</select><button class="btn btn-sm btn-outline-primary" title="Enregistrer le rôle" @disabled($agent->isSuperAdmin() && !auth()->user()->isSuperAdmin())><i class="bi bi-check-lg"></i></button></form></td><td>{{ $agent->departement?->designation ?? '—' }}<small class="d-block text-muted">{{ $agent->fonction?->designation ?? 'Aucune fonction' }}</small></td><td><span class="badge bg-{{ $agent->statut==='Actif'?'success':'secondary' }}">{{ $agent->statut }}</span></td><td>@if($agent->last_logged_in)<span class="fw-semibold">{{ \Carbon\Carbon::parse($agent->last_logged_in)->format('d/m/Y H:i') }}</span><small class="d-block text-muted">{{ \Carbon\Carbon::parse($agent->last_logged_in)->diffForHumans() }}</small>@else<span class="text-muted">Jamais connecté</span>@endif</td><td class="text-end"><form action="{{ route('parametres.utilisateurs.password.reset', $agent) }}" method="POST" data-confirm="Réinitialiser le mot de passe de cet utilisateur ?">@csrf @method('PATCH')<button class="btn btn-sm btn-outline-warning text-nowrap" @disabled($agent->isSuperAdmin() && !auth()->user()->isSuperAdmin())><i class="bi bi-key me-1"></i>Réinitialiser</button></form></td></tr>
-        @empty<tr><td colspan="6" class="text-center text-muted py-4">Aucun utilisateur.</td></tr>@endforelse
+    <div class="card border-0 shadow-sm"><div class="card-header bg-dark text-white py-3 d-flex justify-content-between"><div><strong>Liste des utilisateurs</strong><small class="d-block text-white-50">La suppression archive le compte et conserve ses opérations.</small></div><span class="badge bg-light text-dark">{{ $users->total() }} compte(s)</span></div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Utilisateur</th><th>Rôle</th><th>Affectation</th><th>Statut</th><th>Dernière connexion</th><th class="text-end">Actions</th></tr></thead><tbody>
+        @forelse($users as $agent)
+            <tr>
+                <td><div class="fw-semibold">{{ $agent->prenom }} {{ $agent->nom }}</div><small class="text-muted">{{ $agent->email }} @if($agent->telephone)· {{ $agent->telephone }}@endif</small></td>
+                <td><form action="{{ route('parametres.utilisateurs.role', $agent) }}" method="POST" class="d-flex gap-2">@csrf @method('PATCH')<select name="role_id" class="form-select form-select-sm" aria-label="Rôle de {{ $agent->prenom }} {{ $agent->nom }}" @disabled($agent->archive_le || ($agent->isSuperAdmin() && !auth()->user()->isSuperAdmin()))>@foreach($roles as $role)@if(auth()->user()->isSuperAdmin() || $role->designation !== 'Super Admin')<option value="{{ $role->id }}" @selected($agent->role_id===$role->id)>{{ $role->designation }}</option>@endif @endforeach</select><button class="btn btn-sm btn-outline-primary" title="Enregistrer le rôle" @disabled($agent->archive_le || ($agent->isSuperAdmin() && !auth()->user()->isSuperAdmin()))><i class="bi bi-check-lg"></i></button></form></td>
+                <td>{{ $agent->departement?->designation ?? '—' }}<small class="d-block text-muted">{{ $agent->fonction?->designation ?? 'Aucune fonction' }}</small></td>
+                <td>@if($agent->archive_le)<span class="badge bg-dark">Archivé</span><small class="d-block text-muted">{{ $agent->archive_le->format('d/m/Y H:i') }}</small>@else<span class="badge bg-{{ $agent->statut==='Actif'?'success':'secondary' }}">{{ $agent->statut }}</span>@endif</td>
+                <td>@if($agent->last_logged_in)<span class="fw-semibold">{{ \Carbon\Carbon::parse($agent->last_logged_in)->format('d/m/Y H:i') }}</span><small class="d-block text-muted">{{ \Carbon\Carbon::parse($agent->last_logged_in)->diffForHumans() }}</small>@else<span class="text-muted">Jamais connecté</span>@endif</td>
+                <td class="text-end"><div class="d-flex justify-content-end flex-wrap gap-1">
+                    @if(!$agent->archive_le)<form action="{{ route('parametres.utilisateurs.password.reset', $agent) }}" method="POST" data-confirm="Réinitialiser le mot de passe de cet utilisateur ?">@csrf @method('PATCH')<button class="btn btn-sm btn-outline-warning text-nowrap" title="Réinitialiser le mot de passe" @disabled($agent->isSuperAdmin() && !auth()->user()->isSuperAdmin())><i class="bi bi-key"></i></button></form>@endif
+                    @if(auth()->user()->isSuperAdmin())
+                        @if($agent->archive_le)
+                            <form action="{{ route('parametres.utilisateurs.restore', $agent) }}" method="POST" data-confirm="Restaurer ce compte et réactiver son accès ?">@csrf @method('PATCH')<button class="btn btn-sm btn-outline-success text-nowrap"><i class="bi bi-arrow-counterclockwise me-1"></i>Restaurer</button></form>
+                        @else
+                            <form action="{{ route('parametres.utilisateurs.destroy', $agent) }}" method="POST" data-confirm="Archiver ce compte ? L’utilisateur ne pourra plus se connecter, mais ses opérations et son historique seront conservés.">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger text-nowrap" @disabled($agent->id===auth()->id())><i class="bi bi-archive me-1"></i>Supprimer</button></form>
+                        @endif
+                    @endif
+                </div></td>
+            </tr>
+        @empty
+            <tr><td colspan="6" class="text-center text-muted py-4">Aucun utilisateur.</td></tr>
+        @endforelse
     </tbody></table></div>@if($users->hasPages())<div class="card-footer bg-white">{{ $users->links() }}</div>@endif</div>
 </div>
 @endsection

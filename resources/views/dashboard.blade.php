@@ -37,8 +37,12 @@
     @if(isset($management_account))
         <section class="panel-card mb-4 border-start border-4 border-info">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
-                <div><span class="eyebrow">TVA due · Toutes périodes</span><h5 class="mb-1">{{ $management_account['account']->compte }} — {{ $management_account['account']->designation }}</h5><small class="text-muted">Calculée à partir des écritures comptables validées, toutes périodes.</small></div>
-                <div class="text-end"><span class="d-block text-muted small">TVA facturée − TVA récupérable</span><strong class="fs-3 {{ $management_account['due'] < 0 ? 'text-danger' : 'text-success' }}">{{ number_format($management_account['due'], 2, ',', ' ') }} CDF</strong></div>
+                <div><span class="eyebrow">TVA due · Toutes périodes · CDF</span><h5 class="mb-1">{{ $management_account['account']->compte }} — {{ $management_account['account']->designation }}</h5><small class="text-muted">Solde créditeur − solde débiteur des écritures validées, comme au grand livre.</small></div>
+                <div class="d-flex flex-wrap justify-content-end gap-4 text-end">
+                    @foreach($management_account['amounts'] as $currency => $amount)
+                        <div><span class="d-block text-muted small">TVA due · {{ $currency }}</span><strong class="fs-3 {{ $amount['due'] < 0 ? 'text-danger' : 'text-success' }}">{{ number_format($amount['due'], 2, ',', ' ') }} {{ $currency }}</strong></div>
+                    @endforeach
+                </div>
             </div>
         </section>
     @endif

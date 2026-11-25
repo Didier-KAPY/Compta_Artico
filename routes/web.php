@@ -273,6 +273,12 @@ Route::middleware(['auth', 'force.password.change'])->group(function () {
     Route::patch('/parametres/utilisateurs/{user}/mot-de-passe', [ParametreController::class, 'reinitialiserMotDePasse'])
         ->middleware('role:Super Admin,Admin,Gérant,Gerant,Directeur Général')
         ->name('parametres.utilisateurs.password.reset');
+    Route::delete('/parametres/utilisateurs/{user}', [ParametreController::class, 'supprimerUtilisateur'])
+        ->middleware('role:Super Admin')
+        ->name('parametres.utilisateurs.destroy');
+    Route::patch('/parametres/utilisateurs/{user}/restaurer', [ParametreController::class, 'restaurerUtilisateur'])
+        ->middleware('role:Super Admin')
+        ->name('parametres.utilisateurs.restore');
 
     Route::get('/parametres/comptables', [ParametreController::class, 'index'])
         ->middleware('role:Super Admin,DAF,Comptable')

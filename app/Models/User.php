@@ -40,6 +40,7 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password_default' => 'boolean',
+        'archive_le' => 'datetime',
     ];
     /*
     |--------------------------------------------------------------------------
@@ -105,6 +106,21 @@ class User extends Authenticatable
     public function journaux()
     {
         return $this->hasMany(Journaux::class);
+    }
+
+    public function entreesCaisse()
+    {
+        return $this->hasMany(EntreeCaisse::class);
+    }
+
+    public function sortiesCaisse()
+    {
+        return $this->hasMany(SortieCaisse::class);
+    }
+
+    public function ecrituresComptables()
+    {
+        return $this->hasMany(EcritureComptable::class);
     }
     /**
      * Taux de change

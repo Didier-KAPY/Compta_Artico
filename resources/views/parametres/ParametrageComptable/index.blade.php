@@ -56,7 +56,7 @@ Configuration des comptes automatiques
 <div class="card shadow-sm border-0 mb-4">
     <div class="card-header bg-light fw-semibold">Configuration de la TVA due au tableau de bord</div>
     <div class="card-body">
-        <p class="text-muted">La TVA due est calculée à partir des écritures comptables validées : TVA facturée − TVA récupérable. Choisissez le compte de TVA due à afficher ainsi que les comptes sources.</p>
+        <p class="text-muted">Le tableau de bord affiche le solde du compte « TVA due » comme au grand livre : crédit − débit des écritures validées, en CDF. Les comptes « TVA facturée » et « TVA récupérable » ci-dessous servent au paramétrage des imputations comptables ; ils ne sont pas utilisés pour calculer ce solde.</p>
         <form method="POST" action="{{ route('parametres.comptables.dashboard-gerant') }}" class="row g-3 align-items-end">
             @csrf
             @method('PUT')

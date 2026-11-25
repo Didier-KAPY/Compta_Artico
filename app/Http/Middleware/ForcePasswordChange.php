@@ -16,6 +16,14 @@ class ForcePasswordChange
             return $next($request);
         }
 
+        if ($user->statut !== 'Actif') {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()->route('login')->with('error_msg', 'Ce compte est désactivé. Contactez un administrateur.');
+        }
+
         if ($user->password_default == 1) {
             // Eviter boucle infinie
             if (!$request->is('password-change')) {

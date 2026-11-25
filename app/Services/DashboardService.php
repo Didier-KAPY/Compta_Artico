@@ -57,31 +57,26 @@ class DashboardService
         $asciiRole = \Illuminate\Support\Str::ascii($role);
         if (in_array($asciiRole, ['super admin', 'gerant', 'directeur general'], true)) {
             $settings = ParametrageComptable::with('compte')->whereIn('code', [
-                'DASHBOARD_GERANT_TVA_DUE', 'TVA_FACTUREE', 'TVA_RECUPERABLE',
+                'DASHBOARD_GERANT_TVA_DUE',
             ])->get()->keyBy('code');
             $dueAccount = $settings->get('DASHBOARD_GERANT_TVA_DUE');
-            $factureeAccount = $settings->get('TVA_FACTUREE');
-            $recuperableAccount = $settings->get('TVA_RECUPERABLE');
 
-            if ($dueAccount?->compte && $factureeAccount?->compte && $recuperableAccount?->compte) {
-                $validStatuses = ["Valid\u{00E9}", "Valid\u{00C3}\u{00A9}"];
-                $accountEntries = EcritureComptable::query()
-                    ->whereIn('liste_des_comptes_id', [$factureeAccount->liste_des_comptes_id, $recuperableAccount->liste_des_comptes_id])
-                    ->whereIn('statut', $validStatuses)
-                    ->select('liste_des_comptes_id')
+            if ($dueAccount?->compte) {
+                $validatedEntries = EcritureComptable::query()
+                    ->whereIn('statut', ["Valid\u{00E9}", "Valid\u{00C3}\u{00A9}"])
+                    ->where('liste_des_comptes_id', $dueAccount->liste_des_comptes_id)
+                    ->whereDate('date', '<=', $month->endOfMonth()->toDateString());
+                $totals = (clone $validatedEntries)
                     ->selectRaw('COALESCE(SUM(debit_cdf), 0) AS debit, COALESCE(SUM(credit_cdf), 0) AS credit')
-                    ->groupBy('liste_des_comptes_id')
-                    ->get()
-                    ->keyBy('liste_des_comptes_id');
+                    ->first();
 
-                $factureeEntry = $accountEntries->get($factureeAccount->liste_des_comptes_id);
-                $recuperableEntry = $accountEntries->get($recuperableAccount->liste_des_comptes_id);
-                $facturee = (float) ($factureeEntry?->credit ?? 0) - (float) ($factureeEntry?->debit ?? 0);
-                $recuperable = (float) ($recuperableEntry?->debit ?? 0) - (float) ($recuperableEntry?->credit ?? 0);
-
+                // Le compte de TVA due est créditeur : le solde affiché est crédit - débit,
+                // comme le solde final du Grand Livre après report des périodes antérieures.
                 $data['management_account'] = [
                     'account' => $dueAccount->compte,
-                    'due' => $facturee - $recuperable,
+                    'amounts' => [
+                        'CDF' => ['due' => (float) $totals->credit - (float) $totals->debit],
+                    ],
                 ];
             }
         }
